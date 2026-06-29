@@ -7,6 +7,7 @@ import sessionPlugin from "./plugins/session";
 import health from "./routes/health";
 import setup from "./routes/setup";
 import auth from "./routes/auth";
+import profilesRoute from "./routes/profiles";
 
 export async function buildApp(env: Env): Promise<FastifyInstance> {
   const app = Fastify({ logger: true });
@@ -17,5 +18,6 @@ export async function buildApp(env: Env): Promise<FastifyInstance> {
   await app.register(health);
   await app.register(setup);
   await app.register(auth);
+  await app.register(profilesRoute);
   return app;
 }
