@@ -4,7 +4,10 @@ import { redirect } from "next/navigation";
 // Always dynamic — reads cookies and makes authed API calls per request.
 export const dynamic = "force-dynamic";
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:1061";
+const BASE =
+  process.env.API_INTERNAL_URL ??
+  process.env.NEXT_PUBLIC_API_URL ??
+  "http://localhost:1061";
 
 export default async function HomePage() {
   // 1. Check setup status (no auth needed)

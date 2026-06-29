@@ -24,7 +24,6 @@ services:
 
   api:
     build: { context: ., dockerfile: apps/api/Dockerfile.dev }
-    command: pnpm --filter @orbix/api dev
     environment:
       DATABASE_URL: postgresql://orbix:orbix@postgres:5432/orbix
       REDIS_URL: redis://redis:6379
@@ -34,17 +33,31 @@ services:
       SESSION_SECRET: dev-session-secret-change-me-32chars
       NODE_ENV: development
     ports: ["1061:1061"]
-    volumes: ["./:/app", "/app/node_modules"]
+    volumes:
+      - ./apps/api/src:/app/apps/api/src
+      - ./packages/config/src:/app/packages/config/src
+      - ./packages/core/src:/app/packages/core/src
+      - ./packages/db/src:/app/packages/db/src
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:1061/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
 
   web:
     build: { context: ., dockerfile: apps/web/Dockerfile.dev }
-    command: pnpm --filter @orbix/web dev
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:1061
+      API_INTERNAL_URL: http://api:1061
       WEB_PORT: "1060"
+      NODE_ENV: development
     ports: ["1060:1060"]
-    volumes: ["./:/app", "/app/node_modules"]
-    depends_on: [api]
+    volumes:
+      - ./apps/web/src:/app/apps/web/src
+      - ./packages/ui/src:/app/packages/ui/src
+    depends_on:
+      api: { condition: service_healthy }
