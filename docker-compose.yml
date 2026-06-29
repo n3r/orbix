@@ -1,0 +1,50 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: orbix
+      POSTGRES_PASSWORD: orbix
+      POSTGRES_DB: orbix
+    ports: ["1062:5432"]
+    volumes: ["./data/postgres:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orbix"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports: ["1063:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: { context: ., dockerfile: apps/api/Dockerfile.dev }
+    command: pnpm --filter @orbix/api dev
+    environment:
+      DATABASE_URL: postgresql://orbix:orbix@postgres:5432/orbix
+      REDIS_URL: redis://redis:6379
+      API_PORT: "1061"
+      WEB_PORT: "1060"
+      WEB_ORIGIN: http://localhost:1060
+      SESSION_SECRET: dev-session-secret-change-me-32chars
+      NODE_ENV: development
+    ports: ["1061:1061"]
+    volumes: ["./:/app", "/app/node_modules"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  web:
+    build: { context: ., dockerfile: apps/web/Dockerfile.dev }
+    command: pnpm --filter @orbix/web dev
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:1061
+      WEB_PORT: "1060"
+    ports: ["1060:1060"]
+    volumes: ["./:/app", "/app/node_modules"]
+    depends_on: [api]
