@@ -33,6 +33,6 @@ export async function buildApp(env: Env): Promise<FastifyInstance> {
   await app.register(imagesRoute(env));
   await app.register(scanRoute);
   await app.register(catalogRoute);
-  await app.register(streamRoute);
+  await app.register(streamRoute(env));
   return app;
 }
