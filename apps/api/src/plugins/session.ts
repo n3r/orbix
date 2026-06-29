@@ -7,9 +7,13 @@ export default fp(async (app) => {
   app.addHook("preHandler", async (req) => {
     const sid = req.cookies["orbix_session"];
     if (!sid) return;
-    const session = await app.prisma.session.findUnique({ where: { id: sid } });
-    if (session && isSessionValid(session)) {
-      (req as { accountId: string | null }).accountId = session.accountId;
+    try {
+      const session = await app.prisma.session.findUnique({ where: { id: sid } });
+      if (session && isSessionValid(session)) {
+        req.accountId = session.accountId;
+      }
+    } catch (err) {
+      req.log.error({ err }, "session lookup failed");
     }
   });
 });
