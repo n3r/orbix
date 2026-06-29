@@ -1,0 +1,39 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+model Account {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  isAdmin      Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  sessions     Session[]
+}
+
+model Profile {
+  id          String   @id @default(cuid())
+  name        String
+  avatar      String?
+  kind        String   @default("standard") // "standard" | "kids"
+  pinHash     String?
+  maturityCap Int? // null = unrestricted
+  createdAt   DateTime @default(now())
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  accountId String
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([accountId])
+}

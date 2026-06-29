@@ -14,6 +14,9 @@
     "db:migrate": "pnpm --filter @orbix/db exec prisma migrate dev",
     "db:generate": "pnpm --filter @orbix/db exec prisma generate"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": ["@prisma/client", "@prisma/engines", "esbuild", "prisma"]
+  },
   "devDependencies": {
     "@types/node": "^26.0.1",
     "prettier": "^3.3.0",
