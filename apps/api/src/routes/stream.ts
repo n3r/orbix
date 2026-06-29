@@ -92,7 +92,7 @@ export default async function streamRoute(app: FastifyInstance) {
         }
 
         const start = parseInt(match[1], 10);
-        const end = match[2] ? parseInt(match[2], 10) : total - 1;
+        const end = match[2] ? Math.min(parseInt(match[2], 10), total - 1) : total - 1;
 
         // Validate range
         if (start > end || start >= total) {
