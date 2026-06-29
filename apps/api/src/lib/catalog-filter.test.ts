@@ -13,8 +13,10 @@ describe("kidsRatingWhere", () => {
     expect(kidsRatingWhere({ kind: "standard", maturityCap: 3 })).toBeNull();
   });
 
-  it("returns null for a kids profile with null maturityCap (unrestricted)", () => {
-    expect(kidsRatingWhere({ kind: "kids", maturityCap: null })).toBeNull();
+  it("kids profile with null maturityCap → fail-safe G-only (not null/unrestricted)", () => {
+    expect(kidsRatingWhere({ kind: "kids", maturityCap: null })).toEqual({
+      rating: { in: ["G"] },
+    });
   });
 
   it("kids cap=2 (PG-13) → rating in ['G','PG','PG-13']", () => {
@@ -69,5 +71,13 @@ describe("profileAllowsItem", () => {
 
   it("kids cap=2 → blocks unrated (null)", () => {
     expect(profileAllowsItem(kidsCapPG13, { rating: null })).toBe(false);
+  });
+
+  it("kids null-cap → fail-safe G-only: blocks PG", () => {
+    expect(profileAllowsItem({ kind: "kids", maturityCap: null }, { rating: "PG" })).toBe(false);
+  });
+
+  it("kids null-cap → fail-safe G-only: allows G", () => {
+    expect(profileAllowsItem({ kind: "kids", maturityCap: null }, { rating: "G" })).toBe(true);
   });
 });

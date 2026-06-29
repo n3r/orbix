@@ -18,8 +18,11 @@ import type { Prisma } from "@orbix/db";
 export function kidsRatingWhere(
   profile: { kind: string; maturityCap: number | null } | null,
 ): Prisma.MediaItemWhereInput | null {
-  if (!profile || profile.kind !== "kids" || profile.maturityCap == null) return null;
-  const allowed = certsAtOrBelow(profile.maturityCap);
+  if (!profile || profile.kind !== "kids") return null;
+  // Fail-safe: a kids profile with a null cap (DB tamper / future bug) defaults
+  // to the most restrictive rating (G-only, cap index 0) rather than unrestricted.
+  const cap = profile.maturityCap ?? 0;
+  const allowed = certsAtOrBelow(cap);
   return { rating: { in: allowed } };
 }
 
@@ -49,7 +52,8 @@ export function profileAllowsItem(
   item: { rating: string | null },
 ): boolean {
   if (!profile || profile.kind !== "kids") return true;
-  return allowsRating(profile.maturityCap, item.rating);
+  // Fail-safe: null cap on a kids profile → most restrictive (G-only, cap index 0).
+  return allowsRating(profile.maturityCap ?? 0, item.rating);
 }
 
 /**

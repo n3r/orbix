@@ -78,6 +78,20 @@ export default async function playstateRoute(app: FastifyInstance) {
       if (!profileId) return reply.code(400).send({ error: "no_profile" });
 
       const mediaItemId = req.params.id;
+
+      // Kids-safety gate: a kids profile must not be able to read back the
+      // watch-position of a blocked title (same check as PUT).
+      const [profile, mediaItem] = await Promise.all([
+        activeProfile(app, req),
+        app.prisma.mediaItem.findUnique({
+          where: { id: mediaItemId },
+          select: { rating: true },
+        }),
+      ]);
+      if (mediaItem && !profileAllowsItem(profile, { rating: mediaItem.rating })) {
+        return reply.code(403).send({ error: "blocked_by_rating" });
+      }
+
       const state = await app.prisma.playbackState.findUnique({
         where: { profileId_mediaItemId: { profileId, mediaItemId } },
         select: { positionSec: true, durationSec: true, finished: true },
