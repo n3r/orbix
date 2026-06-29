@@ -38,6 +38,7 @@ services:
       - ./packages/config/src:/app/packages/config/src
       - ./packages/core/src:/app/packages/core/src
       - ./packages/db/src:/app/packages/db/src
+      - ./packages/db/prisma:/app/packages/db/prisma
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
