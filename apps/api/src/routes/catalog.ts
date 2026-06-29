@@ -78,6 +78,7 @@ export default async function catalogRoute(app: FastifyInstance) {
           },
           files: {
             select: {
+              id: true,
               path: true,
               container: true,
               videoCodec: true,
@@ -118,6 +119,7 @@ export default async function catalogRoute(app: FastifyInstance) {
         director,
         // CRITICAL: BigInt size must be serialized as string to avoid JSON.stringify error
         files: item.files.map((f) => ({
+          id: f.id,
           path: f.path,
           container: f.container,
           videoCodec: f.videoCodec,

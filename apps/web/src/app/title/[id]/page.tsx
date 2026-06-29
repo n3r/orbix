@@ -1,8 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { Button } from "@orbix/ui";
 import { apiFetch } from "@/lib/api";
+
+const Player = dynamic(() => import("@/components/Player"), { ssr: false });
 
 interface CastMember {
   name: string;
@@ -10,6 +13,7 @@ interface CastMember {
 }
 
 interface MediaFile {
+  id: string;
   path: string;
   container: string | null;
   videoCodec: string | null;
@@ -54,6 +58,7 @@ export default function TitlePage({ params }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
     params.then((p) => setId(p.id));
@@ -163,12 +168,25 @@ export default function TitlePage({ params }: Props) {
               </div>
             )}
 
-            {/* Play button (disabled — playback is Phase 2) */}
+            {/* Play button */}
             <div className="mt-2">
-              <Button disabled>Play (coming soon)</Button>
+              {item.files?.[0]?.id ? (
+                <Button onClick={() => setPlaying(true)}>Play</Button>
+              ) : (
+                <Button disabled>Play (no media)</Button>
+              )}
             </div>
           </div>
         </div>
+
+        {/* Player */}
+        {playing && item.files?.[0]?.id && (
+          <Player
+            fileId={item.files[0].id}
+            mediaItemId={item.id}
+            title={item.title}
+          />
+        )}
 
         {/* Overview */}
         {item.overview && (

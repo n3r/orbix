@@ -9,6 +9,9 @@ export default defineConfig({
   globalSetup: "./e2e/global-setup.ts",
   timeout: 60_000,
   expect: { timeout: 15_000 },
+  // Limit to 2 workers to match pre-playback parallelism and prevent
+  // three-way race on the first-account setup wizard.
+  workers: 2,
   use: {
     baseURL: "http://localhost:1060",
     headless: true,

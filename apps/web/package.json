@@ -12,11 +12,13 @@
   },
   "dependencies": {
     "@orbix/ui": "workspace:*",
+    "@vidstack/react": "^1.0.0",
     "next": "^15.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@orbix/core": "workspace:*",
     "@orbix/db": "workspace:*",
     "@playwright/test": "^1.48.0",
     "@tailwindcss/postcss": "^4.0.0",
