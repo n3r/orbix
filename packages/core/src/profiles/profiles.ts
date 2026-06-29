@@ -1,4 +1,8 @@
 import { z } from "zod";
+import { hashPassword, verifyPassword } from "../auth/password";
+
+export const hashPin = hashPassword;
+export const verifyPin = verifyPassword;
 
 export class ProfileValidationError extends Error {}
 
