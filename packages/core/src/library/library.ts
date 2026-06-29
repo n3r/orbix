@@ -34,3 +34,9 @@ export function validateSourceInput(input: unknown) {
   if (!r.success) throw new LibraryValidationError(r.error.message);
   return r.data;
 }
+
+export function validateSectionPatch(input: unknown): { name?: string; order?: number } {
+  const r = SectionSchema.pick({ name: true, order: true }).partial().safeParse(input);
+  if (!r.success) throw new LibraryValidationError(r.error.message);
+  return r.data;
+}

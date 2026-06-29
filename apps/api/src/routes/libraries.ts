@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import fs from "node:fs";
-import { validateLibraryInput, validateSectionInput, validateSourceInput, LibraryValidationError } from "@orbix/core";
+import { validateLibraryInput, validateSectionInput, validateSourceInput, validateSectionPatch, LibraryValidationError } from "@orbix/core";
 import { Prisma } from "@orbix/db";
 
 function requireAdmin(app: FastifyInstance) {
@@ -63,10 +63,10 @@ export default async function libraries(app: FastifyInstance) {
   // PATCH /sections/:id
   app.patch<{ Params: { id: string }; Body: unknown }>("/sections/:id", { preHandler: requireAdmin(app) }, async (req, reply) => {
     try {
-      const body = (req.body ?? {}) as Record<string, unknown>;
-      const data: Record<string, unknown> = {};
-      if (body.name !== undefined) data.name = body.name;
-      if (body.order !== undefined) data.order = body.order;
+      const patch = validateSectionPatch(req.body);
+      const data: { name?: string; order?: number } = {};
+      if (patch.name !== undefined) data.name = patch.name;
+      if (patch.order !== undefined) data.order = patch.order;
       const section = await app.prisma.section.update({
         where: { id: req.params.id },
         data,
@@ -74,6 +74,7 @@ export default async function libraries(app: FastifyInstance) {
       });
       return section;
     } catch (e) {
+      if (e instanceof LibraryValidationError) return reply.code(400).send({ error: "invalid" });
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") {
         return reply.code(404).send({ error: "not_found" });
       }

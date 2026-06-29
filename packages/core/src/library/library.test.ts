@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateSourceInput, validateLibraryInput, validateSectionInput, LibraryValidationError } from "./library";
+import { validateSourceInput, validateLibraryInput, validateSectionInput, validateSectionPatch, LibraryValidationError } from "./library";
 
 describe("validateSourceInput", () => {
   it("accepts an absolute path", () => {
@@ -37,5 +37,20 @@ describe("validateSectionInput", () => {
   });
   it("rejects empty sectionId in source", () => {
     expect(() => validateSourceInput({ sectionId: "", path: "/movies" })).toThrow(LibraryValidationError);
+  });
+});
+
+describe("validateSectionPatch", () => {
+  it("accepts a valid name patch", () => {
+    expect(validateSectionPatch({ name: "X" })).toEqual({ name: "X" });
+  });
+  it("accepts an empty patch (no fields)", () => {
+    expect(validateSectionPatch({})).toEqual({});
+  });
+  it("throws on empty name", () => {
+    expect(() => validateSectionPatch({ name: "" })).toThrow(LibraryValidationError);
+  });
+  it("throws on negative order", () => {
+    expect(() => validateSectionPatch({ order: -1 })).toThrow(LibraryValidationError);
   });
 });
