@@ -36,9 +36,10 @@ const fakeCredits: TmdbCredits = {
 
 const fakeKeywords: TmdbKeyword[] = [{ tmdbId: 9, name: "dystopia" }];
 
-function makeFakeClient(searchResult: TmdbSearchResult | null = { tmdbId: MATRIX_ID, title: "The Matrix", year: 1999 }): TmdbLike & {
-  searchCalls: number;
-} {
+function makeFakeClient(
+  searchResult: TmdbSearchResult | null = { tmdbId: MATRIX_ID, title: "The Matrix", year: 1999 },
+  options: { certification?: string | null; certThrows?: boolean } = {},
+): TmdbLike & { searchCalls: number } {
   let searchCalls = 0;
   return {
     get searchCalls() {
@@ -56,6 +57,11 @@ function makeFakeClient(searchResult: TmdbSearchResult | null = { tmdbId: MATRIX
     },
     async keywords(_id: number): Promise<TmdbKeyword[]> {
       return fakeKeywords;
+    },
+    async releaseCertification(_id: number): Promise<string | undefined> {
+      if (options.certThrows) throw new Error("cert fetch failed");
+      if (options.certification == null) return undefined;
+      return options.certification;
     },
   };
 }
@@ -159,5 +165,50 @@ describe("enrichItem", () => {
     expect(result.tmdbId).toBe(MATRIX_ID);
     // searchMovie should NOT have been called since tmdbId was embedded
     expect(client.searchCalls).toBe(0);
+  });
+
+  it("Test 4: releaseCertification returns a value → saveMetadata receives rating", async () => {
+    const client = makeFakeClient(undefined, { certification: "R" });
+    const { cacheImage } = makeCacheImageSpy();
+    const { saveMetadata, calls: saveCalls } = makeSaveMetadataSpy();
+
+    const result = await enrichItem(
+      { id: "item-4", title: "The Matrix", year: 1999 },
+      { client, cacheImage, saveMetadata },
+    );
+
+    expect(result.matched).toBe(true);
+    expect(saveCalls).toHaveLength(1);
+    expect(saveCalls[0].rating).toBe("R");
+  });
+
+  it("Test 5: releaseCertification throws → enrichItem still succeeds, rating absent/undefined", async () => {
+    const client = makeFakeClient(undefined, { certThrows: true });
+    const { cacheImage } = makeCacheImageSpy();
+    const { saveMetadata, calls: saveCalls } = makeSaveMetadataSpy();
+
+    const result = await enrichItem(
+      { id: "item-5", title: "The Matrix", year: 1999 },
+      { client, cacheImage, saveMetadata },
+    );
+
+    // Enrich still completes successfully
+    expect(result.matched).toBe(true);
+    expect(saveCalls).toHaveLength(1);
+    // rating should be undefined (not throw)
+    expect(saveCalls[0].rating).toBeUndefined();
+  });
+
+  it("Test 6: releaseCertification returns undefined → saveMetadata receives no rating", async () => {
+    const client = makeFakeClient(undefined, { certification: null });
+    const { cacheImage } = makeCacheImageSpy();
+    const { saveMetadata, calls: saveCalls } = makeSaveMetadataSpy();
+
+    await enrichItem(
+      { id: "item-6", title: "The Matrix", year: 1999 },
+      { client, cacheImage, saveMetadata },
+    );
+
+    expect(saveCalls[0].rating).toBeUndefined();
   });
 });

@@ -276,6 +276,7 @@ export function queuePlugin(env: Env) {
                 imdbId: input.imdbId ?? null,
                 tmdbId: input.tmdbId,
                 matchState: "matched",
+                rating: input.rating ?? null,
               },
             });
 

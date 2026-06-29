@@ -79,6 +79,13 @@ interface RawKeywords {
   keywords: { id: number; name: string }[];
 }
 
+interface RawReleaseDates {
+  results: {
+    iso_3166_1: string;
+    release_dates: { certification: string }[];
+  }[];
+}
+
 // ---------------------------------------------------------------------------
 // Client
 // ---------------------------------------------------------------------------
@@ -164,5 +171,15 @@ export class TmdbClient {
   async keywords(id: number): Promise<TmdbKeyword[]> {
     const raw = await this.get<RawKeywords>(`${BASE}/movie/${id}/keywords`);
     return raw.keywords.map((k) => ({ tmdbId: k.id, name: k.name }));
+  }
+
+  async releaseCertification(id: number): Promise<string | undefined> {
+    const raw = await this.get<RawReleaseDates>(`${BASE}/movie/${id}/release_dates`);
+    const usEntry = raw.results.find((r) => r.iso_3166_1 === "US");
+    if (!usEntry) return undefined;
+    for (const rd of usEntry.release_dates) {
+      if (rd.certification) return rd.certification;
+    }
+    return undefined;
   }
 }

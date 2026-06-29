@@ -10,6 +10,7 @@ export interface TmdbLike {
   movie(id: number): Promise<TmdbMovie>;
   credits(id: number): Promise<TmdbCredits>;
   keywords(id: number): Promise<TmdbKeyword[]>;
+  releaseCertification(id: number): Promise<string | undefined>;
 }
 
 // ---------------------------------------------------------------------------
@@ -30,6 +31,7 @@ export interface SaveMetadataInput {
   cast: { tmdbId: number; name: string; character?: string; order: number }[];
   director?: { tmdbId: number; name: string };
   keywords: { tmdbId: number; name: string }[];
+  rating?: string;
 }
 
 export interface EnrichResult {
@@ -64,6 +66,15 @@ export async function enrichItem(
     deps.client.keywords(tmdbId),
   ]);
 
+  // Step 2b: fetch US content rating — tolerate failures gracefully
+  let rating: string | undefined;
+  try {
+    rating = await deps.client.releaseCertification(tmdbId);
+  } catch {
+    // Missing certification must NOT fail enrichment
+    rating = undefined;
+  }
+
   // Step 3: cache images
   const posterPath = movie.posterPath
     ? await deps.cacheImage(movie.posterPath, "poster")
@@ -97,6 +108,7 @@ export async function enrichItem(
     cast,
     director,
     keywords: keywords.map((k) => ({ tmdbId: k.tmdbId, name: k.name })),
+    rating,
   });
 
   return { matched: true, tmdbId };

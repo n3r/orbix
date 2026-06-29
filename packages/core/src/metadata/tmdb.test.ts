@@ -171,6 +171,79 @@ describe("TmdbClient.keywords", () => {
 });
 
 // ---------------------------------------------------------------------------
+// releaseCertification
+// ---------------------------------------------------------------------------
+
+describe("TmdbClient.releaseCertification", () => {
+  it("returns the US certification from the release_dates payload", async () => {
+    const payload = {
+      results: [
+        { iso_3166_1: "US", release_dates: [{ certification: "PG-13" }] },
+        { iso_3166_1: "GB", release_dates: [{ certification: "12A" }] },
+      ],
+    };
+    const { fake, calls } = makeFetch(payload);
+    const client = new TmdbClient("tok", fake);
+
+    const cert = await client.releaseCertification(603);
+
+    // Correct certification (US, not GB)
+    expect(cert).toBe("PG-13");
+
+    // URL contains the correct path
+    expect(calls[0].url).toContain("/movie/603/release_dates");
+
+    // Bearer auth header is present
+    const headers = calls[0].init?.headers as Record<string, string>;
+    expect(headers["Authorization"]).toBe("Bearer tok");
+  });
+
+  it("returns undefined when there is no US entry", async () => {
+    const payload = {
+      results: [{ iso_3166_1: "GB", release_dates: [{ certification: "12A" }] }],
+    };
+    const { fake } = makeFetch(payload);
+    const client = new TmdbClient("tok", fake);
+    const cert = await client.releaseCertification(603);
+    expect(cert).toBeUndefined();
+  });
+
+  it("returns undefined when the US entry has only empty certifications", async () => {
+    const payload = {
+      results: [
+        { iso_3166_1: "US", release_dates: [{ certification: "" }, { certification: "" }] },
+      ],
+    };
+    const { fake } = makeFetch(payload);
+    const client = new TmdbClient("tok", fake);
+    const cert = await client.releaseCertification(603);
+    expect(cert).toBeUndefined();
+  });
+
+  it("returns undefined when results array is empty", async () => {
+    const { fake } = makeFetch({ results: [] });
+    const client = new TmdbClient("tok", fake);
+    const cert = await client.releaseCertification(603);
+    expect(cert).toBeUndefined();
+  });
+
+  it("picks the first non-empty certification from multiple US release_dates entries", async () => {
+    const payload = {
+      results: [
+        {
+          iso_3166_1: "US",
+          release_dates: [{ certification: "" }, { certification: "R" }],
+        },
+      ],
+    };
+    const { fake } = makeFetch(payload);
+    const client = new TmdbClient("tok", fake);
+    const cert = await client.releaseCertification(603);
+    expect(cert).toBe("R");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Error handling
 // ---------------------------------------------------------------------------
 
