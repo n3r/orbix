@@ -1,12 +1,8 @@
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:1061";
+const BASE = "/api";
 
 export async function apiFetch(path: string, init?: RequestInit) {
-  return fetch(`${BASE}${path}`, {
-    ...init,
-    credentials: "include",
-    headers: {
-      ...(init?.body != null ? { "content-type": "application/json" } : {}),
-      ...(init?.headers ?? {}),
-    },
-  });
+  const headers = init?.body
+    ? { "content-type": "application/json", ...(init?.headers ?? {}) }
+    : init?.headers;
+  return fetch(`${BASE}${path}`, { ...init, credentials: "include", headers });
 }

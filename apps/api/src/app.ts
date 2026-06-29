@@ -11,7 +11,8 @@ import profilesRoute from "./routes/profiles";
 
 export async function buildApp(env: Env): Promise<FastifyInstance> {
   const app = Fastify({ logger: true });
-  await app.register(cors, { origin: env.WEB_ORIGIN, credentials: true });
+  const origins = env.WEB_ORIGIN.split(",").map((s) => s.trim());
+  await app.register(cors, { origin: origins, credentials: true });
   await app.register(cookie, { secret: env.SESSION_SECRET });
   await app.register(dbPlugin);
   await app.register(sessionPlugin);
