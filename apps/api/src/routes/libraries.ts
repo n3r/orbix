@@ -13,7 +13,12 @@ export default async function libraries(app: FastifyInstance) {
   // GET /libraries — returns libraries with their sections
   app.get("/libraries", { preHandler: requireAdmin(app) }, async () =>
     app.prisma.library.findMany({
-      include: { sections: { orderBy: { order: "asc" } } },
+      include: {
+        sections: {
+          orderBy: { order: "asc" },
+          include: { sources: true },
+        },
+      },
     }),
   );
 
