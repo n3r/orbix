@@ -58,7 +58,7 @@ export default async function scanRoute(app: FastifyInstance) {
 
       const listener = (event: Record<string, unknown>) => {
         res.write(`data: ${JSON.stringify(event)}\n\n`);
-        if (event["phase"] === "done") {
+        if (event["phase"] === "done" || event["phase"] === "error") {
           scanEvents.off(jobId, listener);
           res.end();
         }

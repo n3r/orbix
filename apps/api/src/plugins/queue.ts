@@ -90,6 +90,7 @@ export function queuePlugin(env: Env) {
       const { jobId, sectionId, sources } = job.data;
       const { prisma } = app;
 
+      try {
       // ── Real adapters ──────────────────────────────────────────────────
 
       const probe = async (p: string): Promise<MediaFileTechnical> => {
@@ -341,14 +342,24 @@ export function queuePlugin(env: Env) {
           });
         };
 
+        // Build enrichment set: touched items UNION any still-unmatched in this section
+        const enrichIds = new Set<string>(allItemIds);
+        const unmatchedItems = await prisma.mediaItem.findMany({
+          where: { sectionId, matchState: "unmatched" },
+          select: { id: true },
+        });
+        for (const u of unmatchedItems) enrichIds.add(u.id);
+
+        const enrichIdsArr = [...enrichIds];
+
         scanEvents.emit(jobId, {
           phase: "enriching",
           processed: 0,
-          total: allItemIds.length,
+          total: enrichIds.size,
         });
 
-        for (let i = 0; i < allItemIds.length; i++) {
-          const itemId = allItemIds[i]!;
+        for (let i = 0; i < enrichIdsArr.length; i++) {
+          const itemId = enrichIdsArr[i]!;
           const item = await prisma.mediaItem.findUnique({
             where: { id: itemId },
             select: { id: true, title: true, year: true, tmdbId: true },
@@ -373,7 +384,7 @@ export function queuePlugin(env: Env) {
           scanEvents.emit(jobId, {
             phase: "enriching",
             processed: i + 1,
-            total: allItemIds.length,
+            total: enrichIds.size,
           });
         }
       }
@@ -387,9 +398,24 @@ export function queuePlugin(env: Env) {
         skipped: totalSkipped,
         matched,
       };
-      // Cache so late SSE subscribers get the result even if they missed the event
+      // Cache so late SSE subscribers get the result even if they missed the event.
+      // Evict after 5 min to prevent unbounded growth.
       scanDoneCache.set(jobId, doneEvent);
+      const doneTimer = setTimeout(() => scanDoneCache.delete(jobId), 5 * 60 * 1000);
+      doneTimer.unref?.();
       scanEvents.emit(jobId, doneEvent);
+      } catch (err) {
+        // Emit a terminal error event so SSE clients don't hang forever.
+        const errEvt: Record<string, unknown> = {
+          phase: "error",
+          message: err instanceof Error ? err.message : String(err),
+        };
+        scanDoneCache.set(jobId, errEvt);
+        const errTimer = setTimeout(() => scanDoneCache.delete(jobId), 5 * 60 * 1000);
+        errTimer.unref?.();
+        scanEvents.emit(jobId, errEvt);
+        throw err;
+      }
     }
 
     // ── Worker ─────────────────────────────────────────────────────────────

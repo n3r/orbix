@@ -30,6 +30,7 @@ interface ScanState {
   updated?: number;
   skipped?: number;
   matched?: number;
+  message?: string;
 }
 
 export default function AdminLibrariesPage() {
@@ -193,11 +194,11 @@ export default function AdminLibrariesPage() {
       es.onmessage = (event: MessageEvent<string>) => {
         const data = JSON.parse(event.data) as ScanState;
         setScanStates((s) => ({ ...s, [sectionId]: data }));
-        if (data.phase === "done") {
+        if (data.phase === "done" || data.phase === "error") {
           es.close();
           esRef.current.delete(sectionId);
           setScanLoading((s) => ({ ...s, [sectionId]: false }));
-          void loadLibraries();
+          if (data.phase === "done") void loadLibraries();
         }
       };
 
@@ -216,6 +217,9 @@ export default function AdminLibrariesPage() {
   function formatScanState(state: ScanState): string {
     if (state.phase === "done") {
       return `Done — added: ${state.added ?? 0}, updated: ${state.updated ?? 0}, matched: ${state.matched ?? 0}`;
+    }
+    if (state.phase === "error") {
+      return `Scan failed: ${state.message ?? "unknown error"}`;
     }
     if (state.processed !== undefined && state.total !== undefined) {
       return `${state.phase}: ${state.processed}/${state.total}`;
