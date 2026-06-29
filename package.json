@@ -15,7 +15,7 @@
     "db:generate": "pnpm --filter @orbix/db exec prisma generate"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["@prisma/client", "@prisma/engines", "esbuild", "prisma"]
+    "onlyBuiltDependencies": ["@prisma/client", "@prisma/engines", "argon2", "esbuild", "prisma"]
   },
   "devDependencies": {
     "@types/node": "^26.0.1",

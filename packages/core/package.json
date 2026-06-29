@@ -1,0 +1,10 @@
+{
+  "name": "@orbix/core",
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc --noEmit", "test": "vitest run", "lint": "eslint ." },
+  "dependencies": { "argon2": "^0.41.0", "zod": "^3.23.0" },
+  "devDependencies": { "@orbix/config": "workspace:*", "vitest": "^3.0.0", "typescript": "^5.6.0" }
+}
