@@ -122,6 +122,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@ctrl/video-filename-parser':
+        specifier: ^5.0.0
+        version: 5.11.0
       argon2:
         specifier: ^0.41.0
         version: 0.41.1
@@ -178,6 +181,10 @@ packages:
   '@alloc/quick-lru@5.2.0':
     resolution: {integrity: sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw==}
     engines: {node: '>=10'}
+
+  '@ctrl/video-filename-parser@5.11.0':
+    resolution: {integrity: sha512-moAxON3TdWaBEJP5xWHIoh05mzjcmi2DFqevKuXGSJ5xy4rq7JWh1vzsu5O6gP/zzI+dR/TygF0cU7iAjfSdmw==}
+    engines: {node: '>=20'}
 
   '@emnapi/runtime@1.11.1':
     resolution: {integrity: sha512-vgj7R3y3Wgx24IQaGPA/R6YFXLHVMOZ0uVEyIQPaWs+rd1AzfEMXlAC22FYwO1XkKR6NPsq7mUandH8oIRdZFw==}
@@ -2001,6 +2008,8 @@ packages:
 snapshots:
 
   '@alloc/quick-lru@5.2.0': {}
+
+  '@ctrl/video-filename-parser@5.11.0': {}
 
   '@emnapi/runtime@1.11.1':
     dependencies:

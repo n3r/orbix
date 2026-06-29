@@ -4,3 +4,4 @@ export * from "./auth/session";
 export * from "./profiles/profiles";
 export * from "./settings/settings";
 export * from "./library/library";
+export * from "./scanner/parse";
