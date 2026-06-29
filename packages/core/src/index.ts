@@ -15,3 +15,4 @@ export * from "./playback/playlist";
 export * from "./playback/ffargs";
 export * from "./playback/resume";
 export * from "./playback/subs";
+export * from "./discovery/similarity";
