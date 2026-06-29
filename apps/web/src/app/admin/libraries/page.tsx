@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button, Card, Input } from "@orbix/ui";
 import { apiFetch } from "@/lib/api";
 
@@ -54,6 +54,14 @@ export default function AdminLibrariesPage() {
   // Scan state: keyed by sectionId
   const [scanStates, setScanStates] = useState<Record<string, ScanState>>({});
   const [scanLoading, setScanLoading] = useState<Record<string, boolean>>({});
+
+  // Track active EventSources so we can close them on unmount
+  const esRef = useRef<Map<string, EventSource>>(new Map());
+
+  useEffect(() => {
+    const sources = esRef.current;
+    return () => { sources.forEach((es) => es.close()); sources.clear(); };
+  }, []);
 
   async function loadLibraries() {
     try {
@@ -177,13 +185,17 @@ export default function AdminLibrariesPage() {
       const { jobId } = (await res.json()) as { jobId: string };
 
       // Open SSE stream (same-origin via Next.js proxy rewrite)
+      // Close any prior EventSource for this section before opening a new one
+      esRef.current.get(sectionId)?.close();
       const es = new EventSource(`/api/scan/${jobId}/stream`);
+      esRef.current.set(sectionId, es);
 
       es.onmessage = (event: MessageEvent<string>) => {
         const data = JSON.parse(event.data) as ScanState;
         setScanStates((s) => ({ ...s, [sectionId]: data }));
         if (data.phase === "done") {
           es.close();
+          esRef.current.delete(sectionId);
           setScanLoading((s) => ({ ...s, [sectionId]: false }));
           void loadLibraries();
         }
@@ -192,6 +204,7 @@ export default function AdminLibrariesPage() {
       es.onerror = () => {
         setScanStates((s) => ({ ...s, [sectionId]: { phase: "stream error" } }));
         es.close();
+        esRef.current.delete(sectionId);
         setScanLoading((s) => ({ ...s, [sectionId]: false }));
       };
     } catch {
