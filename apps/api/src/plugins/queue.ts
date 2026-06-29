@@ -368,9 +368,12 @@ export function queuePlugin(env: Env) {
           const itemId = enrichIdsArr[i]!;
           const item = await prisma.mediaItem.findUnique({
             where: { id: itemId },
-            select: { id: true, title: true, year: true, tmdbId: true },
+            select: { id: true, title: true, year: true, tmdbId: true, matchState: true },
           });
           if (!item) continue;
+
+          // Never overwrite admin-chosen metadata on rescan — skip manual items.
+          if (item.matchState === "manual") continue;
 
           try {
             const result = await enrichItem(

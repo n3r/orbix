@@ -21,6 +21,13 @@ export interface TmdbSearchResult {
   year?: number;
 }
 
+export interface TmdbSearchCandidate {
+  tmdbId: number;
+  title: string;
+  year?: number;
+  posterPath?: string;
+}
+
 export interface TmdbGenreRef {
   tmdbId: number;
   name: string;
@@ -56,6 +63,7 @@ interface RawSearchResult {
   id: number;
   title: string;
   release_date?: string;
+  poster_path?: string | null;
 }
 
 interface RawMovie {
@@ -129,6 +137,20 @@ export class TmdbClient {
         ? { year: Number(first.release_date.slice(0, 4)) }
         : {}),
     };
+  }
+
+  /** Return the top 8 search results, each including a posterPath for thumbnail display. */
+  async searchMovies(query: string, year?: number): Promise<TmdbSearchCandidate[]> {
+    let url = `${BASE}/search/movie?query=${encodeURIComponent(query)}`;
+    if (year != null) url += `&year=${year}`;
+
+    const data = await this.get<{ results: RawSearchResult[] }>(url);
+    return data.results.slice(0, 8).map((r) => ({
+      tmdbId: r.id,
+      title: r.title,
+      ...(r.release_date ? { year: Number(r.release_date.slice(0, 4)) } : {}),
+      ...(r.poster_path != null ? { posterPath: r.poster_path } : {}),
+    }));
   }
 
   async movie(id: number): Promise<TmdbMovie> {

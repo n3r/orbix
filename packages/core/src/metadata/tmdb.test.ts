@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { TmdbClient, TmdbError } from "./tmdb";
+import { TmdbClient, TmdbError, type TmdbSearchCandidate } from "./tmdb";
 
 // ---------------------------------------------------------------------------
 // Fake fetch helpers — NO real network. All tests use canned payloads.
@@ -23,6 +23,66 @@ function makeFetch(payload: unknown, status = 200): {
   };
   return { fake: fake as unknown as typeof fetch, calls };
 }
+
+// ---------------------------------------------------------------------------
+// searchMovies (plural — returns top 8 candidates with posterPath)
+// ---------------------------------------------------------------------------
+
+describe("TmdbClient.searchMovies", () => {
+  it("returns top 8 results mapped to TmdbSearchCandidate with posterPath", async () => {
+    const { fake, calls } = makeFetch({
+      results: [
+        { id: 603, title: "The Matrix", release_date: "1999-03-31", poster_path: "/p.jpg" },
+        { id: 604, title: "The Matrix Reloaded", release_date: "2003-05-15", poster_path: "/p2.jpg" },
+        { id: 605, title: "The Matrix Revolutions", release_date: "2003-11-05", poster_path: null },
+      ],
+    });
+
+    const client = new TmdbClient("tok", fake);
+    const results: TmdbSearchCandidate[] = await client.searchMovies("The Matrix");
+
+    // URL assertions
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toContain("/search/movie");
+    expect(calls[0].url).toContain("query=The%20Matrix");
+    expect(calls[0].url).not.toContain("year=");
+
+    // All three results returned
+    expect(results).toHaveLength(3);
+    expect(results[0]).toEqual({ tmdbId: 603, title: "The Matrix", year: 1999, posterPath: "/p.jpg" });
+    expect(results[1]).toEqual({ tmdbId: 604, title: "The Matrix Reloaded", year: 2003, posterPath: "/p2.jpg" });
+    // null poster_path → posterPath omitted
+    expect(results[2]).toEqual({ tmdbId: 605, title: "The Matrix Revolutions", year: 2003 });
+    expect(results[2]!.posterPath).toBeUndefined();
+  });
+
+  it("appends year param when provided", async () => {
+    const { fake, calls } = makeFetch({ results: [] });
+    const client = new TmdbClient("tok", fake);
+    await client.searchMovies("The Matrix", 1999);
+    expect(calls[0]!.url).toContain("year=1999");
+  });
+
+  it("limits results to 8 even when API returns more", async () => {
+    const manyResults = Array.from({ length: 10 }, (_, i) => ({
+      id: i + 1,
+      title: `Movie ${i + 1}`,
+      release_date: "2020-01-01",
+      poster_path: null,
+    }));
+    const { fake } = makeFetch({ results: manyResults });
+    const client = new TmdbClient("tok", fake);
+    const candidates = await client.searchMovies("Movie");
+    expect(candidates).toHaveLength(8);
+  });
+
+  it("returns empty array when results is empty", async () => {
+    const { fake } = makeFetch({ results: [] });
+    const client = new TmdbClient("tok", fake);
+    const candidates = await client.searchMovies("Nothing");
+    expect(candidates).toEqual([]);
+  });
+});
 
 // ---------------------------------------------------------------------------
 // searchMovie

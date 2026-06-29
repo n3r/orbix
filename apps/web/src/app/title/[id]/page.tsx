@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { Button } from "@orbix/ui";
 import { apiFetch } from "@/lib/api";
 
@@ -148,10 +149,22 @@ export default function TitlePage({ params }: Props) {
             </div>
 
             {/* Unmatched notice */}
-            {item.matchState !== "matched" && (
+            {item.matchState !== "matched" && item.matchState !== "manual" && (
               <p className="text-sm text-yellow-400">
                 Metadata not matched yet — scan with a TMDB token to enrich.
               </p>
+            )}
+
+            {/* Admin: Fix match action */}
+            {id && (
+              <div className="mt-1">
+                <Link
+                  href={`/title/${id}/fix`}
+                  className="text-xs text-[var(--text-dim)] hover:text-[var(--accent)] underline underline-offset-2"
+                >
+                  Fix match / poster (admin)
+                </Link>
+              </div>
             )}
 
             {/* Genres */}
