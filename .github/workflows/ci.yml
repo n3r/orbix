@@ -1,0 +1,59 @@
+name: CI
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: orbix
+          POSTGRES_PASSWORD: orbix
+          POSTGRES_DB: orbix
+        ports:
+          - "1062:5432"
+        options: >-
+          --health-cmd "pg_isready -U orbix"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://orbix:orbix@localhost:1062/orbix
+      REDIS_URL: redis://localhost:1063
+      API_PORT: "1061"
+      WEB_PORT: "1060"
+      SESSION_SECRET: ci-session-secret-32-characters-long
+      WEB_ORIGIN: http://localhost:1060
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: "10"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @orbix/db exec prisma generate
+
+      - name: Apply database migrations
+        run: pnpm --filter @orbix/db exec prisma migrate deploy
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test

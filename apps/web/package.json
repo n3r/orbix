@@ -8,7 +8,7 @@
     "start": "next start -p 1060",
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
-    "lint": "next lint"
+    "lint": "eslint ."
   },
   "dependencies": {
     "@orbix/ui": "workspace:*",

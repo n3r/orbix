@@ -1,6 +1,7 @@
 {
   "name": "orbix",
   "private": true,
+  "type": "module",
   "packageManager": "pnpm@10.22.0",
   "engines": {
     "node": ">=22"
@@ -15,12 +16,21 @@
     "db:generate": "pnpm --filter @orbix/db exec prisma generate"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["@prisma/client", "@prisma/engines", "argon2", "esbuild", "prisma"]
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "argon2",
+      "esbuild",
+      "prisma"
+    ]
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.4",
     "@types/node": "^26.0.1",
+    "eslint": "^9.39.4",
     "prettier": "^3.3.0",
     "turbo": "^2.1.0",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "typescript-eslint": "^8.62.0"
   }
 }
