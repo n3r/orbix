@@ -9,3 +9,6 @@ coverage/
 *.tsbuildinfo
 test-results/
 playwright-report/
+
+# SDD scratch (briefs, reports, review diffs, ledger)
+.superpowers/
