@@ -8,6 +8,7 @@ const EnvSchema = z.object({
   WEB_PORT: z.coerce.number().int().positive(),
   SESSION_SECRET: z.string().min(32),
   WEB_ORIGIN: z.string().url(),
+  METADATA_DIR: z.string().default("./data/metadata"),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

@@ -8,3 +8,4 @@ export * from "./scanner/parse";
 export * from "./scanner/probe";
 export * from "./scanner/scan";
 export * from "./metadata/tmdb";
+export * from "./metadata/images";
