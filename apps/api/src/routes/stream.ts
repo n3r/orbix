@@ -2,6 +2,7 @@ import fs from "node:fs";
 import type { FastifyInstance } from "fastify";
 import { decideStrategy } from "@orbix/core";
 import { requireAuth } from "../lib/auth";
+import { activeProfile, profileAllowsItem } from "../lib/catalog-filter";
 import { SessionManager, SegmentTimeoutError } from "../playback/session";
 
 const DEFAULT_PROFILE = "default";
@@ -82,17 +83,30 @@ export default function streamRoute(env: { TRANSCODE_DIR: string }) {
       async (req, reply) => {
         const { fileId } = req.params;
 
-        const file = await app.prisma.mediaFile.findUnique({
-          where: { id: fileId },
-          select: {
-            id: true,
-            container: true,
-            videoCodec: true,
-            audioCodecs: true,
-          },
-        });
+        // Load the file (with its parent item's rating) and the active profile
+        // in parallel so we can enforce the kids maturity cap before issuing a
+        // play URL.
+        const [file, profile] = await Promise.all([
+          app.prisma.mediaFile.findUnique({
+            where: { id: fileId },
+            select: {
+              id: true,
+              container: true,
+              videoCodec: true,
+              audioCodecs: true,
+              mediaItem: { select: { rating: true } },
+            },
+          }),
+          activeProfile(app, req),
+        ]);
 
         if (!file) return reply.code(404).send({ error: "not_found" });
+
+        // Kids-safety gate: a kids profile must not receive a play URL for a
+        // blocked title.
+        if (!profileAllowsItem(profile, { rating: file.mediaItem.rating })) {
+          return reply.code(403).send({ error: "blocked_by_rating" });
+        }
 
         const plan = decideStrategy({
           container: file.container ?? undefined,

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { requireAuth } from "../lib/auth";
+import { activeProfile, kidsRatingWhere, profileAllowsItem } from "../lib/catalog-filter";
 
 export default async function catalogRoute(app: FastifyInstance) {
   // GET /sections/:id/items?sort=&q=
@@ -26,11 +27,15 @@ export default async function catalogRoute(app: FastifyInstance) {
           ? [{ year: "desc" as const }]
           : [{ sortTitle: "asc" as const }];
 
+      const profile = await activeProfile(app, req);
+      const ratingFilter = kidsRatingWhere(profile);
+
       // MVP cap at 500 items
       const items = await app.prisma.mediaItem.findMany({
         where: {
           sectionId: id,
           ...(q ? { title: { contains: q, mode: "insensitive" } } : {}),
+          ...(ratingFilter ?? {}),
         },
         select: {
           id: true,
@@ -52,47 +57,55 @@ export default async function catalogRoute(app: FastifyInstance) {
     "/items/:id",
     { preHandler: requireAuth(app) },
     async (req, reply) => {
-      const item = await app.prisma.mediaItem.findUnique({
-        where: { id: req.params.id },
-        select: {
-          id: true,
-          title: true,
-          year: true,
-          overview: true,
-          runtimeSec: true,
-          rating: true,
-          posterPath: true,
-          backdropPath: true,
-          matchState: true,
-          genres: {
-            select: { genre: { select: { name: true } } },
-          },
-          credits: {
-            select: {
-              role: true,
-              department: true,
-              order: true,
-              person: { select: { name: true } },
+      const [item, profile] = await Promise.all([
+        app.prisma.mediaItem.findUnique({
+          where: { id: req.params.id },
+          select: {
+            id: true,
+            title: true,
+            year: true,
+            overview: true,
+            runtimeSec: true,
+            rating: true,
+            posterPath: true,
+            backdropPath: true,
+            matchState: true,
+            genres: {
+              select: { genre: { select: { name: true } } },
             },
-            orderBy: { order: "asc" },
-          },
-          files: {
-            select: {
-              id: true,
-              path: true,
-              container: true,
-              videoCodec: true,
-              audioCodecs: true,
-              width: true,
-              height: true,
-              durationSec: true,
-              size: true,
+            credits: {
+              select: {
+                role: true,
+                department: true,
+                order: true,
+                person: { select: { name: true } },
+              },
+              orderBy: { order: "asc" },
+            },
+            files: {
+              select: {
+                id: true,
+                path: true,
+                container: true,
+                videoCodec: true,
+                audioCodecs: true,
+                width: true,
+                height: true,
+                durationSec: true,
+                size: true,
+              },
             },
           },
-        },
-      });
+        }),
+        activeProfile(app, req),
+      ]);
 
       if (!item) return reply.code(404).send({ error: "not_found" });
+
+      // Kids profile: return 404 for blocked titles (avoids leaking existence)
+      if (!profileAllowsItem(profile, { rating: item.rating })) {
+        return reply.code(404).send({ error: "not_found" });
+      }
 
       const cast = item.credits
         .filter((c) => c.department === "cast")

@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { buildSmartRows, itemSimilarity, continueWatching, parseConstraints } from "@orbix/core";
 import { requireAuth } from "../lib/auth";
+import { activeProfile, kidsRatingWhere } from "../lib/catalog-filter";
 import { embedText, EmbedderUnavailable } from "../discovery/embedder.js";
 import { backfillEmbeddings } from "../discovery/embed-worker.js";
 import { Prisma } from "@orbix/db";
@@ -99,10 +100,16 @@ export default async function discoveryRoute(app: FastifyInstance) {
       // ── 1. Load catalog + profile activity in parallel ───────────────────────
       // Catalog: deterministic order (newest first), cap raised to 2000 to handle
       // large libraries (similarity computation is O(catalog) per anchor — fine).
+      // For kids profiles, apply the maturity rating filter so blocked titles never
+      // enter the rows.
+      const profile = await activeProfile(app, req);
+      const ratingFilter = kidsRatingWhere(profile);
+
       const [rawItems, allStates, playedEvents, histEvents] = await Promise.all([
         app.prisma.mediaItem.findMany({
           take: 2000,
           orderBy: [{ addedAt: "desc" }, { id: "asc" }],
+          where: ratingFilter ?? undefined,
           select: itemSelect,
         }),
         // Full playback states: used for both continueWatching and playedIds
@@ -146,7 +153,7 @@ export default async function discoveryRoute(app: FastifyInstance) {
       let extraItems: typeof rawItems = [];
       if (missingIds.length > 0) {
         extraItems = await app.prisma.mediaItem.findMany({
-          where: { id: { in: missingIds } },
+          where: { id: { in: missingIds }, ...(ratingFilter ?? {}) },
           select: itemSelect,
         });
         for (const item of extraItems) {
@@ -240,8 +247,15 @@ export default async function discoveryRoute(app: FastifyInstance) {
       const { q = "" } = req.query as { q?: string };
       const c = parseConstraints(q);
 
+      // Load active profile for kids-safety filtering.
+      const profile = await activeProfile(app, req);
+      const ratingFilter = kidsRatingWhere(profile);
+
       // Build the Prisma WHERE clause from parsed constraints
-      const where: Prisma.MediaItemWhereInput = { matchState: "matched" };
+      const where: Prisma.MediaItemWhereInput = {
+        matchState: "matched",
+        ...(ratingFilter ?? {}),
+      };
 
       // Runtime filter
       const runtimeFilter: { lte?: number; gte?: number } = {};
