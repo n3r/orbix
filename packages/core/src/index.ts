@@ -17,3 +17,4 @@ export * from "./playback/resume";
 export * from "./playback/subs";
 export * from "./discovery/similarity";
 export * from "./discovery/rows";
+export * from "./discovery/constraints";
