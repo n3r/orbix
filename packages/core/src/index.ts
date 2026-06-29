@@ -12,3 +12,4 @@ export * from "./metadata/images";
 export * from "./metadata/enrich";
 export * from "./playback/strategy";
 export * from "./playback/playlist";
+export * from "./playback/ffargs";
