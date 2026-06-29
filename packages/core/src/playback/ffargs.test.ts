@@ -82,8 +82,38 @@ describe("buildHlsArgs", () => {
     expect(args[args.indexOf("-crf") + 1]).toBe("21");
   });
 
-  it("transcode: custom encoder override", () => {
+  it("transcode: custom encoder override (libx264 passthrough)", () => {
     const args = buildHlsArgs({ ...BASE_TRANSCODE, encoder: "libx264" });
+    const idx = args.indexOf("-c:v");
+    expect(args[idx + 1]).toBe("libx264");
+  });
+
+  it("transcode: software encoder maps to libx264", () => {
+    const args = buildHlsArgs({ ...BASE_TRANSCODE, encoder: "software" });
+    const idx = args.indexOf("-c:v");
+    expect(args[idx + 1]).toBe("libx264");
+  });
+
+  it("transcode: nvenc encoder maps to h264_nvenc", () => {
+    const args = buildHlsArgs({ ...BASE_TRANSCODE, encoder: "nvenc" });
+    const idx = args.indexOf("-c:v");
+    expect(args[idx + 1]).toBe("h264_nvenc");
+  });
+
+  it("transcode: vaapi encoder maps to h264_vaapi", () => {
+    const args = buildHlsArgs({ ...BASE_TRANSCODE, encoder: "vaapi" });
+    const idx = args.indexOf("-c:v");
+    expect(args[idx + 1]).toBe("h264_vaapi");
+  });
+
+  it("transcode: qsv encoder maps to h264_qsv", () => {
+    const args = buildHlsArgs({ ...BASE_TRANSCODE, encoder: "qsv" });
+    const idx = args.indexOf("-c:v");
+    expect(args[idx + 1]).toBe("h264_qsv");
+  });
+
+  it("transcode: no encoder → defaults to libx264", () => {
+    const args = buildHlsArgs(BASE_TRANSCODE); // no encoder field
     const idx = args.indexOf("-c:v");
     expect(args[idx + 1]).toBe("libx264");
   });

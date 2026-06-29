@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import { decideStrategy } from "@orbix/core";
+import { decideStrategy, getSetting } from "@orbix/core";
 import { requireAuth } from "../lib/auth";
 import { activeProfile, profileAllowsItem, assertFileAllowed } from "../lib/catalog-filter";
 import { SessionManager, SegmentTimeoutError } from "../playback/session";
@@ -82,7 +82,14 @@ async function resolveSession(
 
 export default function streamRoute(env: { TRANSCODE_DIR: string }) {
   return async function (app: FastifyInstance) {
-    const manager = new SessionManager({ transcodeDir: env.TRANSCODE_DIR });
+    const manager = new SessionManager({
+      transcodeDir: env.TRANSCODE_DIR,
+      getEncoder: () =>
+        getSetting<string>("encoder", {
+          fallback: "software",
+          read: (k) => app.prisma.setting.findUnique({ where: { key: k } }),
+        }),
+    });
 
     app.addHook("onClose", async () => {
       await manager.closeAll();

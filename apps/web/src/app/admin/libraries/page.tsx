@@ -237,7 +237,15 @@ export default function AdminLibrariesPage() {
 
   return (
     <main className="p-8 max-w-4xl mx-auto flex flex-col gap-8">
-      <h1 className="text-3xl font-bold text-[var(--text)]">Libraries</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold text-[var(--text)]">Libraries</h1>
+        <a
+          href="/admin/settings"
+          className="text-sm text-[var(--text-dim)] hover:text-[var(--text)]"
+        >
+          Settings
+        </a>
+      </div>
 
       {error && <p className="text-sm text-red-400">{error}</p>}
 

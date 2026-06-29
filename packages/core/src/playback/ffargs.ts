@@ -1,3 +1,14 @@
+/** Named encoder setting values (as stored in the DB). */
+export type EncoderSetting = "software" | "vaapi" | "qsv" | "nvenc";
+
+/** Mapping from encoder setting value to ffmpeg codec name. */
+const ENCODER_MAP: Record<string, string> = {
+  software: "libx264",
+  vaapi: "h264_vaapi",
+  qsv: "h264_qsv",
+  nvenc: "h264_nvenc",
+};
+
 export interface HlsArgsOpts {
   input: string;
   startSegment: number;
@@ -5,7 +16,12 @@ export interface HlsArgsOpts {
   outDir: string;
   mode: "remux" | "transcode";
   audioAction: "copy" | "aac";
-  encoder?: "libx264";
+  /**
+   * Encoder setting value (`software`|`vaapi`|`qsv`|`nvenc`) **or** a raw
+   * ffmpeg codec name (`libx264`) for backward compatibility.
+   * Defaults to `"software"` (→ libx264) when omitted.
+   */
+  encoder?: EncoderSetting | "libx264";
 }
 
 export function buildHlsArgs(opts: HlsArgsOpts): string[] {
@@ -28,7 +44,9 @@ export function buildHlsArgs(opts: HlsArgsOpts): string[] {
   if (mode === "remux") {
     args.push("-c:v", "copy");
   } else {
-    const videoEncoder = encoder ?? "libx264";
+    // Map setting values → ffmpeg codec names; fall through for raw names (e.g. libx264).
+    const rawEncoder = encoder ?? "software";
+    const videoEncoder = ENCODER_MAP[rawEncoder] ?? rawEncoder;
     args.push("-c:v", videoEncoder, "-preset", "veryfast", "-crf", "21");
   }
 

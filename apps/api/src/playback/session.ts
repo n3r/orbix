@@ -46,20 +46,30 @@ export class SessionManager {
   private spawnFn: SpawnFn;
   private reapTimer: ReturnType<typeof setInterval>;
   private timeoutMs: number;
+  private getEncoder: (() => Promise<string>) | undefined;
 
   constructor({
     transcodeDir,
     spawn,
     timeoutMs,
+    getEncoder,
   }: {
     transcodeDir: string;
     spawn?: SpawnFn;
     /** Override the segment wait timeout (ms). Useful for fast-failing tests. */
     timeoutMs?: number;
+    /**
+     * Optional async getter for the current encoder setting (e.g. reads from
+     * the DB). Returns a value like `"software"`, `"vaapi"`, `"qsv"`, or
+     * `"nvenc"`. Defaults to `"software"` (libx264) when absent or the
+     * returned value is unrecognised.
+     */
+    getEncoder?: () => Promise<string>;
   }) {
     this.transcodeDir = transcodeDir;
     this.spawnFn = spawn ?? (nodeSpawn as SpawnFn);
     this.timeoutMs = timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    this.getEncoder = getEncoder;
     this.reapTimer = setInterval(() => {
       void this.reap();
     }, REAP_INTERVAL_MS);
@@ -119,13 +129,26 @@ export class SessionManager {
     session.proc = null;
   }
 
-  private spawnFfmpeg(session: Session, startSegment: number): void {
+  private async spawnFfmpeg(session: Session, startSegment: number): Promise<void> {
     this.killProc(session);
 
     const mode: "remux" | "transcode" =
       session.plan.mode === "transcode" ? "transcode" : "remux";
     const audioAction: "copy" | "aac" =
       "audioAction" in session.plan ? session.plan.audioAction : "aac";
+
+    // Read the encoder setting for transcode mode; fall back to "software" on
+    // any error or unknown value so existing playback is never broken.
+    let encoder: string | undefined;
+    if (mode === "transcode" && this.getEncoder) {
+      try {
+        encoder = await this.getEncoder();
+      } catch {
+        encoder = "software";
+      }
+      // Guard: unknown / empty value → software
+      if (!encoder) encoder = "software";
+    }
 
     const args = buildHlsArgs({
       input: session.inputPath,
@@ -134,6 +157,7 @@ export class SessionManager {
       outDir: session.dir,
       mode,
       audioAction,
+      encoder: encoder as "software" | "vaapi" | "qsv" | "nvenc" | undefined,
     });
 
     const proc = this.spawnFn("ffmpeg", args, { stdio: "ignore" });
@@ -191,7 +215,7 @@ export class SessionManager {
       (n > session.currentStart + AHEAD_WINDOW && !alreadyPresent);
 
     if (needsRestart) {
-      this.spawnFfmpeg(session, n);
+      await this.spawnFfmpeg(session, n);
     }
 
     try {
@@ -225,7 +249,7 @@ export class SessionManager {
     }
 
     if (!this.isProcAlive(session)) {
-      this.spawnFfmpeg(session, session.currentStart);
+      await this.spawnFfmpeg(session, session.currentStart);
     }
 
     try {
