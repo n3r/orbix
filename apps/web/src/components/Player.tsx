@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { MediaPlayer, MediaProvider, Track, type MediaPlayerInstance } from "@vidstack/react";
+import { MediaPlayer, MediaProvider, Track, isHLSProvider, type MediaPlayerInstance, type MediaProviderAdapter } from "@vidstack/react";
 import { DefaultVideoLayout, defaultLayoutIcons } from "@vidstack/react/player/layouts/default";
 import "@vidstack/react/player/styles/default/theme.css";
 import "@vidstack/react/player/styles/default/layouts/video.css";
+import Hls from "hls.js";
 import { apiFetch } from "@/lib/api";
 
 interface Decision {
@@ -117,6 +118,15 @@ export default function Player({ fileId, mediaItemId, title }: Props) {
     };
   }, [saveProgress]);
 
+  // Wire up the bundled hls.js so HLS playback works offline (no CDN fetch).
+  // This fires before the provider loads, so setting provider.library here
+  // ensures Vidstack uses the bundled constructor rather than its CDN default.
+  const onProviderChange = useCallback((provider: MediaProviderAdapter | null) => {
+    if (provider && isHLSProvider(provider)) {
+      provider.library = Hls;
+    }
+  }, []);
+
   // Resume: seek to saved position when the player is ready
   const handleCanPlay = useCallback(() => {
     if (resumedRef.current) return;
@@ -148,8 +158,9 @@ export default function Player({ fileId, mediaItemId, title }: Props) {
     <MediaPlayer
       ref={playerRef}
       title={title}
-      src={decision.url}
+      src={{ src: decision.url, type: decision.mode === "direct" ? "video/mp4" : "application/x-mpegurl" }}
       className="w-full aspect-video bg-black rounded-[var(--radius)] overflow-hidden"
+      onProviderChange={onProviderChange}
       onCanPlay={handleCanPlay}
       onPause={handlePause}
     >

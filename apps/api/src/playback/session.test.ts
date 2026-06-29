@@ -40,9 +40,16 @@ function makeFakeSpawn(writeDelayMs = 50) {
 
     calls.push({ cmd, args, startSegment, outDir });
 
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
     const proc: FakeProc = {
       kill: vi.fn().mockImplementation(() => {
         proc.killed = true;
+        // Cancel the pending write so it doesn't fire after the dir is cleaned up.
+        if (timer !== null) {
+          clearTimeout(timer);
+          timer = null;
+        }
       }),
       killed: false,
       on: vi.fn(),
@@ -51,15 +58,19 @@ function makeFakeSpawn(writeDelayMs = 50) {
     lastProc = proc;
 
     // Asynchronously write init.mp4 + seg<startSegment>.m4s, simulating ffmpeg output.
-    setTimeout(() => {
+    // Writes are skipped if the proc was killed before the timer fires.
+    timer = setTimeout(() => {
+      timer = null;
+      if (proc.killed) return;
       void fsp
         .writeFile(path.join(outDir, "init.mp4"), Buffer.from("init-placeholder"))
-        .then(() =>
-          fsp.writeFile(
+        .then(() => {
+          if (proc.killed) return;
+          return fsp.writeFile(
             path.join(outDir, `seg${startSegment}.m4s`),
             Buffer.from(`segment-${startSegment}-placeholder`),
-          ),
-        );
+          );
+        });
     }, writeDelayMs);
 
     return proc as unknown as ChildProcess;
@@ -200,24 +211,47 @@ describe("SessionManager", () => {
     await manager.closeAll();
   });
 
-  it("ensureSegment throws SegmentTimeoutError if ffmpeg never writes the file", async () => {
-    // Use a spawn that writes nothing within the poll window
-    const noopSpawn = vi.fn().mockImplementation(() => ({
-      kill: vi.fn(),
-      killed: false,
-      on: vi.fn(),
-      once: vi.fn(),
-    })) as unknown as SpawnFn;
-
-    // Reduce timeout by monkey-patching is not possible without exposing it.
-    // Instead test that SegmentTimeoutError is the right class.
-    // We rely on the class name only — don't run the full 30s timeout here.
-    // So just ensure the error class exists and has the right name.
-    expect(SegmentTimeoutError).toBeDefined();
+  it("SegmentTimeoutError class has the right name and message shape", () => {
     const err = new SegmentTimeoutError("seg99.m4s");
     expect(err.name).toBe("SegmentTimeoutError");
     expect(err.message).toContain("seg99.m4s");
+  });
 
-    void noopSpawn; // suppress unused warning
+  it("ensureSegment rejects with SegmentTimeoutError AND kills proc when ffmpeg never writes", async () => {
+    // Spawn that never writes any files — simulates a hung ffmpeg.
+    const killFn = vi.fn().mockImplementation(function (this: { killed: boolean }) {
+      this.killed = true;
+    });
+    const noopProc = {
+      kill: killFn,
+      killed: false,
+      on: vi.fn(),
+      once: vi.fn(),
+    };
+    const noopSpawn = vi.fn().mockImplementation(() => noopProc) as unknown as SpawnFn;
+
+    // Use a very short timeoutMs so the test doesn't wait 30s.
+    const manager = new SessionManager({ transcodeDir: testDir, spawn: noopSpawn, timeoutMs: 200 });
+
+    const plan = decideStrategy({ container: "mkv", videoCodec: "hevc", audioCodecs: ["aac"] });
+    const session = await manager.getOrCreate("file-timeout:default", {
+      inputPath: "/fake/video.mkv",
+      plan,
+      durationSec: 120,
+      segSec: 6,
+    });
+
+    const capturedLastAccess = session.lastAccess;
+
+    await expect(manager.ensureSegment(session, 0)).rejects.toThrow(SegmentTimeoutError);
+
+    // proc must have been killed so the next request triggers a fresh spawn.
+    expect(noopProc.kill).toHaveBeenCalledWith("SIGKILL");
+    expect(session.proc).toBeNull();
+
+    // lastAccess must NOT have been updated on failure — stuck session stays reapable.
+    expect(session.lastAccess).toBe(capturedLastAccess);
+
+    await manager.closeAll();
   });
 });

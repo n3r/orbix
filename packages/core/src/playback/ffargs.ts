@@ -22,7 +22,7 @@ export function buildHlsArgs(opts: HlsArgsOpts): string[] {
   args.push("-i", input);
 
   // 3. Stream mapping
-  args.push("-map", "0:v:0", "-map", "0:a:0");
+  args.push("-map", "0:v:0", "-map", "0:a:0?");
 
   // 4. Video codec
   if (mode === "remux") {
@@ -45,7 +45,7 @@ export function buildHlsArgs(opts: HlsArgsOpts): string[] {
     "-hls_segment_type", "fmp4",
     "-hls_time", String(segSec),
     "-hls_playlist_type", "vod",
-    "-hls_flags", "independent_segments",
+    "-hls_flags", "independent_segments+temp_file",
     "-start_number", String(startSegment),
     "-hls_segment_filename", `${outDir}/seg%d.m4s`,
     "-hls_fmp4_init_filename", "init.mp4",

@@ -46,13 +46,13 @@ describe("buildHlsArgs", () => {
   });
 
   // --- map flags ---
-  it("includes -map 0:v:0 and -map 0:a:0", () => {
+  it("includes -map 0:v:0 and -map 0:a:0? (optional audio)", () => {
     const args = buildHlsArgs(BASE_REMUX);
     const maps = args.filter((a) => a === "-map");
     expect(maps).toHaveLength(2);
     const v = args.indexOf("-map");
     expect(args[v + 1]).toBe("0:v:0");
-    expect(args[v + 3]).toBe("0:a:0"); // second -map is two positions later
+    expect(args[v + 3]).toBe("0:a:0?"); // second -map is two positions later, ? makes audio optional
   });
 
   // --- video: remux ---
@@ -134,11 +134,11 @@ describe("buildHlsArgs", () => {
     expect(args[idx + 1]).toBe("vod");
   });
 
-  it("-hls_flags independent_segments", () => {
+  it("-hls_flags independent_segments+temp_file", () => {
     const args = buildHlsArgs(BASE_REMUX);
     const idx = args.indexOf("-hls_flags");
     expect(idx).toBeGreaterThan(-1);
-    expect(args[idx + 1]).toBe("independent_segments");
+    expect(args[idx + 1]).toBe("independent_segments+temp_file");
   });
 
   it("-hls_segment_filename is outDir/seg%d.m4s", () => {

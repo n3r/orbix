@@ -10,7 +10,7 @@ export type { PlaybackPlan };
 /** How many segments ahead of currentStart ffmpeg may run before we restart. */
 const AHEAD_WINDOW = 100;
 const POLL_INTERVAL_MS = 100;
-const TIMEOUT_MS = 30_000;
+const DEFAULT_TIMEOUT_MS = 30_000;
 const REAP_INTERVAL_MS = 60_000;
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -45,10 +45,21 @@ export class SessionManager {
   private transcodeDir: string;
   private spawnFn: SpawnFn;
   private reapTimer: ReturnType<typeof setInterval>;
+  private timeoutMs: number;
 
-  constructor({ transcodeDir, spawn }: { transcodeDir: string; spawn?: SpawnFn }) {
+  constructor({
+    transcodeDir,
+    spawn,
+    timeoutMs,
+  }: {
+    transcodeDir: string;
+    spawn?: SpawnFn;
+    /** Override the segment wait timeout (ms). Useful for fast-failing tests. */
+    timeoutMs?: number;
+  }) {
     this.transcodeDir = transcodeDir;
     this.spawnFn = spawn ?? (nodeSpawn as SpawnFn);
+    this.timeoutMs = timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.reapTimer = setInterval(() => {
       void this.reap();
     }, REAP_INTERVAL_MS);
@@ -138,7 +149,7 @@ export class SessionManager {
   }
 
   private async waitForFile(filePath: string): Promise<string> {
-    const deadline = Date.now() + TIMEOUT_MS;
+    const deadline = Date.now() + this.timeoutMs;
     while (Date.now() < deadline) {
       try {
         const stat = await fs.promises.stat(filePath);
@@ -158,9 +169,12 @@ export class SessionManager {
    *   - proc is dead/null, OR
    *   - n < currentStart (backward seek), OR
    *   - n > currentStart + AHEAD_WINDOW and the file is not already present (far-forward seek).
+   *
+   * lastAccess is only updated on a SUCCESSFUL segment return so that a stuck
+   * session (ffmpeg hung) is still eligible for reaping by the idle reaper.
+   * On timeout, the hung ffmpeg is killed so the next request triggers a fresh spawn.
    */
   async ensureSegment(session: Session, n: number): Promise<string> {
-    session.lastAccess = Date.now();
     const segPath = path.join(session.dir, `seg${n}.m4s`);
 
     let alreadyPresent = false;
@@ -180,7 +194,18 @@ export class SessionManager {
       this.spawnFfmpeg(session, n);
     }
 
-    return this.waitForFile(segPath);
+    try {
+      const result = await this.waitForFile(segPath);
+      // Only update lastAccess on success so a stuck session can be reaped.
+      session.lastAccess = Date.now();
+      return result;
+    } catch (err) {
+      if (err instanceof SegmentTimeoutError) {
+        // Kill the hung ffmpeg so the next ensureSegment sees a dead proc and restarts.
+        this.killProc(session);
+      }
+      throw err;
+    }
   }
 
   /**
@@ -203,7 +228,16 @@ export class SessionManager {
       this.spawnFfmpeg(session, session.currentStart);
     }
 
-    return this.waitForFile(initPath);
+    try {
+      const result = await this.waitForFile(initPath);
+      session.lastAccess = Date.now();
+      return result;
+    } catch (err) {
+      if (err instanceof SegmentTimeoutError) {
+        this.killProc(session);
+      }
+      throw err;
+    }
   }
 
   private async reap(): Promise<void> {
