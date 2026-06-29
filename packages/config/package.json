@@ -1,0 +1,14 @@
+{
+  "name": "@orbix/config",
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./src/env.ts",
+  "exports": { ".": "./src/env.ts", "./tsconfig.base.json": "./tsconfig.base.json" },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "eslint ."
+  },
+  "dependencies": { "zod": "^3.23.0" },
+  "devDependencies": { "vitest": "^3.0.0", "typescript": "^5.6.0", "eslint": "^9.0.0" }
+}
