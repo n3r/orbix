@@ -10,6 +10,8 @@ const EnvSchema = z.object({
   WEB_ORIGIN: z.string().url(),
   METADATA_DIR: z.string().default("./data/metadata"),
   TRANSCODE_DIR: z.string().default("./data/transcode"),
+  MODELS_DIR: z.string().default("./data/models"),
+  EMBEDDINGS_ENABLED: z.coerce.boolean().default(true),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

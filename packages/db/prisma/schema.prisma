@@ -190,3 +190,22 @@ model PlaybackState {
   @@unique([profileId, mediaItemId])
   @@index([profileId, updatedAt])
 }
+
+// ── Discovery models ─────────────────────────────────────────────────────────
+
+model PlayEvent {
+  id          String   @id @default(cuid())
+  profileId   String
+  mediaItemId String
+  at          DateTime @default(now())
+
+  @@index([profileId, at])
+}
+
+model Embedding {
+  mediaItemId String                      @id
+  vector      Unsupported("vector(384)")
+  text        String
+  model       String
+  updatedAt   DateTime                    @updatedAt
+}

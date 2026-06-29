@@ -37,6 +37,19 @@ export default async function playstateRoute(app: FastifyInstance) {
         update: { positionSec: positionSecInt, durationSec: durationSecInt, finished },
       });
 
+      // Best-effort: append a PlayEvent once per viewing session (dedup within 6h)
+      try {
+        const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
+        const recent = await app.prisma.playEvent.findFirst({
+          where: { profileId, mediaItemId, at: { gt: sixHoursAgo } },
+        });
+        if (!recent) {
+          await app.prisma.playEvent.create({ data: { profileId, mediaItemId } });
+        }
+      } catch (_err) {
+        // never fail the request on history errors
+      }
+
       return { ok: true, finished };
     },
   );
