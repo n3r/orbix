@@ -32,6 +32,7 @@ export function Avatar({ name, src, size = 40, className }: Props) {
   return (
     <div
       aria-label={name}
+      role="img"
       style={style}
       className={cn(
         "rounded-full bg-[var(--accent)] text-white flex items-center justify-center",

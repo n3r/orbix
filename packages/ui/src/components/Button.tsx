@@ -6,6 +6,7 @@ type Props = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "
 export function Button({ variant = "primary", className, ...rest }: Props) {
   return (
     <button
+      type="button"
       className={cn(
         "px-4 py-2 rounded-[var(--radius-sm)] font-medium transition-colors disabled:opacity-50",
         variant === "primary"
