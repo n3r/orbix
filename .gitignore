@@ -12,3 +12,6 @@ playwright-report/
 
 # SDD scratch (briefs, reports, review diffs, ledger)
 .superpowers/
+
+# media/model/transcode/metadata caches at any package depth (e.g. apps/api/data when cwd=apps/api)
+**/data/
