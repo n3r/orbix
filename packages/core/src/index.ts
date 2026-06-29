@@ -6,3 +6,4 @@ export * from "./settings/settings";
 export * from "./library/library";
 export * from "./scanner/parse";
 export * from "./scanner/probe";
+export * from "./scanner/scan";
