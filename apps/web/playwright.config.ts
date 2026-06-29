@@ -9,9 +9,11 @@ export default defineConfig({
   globalSetup: "./e2e/global-setup.ts",
   timeout: 60_000,
   expect: { timeout: 15_000 },
-  // Limit to 2 workers to match pre-playback parallelism and prevent
-  // three-way race on the first-account setup wizard.
-  workers: 2,
+  // Serial execution (1 worker) ensures each spec sees a clean account state
+  // and eliminates first-account setup-wizard races across specs.
+  // (The previous 2-worker comment acknowledged the same concern; discovery
+  // spec makes a 4th concurrent spec that definitively requires serial order.)
+  workers: 1,
   use: {
     baseURL: "http://localhost:1060",
     headless: true,

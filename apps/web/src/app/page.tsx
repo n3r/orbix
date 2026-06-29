@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import HomeRows from "@/components/HomeRows";
 
 // Always dynamic — reads cookies and makes authed API calls per request.
@@ -34,6 +35,15 @@ export default async function HomePage() {
   // All checks passed — show home
   return (
     <main className="flex min-h-screen flex-col gap-6 pt-8">
+      <header className="px-8 flex items-center justify-between">
+        <span className="text-xl font-bold text-[var(--text)]">Orbix</span>
+        <Link
+          href="/search"
+          className="text-sm text-[var(--text-dim)] hover:text-[var(--text)] transition-colors"
+        >
+          Search
+        </Link>
+      </header>
       <HomeRows />
     </main>
   );
