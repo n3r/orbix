@@ -1,0 +1,7 @@
+:root {
+  --bg: #0b0d12; --surface: #14171f; --surface-2: #1c212b;
+  --text: #e8eaf0; --text-dim: #9aa3b2; --accent: #6d7bff; --accent-2: #a06dff;
+  --radius: 12px; --radius-sm: 8px;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--text); }
