@@ -9,6 +9,7 @@ import setup from "./routes/setup";
 import auth from "./routes/auth";
 import profilesRoute from "./routes/profiles";
 import settingsRoute from "./routes/settings";
+import librariesRoute from "./routes/libraries";
 
 export async function buildApp(env: Env): Promise<FastifyInstance> {
   const app = Fastify({ logger: true });
@@ -22,5 +23,6 @@ export async function buildApp(env: Env): Promise<FastifyInstance> {
   await app.register(auth);
   await app.register(profilesRoute);
   await app.register(settingsRoute);
+  await app.register(librariesRoute);
   return app;
 }
