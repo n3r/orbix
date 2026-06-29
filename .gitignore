@@ -6,3 +6,6 @@ dist/
 *.log
 coverage/
 /data/
+*.tsbuildinfo
+test-results/
+playwright-report/

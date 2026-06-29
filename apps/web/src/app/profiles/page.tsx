@@ -2,10 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@orbix/ui";
-import { Card } from "@orbix/ui";
-import { Input } from "@orbix/ui";
-import { Avatar } from "@orbix/ui";
+import { Button, Card, Input, Avatar } from "@orbix/ui";
 import { apiFetch } from "@/lib/api";
 
 interface Profile {
@@ -26,10 +23,20 @@ export default function ProfilesPage() {
   const [selectError, setSelectError] = useState<string | null>(null);
 
   async function loadProfiles() {
-    const res = await apiFetch("/profiles");
-    if (res.ok) {
-      const data = (await res.json()) as Profile[];
-      setProfiles(data);
+    try {
+      const res = await apiFetch("/profiles");
+      if (res.ok) {
+        const data = (await res.json()) as Profile[];
+        setProfiles(data);
+        return;
+      }
+      if (res.status === 401) {
+        router.replace("/login");
+        return;
+      }
+      setSelectError("Failed to load profiles");
+    } catch {
+      setSelectError("Network error");
     }
   }
 
@@ -65,7 +72,6 @@ export default function ProfilesPage() {
     setSelectError(null);
     const res = await apiFetch(`/profiles/${profile.id}/select`, {
       method: "POST",
-      body: JSON.stringify({}),
     });
     if (res.ok) {
       router.replace("/");

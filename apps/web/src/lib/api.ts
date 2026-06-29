@@ -5,7 +5,7 @@ export async function apiFetch(path: string, init?: RequestInit) {
     ...init,
     credentials: "include",
     headers: {
-      "content-type": "application/json",
+      ...(init?.body != null ? { "content-type": "application/json" } : {}),
       ...(init?.headers ?? {}),
     },
   });

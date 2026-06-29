@@ -2,9 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@orbix/ui";
-import { Input } from "@orbix/ui";
-import { Card } from "@orbix/ui";
+import { Button, Input, Card } from "@orbix/ui";
 import { apiFetch } from "@/lib/api";
 
 export default function SetupPage() {
