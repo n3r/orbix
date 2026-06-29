@@ -24,13 +24,17 @@ export default async function playstateRoute(app: FastifyInstance) {
         return reply.code(400).send({ error: "invalid_body" });
       }
 
+      // Floor to integers for Prisma Int fields (player may send fractional seconds)
+      const positionSecInt = Math.max(0, Math.floor(positionSec));
+      const durationSecInt = Math.max(0, Math.floor(durationSec));
+
       const mediaItemId = req.params.id;
-      const finished = isFinished(positionSec, durationSec);
+      const finished = isFinished(positionSecInt, durationSecInt);
 
       await app.prisma.playbackState.upsert({
         where: { profileId_mediaItemId: { profileId, mediaItemId } },
-        create: { profileId, mediaItemId, positionSec, durationSec, finished },
-        update: { positionSec, durationSec, finished },
+        create: { profileId, mediaItemId, positionSec: positionSecInt, durationSec: durationSecInt, finished },
+        update: { positionSec: positionSecInt, durationSec: durationSecInt, finished },
       });
 
       return { ok: true, finished };
