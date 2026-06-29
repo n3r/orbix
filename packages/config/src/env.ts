@@ -9,6 +9,7 @@ const EnvSchema = z.object({
   SESSION_SECRET: z.string().min(32),
   WEB_ORIGIN: z.string().url(),
   METADATA_DIR: z.string().default("./data/metadata"),
+  TRANSCODE_DIR: z.string().default("./data/transcode"),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

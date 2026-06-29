@@ -1,10 +1,5 @@
-import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-
-function requireAdmin(app: FastifyInstance) {
-  return async (req: FastifyRequest, reply: FastifyReply) => {
-    if (!req.accountId) return reply.code(401).send({ error: "unauthenticated" });
-  };
-}
+import type { FastifyInstance } from "fastify";
+import { requireAuth } from "../lib/auth";
 
 export default async function catalogRoute(app: FastifyInstance) {
   // GET /sections/:id/items?sort=&q=
@@ -13,7 +8,7 @@ export default async function catalogRoute(app: FastifyInstance) {
     Querystring: { sort?: string; q?: string };
   }>(
     "/sections/:id/items",
-    { preHandler: requireAdmin(app) },
+    { preHandler: requireAuth(app) },
     async (req, reply) => {
       const { id } = req.params;
       const sort = req.query.sort ?? "title";
@@ -55,7 +50,7 @@ export default async function catalogRoute(app: FastifyInstance) {
   // GET /items/:id
   app.get<{ Params: { id: string } }>(
     "/items/:id",
-    { preHandler: requireAdmin(app) },
+    { preHandler: requireAuth(app) },
     async (req, reply) => {
       const item = await app.prisma.mediaItem.findUnique({
         where: { id: req.params.id },

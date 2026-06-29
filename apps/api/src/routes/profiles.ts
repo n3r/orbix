@@ -1,22 +1,16 @@
-import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { validateProfileInput, hashPin, verifyPin, ProfileValidationError } from "@orbix/core";
 import { Prisma } from "@orbix/db";
-
-// In the single-account MVP, authenticated == admin.
-function requireAdmin(app: FastifyInstance) {
-  return async (req: FastifyRequest, reply: FastifyReply) => {
-    if (!req.accountId) return reply.code(401).send({ error: "unauthenticated" });
-  };
-}
+import { requireAuth } from "../lib/auth";
 
 export default async function profiles(app: FastifyInstance) {
   // GET /profiles — omit pinHash from the select to never leak it to clients
-  app.get("/profiles", { preHandler: requireAdmin(app) }, async () =>
+  app.get("/profiles", { preHandler: requireAuth(app) }, async () =>
     app.prisma.profile.findMany({
       select: { id: true, name: true, avatar: true, kind: true, maturityCap: true },
     }));
 
-  app.post<{ Body: unknown }>("/profiles", { preHandler: requireAdmin(app) }, async (req, reply) => {
+  app.post<{ Body: unknown }>("/profiles", { preHandler: requireAuth(app) }, async (req, reply) => {
     try {
       const v = validateProfileInput(req.body);
       const pinHash = v.pin ? await hashPin(v.pin) : null;
@@ -31,7 +25,7 @@ export default async function profiles(app: FastifyInstance) {
     }
   });
 
-  app.patch<{ Params: { id: string }; Body: unknown }>("/profiles/:id", { preHandler: requireAdmin(app) }, async (req, reply) => {
+  app.patch<{ Params: { id: string }; Body: unknown }>("/profiles/:id", { preHandler: requireAuth(app) }, async (req, reply) => {
     try {
       const existing = await app.prisma.profile.findUnique({ where: { id: req.params.id } });
       if (!existing) return reply.code(404).send({ error: "not_found" });
@@ -64,7 +58,7 @@ export default async function profiles(app: FastifyInstance) {
     }
   });
 
-  app.post<{ Params: { id: string }; Body: { pin?: string } }>("/profiles/:id/select", { preHandler: requireAdmin(app) }, async (req, reply) => {
+  app.post<{ Params: { id: string }; Body: { pin?: string } }>("/profiles/:id/select", { preHandler: requireAuth(app) }, async (req, reply) => {
     const p = await app.prisma.profile.findUnique({ where: { id: req.params.id } });
     if (!p) return reply.code(404).send({ error: "not_found" });
     if (p.pinHash) {
@@ -76,7 +70,7 @@ export default async function profiles(app: FastifyInstance) {
     return { profileId: p.id };
   });
 
-  app.delete<{ Params: { id: string } }>("/profiles/:id", { preHandler: requireAdmin(app) }, async (req, reply) => {
+  app.delete<{ Params: { id: string } }>("/profiles/:id", { preHandler: requireAuth(app) }, async (req, reply) => {
     try {
       await app.prisma.profile.delete({ where: { id: req.params.id } });
       return reply.code(204).send();

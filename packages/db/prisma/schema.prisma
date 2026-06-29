@@ -115,6 +115,7 @@ model MediaFile {
   mtime          DateTime?
   subtitleTracks Json      @default("[]")
   audioTracks    Json      @default("[]")
+  probedOk       Boolean   @default(true)
 
   @@index([mediaItemId])
 }
@@ -175,4 +176,17 @@ model Setting {
   key       String   @id
   value     Json
   updatedAt DateTime @updatedAt
+}
+
+model PlaybackState {
+  id          String   @id @default(cuid())
+  profileId   String
+  mediaItemId String
+  positionSec Int      @default(0)
+  durationSec Int      @default(0)
+  finished    Boolean  @default(false)
+  updatedAt   DateTime @updatedAt
+
+  @@unique([profileId, mediaItemId])
+  @@index([profileId, updatedAt])
 }

@@ -1,18 +1,13 @@
-import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { scanEvents, scanDoneCache } from "../plugins/queue";
-
-function requireAdmin(app: FastifyInstance) {
-  return async (req: FastifyRequest, reply: FastifyReply) => {
-    if (!req.accountId) return reply.code(401).send({ error: "unauthenticated" });
-  };
-}
+import { requireAuth } from "../lib/auth";
 
 export default async function scanRoute(app: FastifyInstance) {
   // POST /sections/:id/scan — enqueue a scan job, return { jobId }
   app.post<{ Params: { id: string } }>(
     "/sections/:id/scan",
-    { preHandler: requireAdmin(app) },
+    { preHandler: requireAuth(app) },
     async (req, reply) => {
       const sectionId = req.params.id;
 

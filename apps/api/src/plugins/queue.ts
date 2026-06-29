@@ -93,12 +93,13 @@ export function queuePlugin(env: Env) {
       try {
       // ── Real adapters ──────────────────────────────────────────────────
 
-      const probe = async (p: string): Promise<MediaFileTechnical> => {
+      const probe = async (p: string): Promise<MediaFileTechnical & { probedOk: boolean }> => {
         try {
-          return await probeFile(p, { run: ffprobeRunner });
+          const tech = await probeFile(p, { run: ffprobeRunner });
+          return { ...tech, probedOk: true };
         } catch {
           // Non-video / missing ffprobe — return empty tech so scan continues
-          return { audioCodecs: [], subtitleTracks: [], audioTracks: [] };
+          return { audioCodecs: [], subtitleTracks: [], audioTracks: [], probedOk: false };
         }
       };
 
@@ -119,6 +120,8 @@ export function queuePlugin(env: Env) {
         parsed: { title: string; year?: number; tmdbId?: number; imdbId?: string };
         tech: MediaFileTechnical;
       }): Promise<{ itemId: string; created: boolean }> => {
+        // probe returns MediaFileTechnical & { probedOk: boolean } at runtime
+        const probedOk = (input.tech as MediaFileTechnical & { probedOk?: boolean }).probedOk ?? true;
         // Check if the file already exists
         const existing = await prisma.mediaFile.findUnique({
           where: { path: input.file.path },
@@ -141,6 +144,7 @@ export function queuePlugin(env: Env) {
               // Prisma accepts Json as unknown[]
               subtitleTracks: input.tech.subtitleTracks as unknown as Prisma.InputJsonValue,
               audioTracks: input.tech.audioTracks as unknown as Prisma.InputJsonValue,
+              probedOk,
             },
           });
           return { itemId: existing.mediaItemId, created: false };
@@ -186,6 +190,7 @@ export function queuePlugin(env: Env) {
             bitrate: input.tech.bitrate,
             subtitleTracks: input.tech.subtitleTracks as unknown as Prisma.InputJsonValue,
             audioTracks: input.tech.audioTracks as unknown as Prisma.InputJsonValue,
+            probedOk,
           },
         });
 
