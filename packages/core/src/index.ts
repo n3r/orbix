@@ -10,3 +10,4 @@ export * from "./scanner/scan";
 export * from "./metadata/tmdb";
 export * from "./metadata/images";
 export * from "./metadata/enrich";
+export * from "./playback/strategy";
