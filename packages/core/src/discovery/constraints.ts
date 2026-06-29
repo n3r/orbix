@@ -194,7 +194,7 @@ export function parseConstraints(query: string): ParsedConstraints {
   // Try multi-word phrases first (already sorted longest-first)
   for (const key of GENRE_KEYS_SORTED) {
     // Build a word-boundary aware pattern; handle special regex chars
-    const escaped = key.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&");
+    const escaped = key.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
     const re = new RegExp(`\\b${escaped}\\b`, "gi");
     if (re.test(residual)) {
       const canonical = GENRE_MAP[key];
