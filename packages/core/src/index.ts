@@ -9,3 +9,4 @@ export * from "./scanner/probe";
 export * from "./scanner/scan";
 export * from "./metadata/tmdb";
 export * from "./metadata/images";
+export * from "./metadata/enrich";

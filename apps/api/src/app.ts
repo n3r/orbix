@@ -10,6 +10,7 @@ import auth from "./routes/auth";
 import profilesRoute from "./routes/profiles";
 import settingsRoute from "./routes/settings";
 import librariesRoute from "./routes/libraries";
+import { imagesRoute } from "./routes/images";
 
 export async function buildApp(env: Env): Promise<FastifyInstance> {
   const app = Fastify({ logger: true });
@@ -24,5 +25,6 @@ export async function buildApp(env: Env): Promise<FastifyInstance> {
   await app.register(profilesRoute);
   await app.register(settingsRoute);
   await app.register(librariesRoute);
+  await app.register(imagesRoute(env));
   return app;
 }
