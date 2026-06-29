@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import ContinueWatching from "@/components/ContinueWatching";
+import HomeRows from "@/components/HomeRows";
 
 // Always dynamic — reads cookies and makes authed API calls per request.
 export const dynamic = "force-dynamic";
@@ -34,11 +34,7 @@ export default async function HomePage() {
   // All checks passed — show home
   return (
     <main className="flex min-h-screen flex-col gap-6 pt-8">
-      <ContinueWatching />
-      <div className="flex flex-col items-center justify-center gap-6 p-8">
-        <h1 className="text-4xl font-bold text-[var(--text)]">Welcome to Orbix</h1>
-        <p className="text-[var(--text-dim)]">Your profile is selected. Enjoy your content.</p>
-      </div>
+      <HomeRows />
     </main>
   );
 }

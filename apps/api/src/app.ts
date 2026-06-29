@@ -17,6 +17,7 @@ import catalogRoute from "./routes/catalog";
 import streamRoute from "./routes/stream";
 import subtitlesRoute from "./routes/subtitles";
 import playstateRoute from "./routes/playstate";
+import discoveryRoute from "./routes/discovery";
 
 export async function buildApp(env: Env): Promise<FastifyInstance> {
   const app = Fastify({ logger: true });
@@ -38,5 +39,6 @@ export async function buildApp(env: Env): Promise<FastifyInstance> {
   await app.register(streamRoute(env));
   await app.register(subtitlesRoute);
   await app.register(playstateRoute);
+  await app.register(discoveryRoute);
   return app;
 }
