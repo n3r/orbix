@@ -21,6 +21,7 @@
       "@prisma/engines",
       "argon2",
       "esbuild",
+      "onnxruntime-node",
       "prisma"
     ]
   },
