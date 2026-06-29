@@ -73,54 +73,95 @@ export default async function discoveryRoute(app: FastifyInstance) {
       const profileId = req.cookies["orbix_profile"];
       if (!profileId) return reply.code(400).send({ error: "no_profile" });
 
-      // ── 1. Load catalog ──────────────────────────────────────────────────────
-      // All MediaItems with genre/keyword/cast/director features (cap 300 for MVP)
-      const rawItems = await app.prisma.mediaItem.findMany({
-        take: 300,
-        select: {
-          id: true,
-          title: true,
-          year: true,
-          posterPath: true,
-          genres: {
-            select: { genre: { select: { name: true } } },
-          },
-          keywords: {
-            select: { keyword: { select: { name: true } } },
-          },
-          credits: {
-            select: {
-              role: true,
-              department: true,
-              order: true,
-              person: { select: { name: true } },
-            },
-            orderBy: { order: "asc" },
-          },
+      // Shared select shape for MediaItem feature loading (used twice: catalog + must-include union)
+      const itemSelect = {
+        id: true,
+        title: true,
+        year: true,
+        posterPath: true,
+        genres: {
+          select: { genre: { select: { name: true } } },
         },
-      });
+        keywords: {
+          select: { keyword: { select: { name: true } } },
+        },
+        credits: {
+          select: {
+            role: true,
+            department: true,
+            order: true,
+            person: { select: { name: true } },
+          },
+          orderBy: { order: "asc" as const },
+        },
+      };
 
-      // Build a quick id→item lookup for hydration and history title resolution
-      const itemById = new Map(rawItems.map((item) => [item.id, item]));
-
-      // Build catalog: determine playedByProfile via a single PlaybackState +
-      // PlayEvent query for this profile
-      const [playedStates, playedEvents] = await Promise.all([
+      // ── 1. Load catalog + profile activity in parallel ───────────────────────
+      // Catalog: deterministic order (newest first), cap raised to 2000 to handle
+      // large libraries (similarity computation is O(catalog) per anchor — fine).
+      const [rawItems, allStates, playedEvents, histEvents] = await Promise.all([
+        app.prisma.mediaItem.findMany({
+          take: 2000,
+          orderBy: [{ addedAt: "desc" }, { id: "asc" }],
+          select: itemSelect,
+        }),
+        // Full playback states: used for both continueWatching and playedIds
         app.prisma.playbackState.findMany({
           where: { profileId },
-          select: { mediaItemId: true },
+          select: {
+            mediaItemId: true,
+            positionSec: true,
+            durationSec: true,
+            finished: true,
+            updatedAt: true,
+          },
         }),
+        // All play events (just ids): used to compute playedByProfile
         app.prisma.playEvent.findMany({
           where: { profileId },
           select: { mediaItemId: true },
         }),
+        // Last 50 play events ordered by recency: used to build history
+        app.prisma.playEvent.findMany({
+          where: { profileId },
+          orderBy: { at: "desc" },
+          take: 50,
+          select: { mediaItemId: true },
+        }),
       ]);
+
+      // Build initial id→item lookup
+      const itemById = new Map(rawItems.map((item) => [item.id, item]));
+
+      // ── 2. Union-in must-include items ───────────────────────────────────────
+      // history anchors (histEvents) + continue-watching items (allStates) MUST
+      // appear in the catalog regardless of the 2000 cap, so smart rows never
+      // drop a resume card or a "because you watched" anchor.
+      const mustIncludeIds = new Set<string>([
+        ...allStates.map((s) => s.mediaItemId),
+        ...histEvents.map((e) => e.mediaItemId),
+      ]);
+      const missingIds = [...mustIncludeIds].filter((id) => !itemById.has(id));
+
+      let extraItems: typeof rawItems = [];
+      if (missingIds.length > 0) {
+        extraItems = await app.prisma.mediaItem.findMany({
+          where: { id: { in: missingIds } },
+          select: itemSelect,
+        });
+        for (const item of extraItems) {
+          itemById.set(item.id, item);
+        }
+      }
+
+      // ── 3. Build catalog (base + must-include extras) ─────────────────────────
       const playedIds = new Set<string>([
-        ...playedStates.map((s) => s.mediaItemId),
+        ...allStates.map((s) => s.mediaItemId),
         ...playedEvents.map((e) => e.mediaItemId),
       ]);
 
-      const catalog = rawItems.map((item) => {
+      const allItems = [...rawItems, ...extraItems];
+      const catalog = allItems.map((item) => {
         const genres = item.genres.map((g) => g.genre.name);
         const keywords = item.keywords.map((k) => k.keyword.name);
         const cast = item.credits
@@ -140,37 +181,22 @@ export default async function discoveryRoute(app: FastifyInstance) {
         };
       });
 
-      // ── 2. Continue Watching ─────────────────────────────────────────────────
-      const allStates = await app.prisma.playbackState.findMany({
-        where: { profileId },
-        select: {
-          mediaItemId: true,
-          positionSec: true,
-          durationSec: true,
-          finished: true,
-          updatedAt: true,
-        },
-      });
+      // ── 4. Continue Watching ─────────────────────────────────────────────────
       const cwList = continueWatching(allStates);
 
-      // ── 3. History ───────────────────────────────────────────────────────────
-      const events = await app.prisma.playEvent.findMany({
-        where: { profileId },
-        orderBy: { at: "desc" },
-        take: 50,
-        select: { mediaItemId: true },
-      });
-      // Dedup: keep first occurrence (newest) per mediaItemId
+      // ── 5. History ───────────────────────────────────────────────────────────
+      // Dedup: keep first occurrence (newest) per mediaItemId.
+      // itemById now covers all must-include items so no anchor is lost.
       const seen = new Set<string>();
       const history: { mediaItemId: string; title: string }[] = [];
-      for (const ev of events) {
+      for (const ev of histEvents) {
         if (seen.has(ev.mediaItemId)) continue;
         seen.add(ev.mediaItemId);
         const item = itemById.get(ev.mediaItemId);
         if (item) history.push({ mediaItemId: ev.mediaItemId, title: item.title });
       }
 
-      // ── 4. Build smart rows ──────────────────────────────────────────────────
+      // ── 6. Build smart rows ──────────────────────────────────────────────────
       const smartRows = buildSmartRows({
         continueWatching: cwList,
         history,
@@ -179,7 +205,9 @@ export default async function discoveryRoute(app: FastifyInstance) {
         limit: 20,
       });
 
-      // ── 5. Hydrate itemIds → cards ──────────────────────────────────────────
+      // ── 7. Hydrate itemIds → cards ──────────────────────────────────────────
+      // itemById covers both the capped catalog AND the union-in extras, so
+      // no continue-watching or history id is dropped during hydration.
       const rows = smartRows
         .map((row) => {
           const items = row.itemIds
@@ -263,29 +291,37 @@ export default async function discoveryRoute(app: FastifyInstance) {
         // ── Embeddings path (with EmbedderUnavailable degrade) ────────────────
         try {
           const qv = await embedText(c.residualText, { kind: "query" });
-          const vecLit = toVecLiteral(qv);
-          const candidateIds = candidates.map((item) => item.id);
-
-          // Inline vector literal as raw SQL (safe: computed from model output,
-          // not user input).  Parameterise candidate IDs normally via Prisma.join.
-          const idJoin = Prisma.join(candidateIds);
-          const vecRaw = Prisma.raw(`'${vecLit}'::vector`);
-
-          const ranked = await app.prisma.$queryRaw<SearchItem[]>`
-            SELECT mi.id, mi.title, mi.year, mi."posterPath", mi."matchState"
-            FROM "MediaItem" mi
-            JOIN "Embedding" e ON e."mediaItemId" = mi.id
-            WHERE mi.id IN (${idJoin})
-            ORDER BY e.vector <=> ${vecRaw}
-            LIMIT 20
-          `;
-
-          if (ranked.length > 0) {
-            items = ranked;
-            usedEmbeddings = true;
-          } else {
-            // No embeddings exist for these candidates yet — degrade to keyword
+          // Guard: if the model emits non-finite floats the ::vector cast would 500.
+          // Treat a non-finite vector as unusable and degrade to keyword ranking.
+          if (!qv.every(Number.isFinite)) {
+            // Non-finite element: degrade to keyword rather than letting the
+            // ::vector cast throw a 500.
             items = rankByKeyword(candidates, c.residualText);
+          } else {
+            const vecLit = toVecLiteral(qv);
+            const candidateIds = candidates.map((item) => item.id);
+
+            // Inline vector literal as raw SQL (safe: computed from model output,
+            // not user input).  Parameterise candidate IDs normally via Prisma.join.
+            const idJoin = Prisma.join(candidateIds);
+            const vecRaw = Prisma.raw(`'${vecLit}'::vector`);
+
+            const ranked = await app.prisma.$queryRaw<SearchItem[]>`
+              SELECT mi.id, mi.title, mi.year, mi."posterPath", mi."matchState"
+              FROM "MediaItem" mi
+              JOIN "Embedding" e ON e."mediaItemId" = mi.id
+              WHERE mi.id IN (${idJoin})
+              ORDER BY e.vector <=> ${vecRaw}
+              LIMIT 20
+            `;
+
+            if (ranked.length > 0) {
+              items = ranked;
+              usedEmbeddings = true;
+            } else {
+              // No embeddings exist for these candidates yet — degrade to keyword
+              items = rankByKeyword(candidates, c.residualText);
+            }
           }
         } catch (err) {
           if (err instanceof EmbedderUnavailable) {

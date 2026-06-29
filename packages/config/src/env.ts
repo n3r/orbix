@@ -11,7 +11,10 @@ const EnvSchema = z.object({
   METADATA_DIR: z.string().default("./data/metadata"),
   TRANSCODE_DIR: z.string().default("./data/transcode"),
   MODELS_DIR: z.string().default("./data/models"),
-  EMBEDDINGS_ENABLED: z.coerce.boolean().default(true),
+  EMBEDDINGS_ENABLED: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((v) => v === "true"),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
