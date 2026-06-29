@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { isFinished, continueWatching } from "@orbix/core";
 import { requireAuth } from "../lib/auth";
+import { activeProfile, profileAllowsItem, kidsRatingWhere } from "../lib/catalog-filter";
 
 export default async function playstateRoute(app: FastifyInstance) {
   // PUT /items/:id/progress — upsert playback position for the active profile
@@ -29,6 +30,20 @@ export default async function playstateRoute(app: FastifyInstance) {
       const durationSecInt = Math.max(0, Math.floor(durationSec));
 
       const mediaItemId = req.params.id;
+
+      // Kids-safety gate: a kids profile must not be able to enroll a blocked
+      // item into playback history (which would then surface in continue-watching).
+      const [profile, mediaItem] = await Promise.all([
+        activeProfile(app, req),
+        app.prisma.mediaItem.findUnique({
+          where: { id: mediaItemId },
+          select: { rating: true },
+        }),
+      ]);
+      if (mediaItem && !profileAllowsItem(profile, { rating: mediaItem.rating })) {
+        return reply.code(403).send({ error: "blocked_by_rating" });
+      }
+
       const finished = isFinished(positionSecInt, durationSecInt);
 
       await app.prisma.playbackState.upsert({
@@ -93,19 +108,31 @@ export default async function playstateRoute(app: FastifyInstance) {
       });
 
       const inProgress = continueWatching(states);
+      if (inProgress.length === 0) return [];
 
-      const enriched = await Promise.all(
-        inProgress.map(async ({ mediaItemId, positionSec, durationSec }) => {
-          const item = await app.prisma.mediaItem.findUnique({
-            where: { id: mediaItemId },
-            select: { title: true, posterPath: true },
-          });
-          if (!item) return null;
+      const inProgressIds = inProgress.map((s) => s.mediaItemId);
+
+      // Load the active profile so we can filter out blocked titles for kids.
+      // kidsRatingWhere returns null for non-kids profiles (no extra filter).
+      // The { rating: { in: [...] } } clause excludes null-rated items automatically
+      // (Prisma's `in` never matches NULL), which is the safe default for kids.
+      const profile = await activeProfile(app, req);
+      const ratingFilter = kidsRatingWhere(profile);
+
+      const items = await app.prisma.mediaItem.findMany({
+        where: { id: { in: inProgressIds }, ...(ratingFilter ?? {}) },
+        select: { id: true, title: true, posterPath: true },
+      });
+
+      const itemMap = new Map(items.map((i) => [i.id, i]));
+
+      return inProgress
+        .map(({ mediaItemId, positionSec, durationSec }) => {
+          const item = itemMap.get(mediaItemId);
+          if (!item) return null; // deleted item or blocked by rating gate
           return { mediaItemId, title: item.title, posterPath: item.posterPath, positionSec, durationSec };
-        }),
-      );
-
-      return enriched.filter((x) => x !== null);
+        })
+        .filter((x) => x !== null);
     },
   );
 }

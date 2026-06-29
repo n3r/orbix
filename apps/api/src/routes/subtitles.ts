@@ -3,6 +3,7 @@ import { promisify } from "node:util";
 import type { FastifyInstance } from "fastify";
 import { srtToVtt } from "@orbix/core";
 import { requireAuth } from "../lib/auth";
+import { assertFileAllowed } from "../lib/catalog-filter";
 
 const execFileAsync = promisify(execFile);
 
@@ -33,6 +34,9 @@ export default async function subtitlesRoute(app: FastifyInstance) {
     async (req, reply) => {
       const { fileId } = req.params;
 
+      // Kids-safety gate: block subtitle track list for blocked titles.
+      if (!await assertFileAllowed(app, req, fileId, reply)) return;
+
       const file = await app.prisma.mediaFile.findUnique({
         where: { id: fileId },
         select: { id: true, subtitleTracks: true },
@@ -61,6 +65,9 @@ export default async function subtitlesRoute(app: FastifyInstance) {
     { preHandler: requireAuth(app) },
     async (req, reply) => {
       const { fileId } = req.params;
+
+      // Kids-safety gate: block subtitle content for blocked titles.
+      if (!await assertFileAllowed(app, req, fileId, reply)) return;
 
       // Strip optional ".vtt" suffix and validate it's a plain integer
       const raw = req.params.index.replace(/\.vtt$/i, "");

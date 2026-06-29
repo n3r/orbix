@@ -1,8 +1,8 @@
 import fs from "node:fs";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { decideStrategy } from "@orbix/core";
 import { requireAuth } from "../lib/auth";
-import { activeProfile, profileAllowsItem } from "../lib/catalog-filter";
+import { activeProfile, profileAllowsItem, assertFileAllowed } from "../lib/catalog-filter";
 import { SessionManager, SegmentTimeoutError } from "../playback/session";
 
 const DEFAULT_PROFILE = "default";
@@ -19,28 +19,42 @@ function contentTypeForContainer(container: string | null | undefined): string {
 
 /**
  * Lookup MediaFile and return an active Session for the given fileId.
- * Returns null (+ sends reply) when file is not found or not probed.
+ * Returns null (+ sends reply) when file is not found, not probed, or blocked
+ * by the active profile's maturity cap (kids-safety gate).
  */
 async function resolveSession(
   app: FastifyInstance,
   manager: SessionManager,
   fileId: string,
+  req: FastifyRequest,
   reply: { code: (n: number) => { send: (b: unknown) => unknown } },
 ) {
-  const file = await app.prisma.mediaFile.findUnique({
-    where: { id: fileId },
-    select: {
-      id: true,
-      path: true,
-      container: true,
-      videoCodec: true,
-      audioCodecs: true,
-      durationSec: true,
-    },
-  });
+  // Load the file (with its parent item's rating) and the active profile in
+  // parallel so we can enforce the kids maturity cap before serving any bytes.
+  const [file, profile] = await Promise.all([
+    app.prisma.mediaFile.findUnique({
+      where: { id: fileId },
+      select: {
+        id: true,
+        path: true,
+        container: true,
+        videoCodec: true,
+        audioCodecs: true,
+        durationSec: true,
+        mediaItem: { select: { rating: true } },
+      },
+    }),
+    activeProfile(app, req),
+  ]);
 
   if (!file) {
     reply.code(404).send({ error: "not_found" });
+    return null;
+  }
+
+  // Kids-safety gate: block access before serving any playlist bytes.
+  if (!profileAllowsItem(profile, { rating: file.mediaItem.rating })) {
+    reply.code(403).send({ error: "blocked_by_rating" });
     return null;
   }
 
@@ -132,6 +146,9 @@ export default function streamRoute(env: { TRANSCODE_DIR: string }) {
       async (req, reply) => {
         const { fileId } = req.params;
 
+        // Kids-safety gate: check before serving any bytes.
+        if (!await assertFileAllowed(app, req, fileId, reply)) return;
+
         const file = await app.prisma.mediaFile.findUnique({
           where: { id: fileId },
           select: {
@@ -210,6 +227,9 @@ export default function streamRoute(env: { TRANSCODE_DIR: string }) {
       async (req, reply) => {
         const { fileId } = req.params;
 
+        // Kids-safety gate: check before serving the master playlist.
+        if (!await assertFileAllowed(app, req, fileId, reply)) return;
+
         const file = await app.prisma.mediaFile.findUnique({
           where: { id: fileId },
           select: { id: true },
@@ -235,7 +255,7 @@ export default function streamRoute(env: { TRANSCODE_DIR: string }) {
       { preHandler: requireAuth(app) },
       async (req, reply) => {
         const { fileId } = req.params;
-        const session = await resolveSession(app, manager, fileId, reply);
+        const session = await resolveSession(app, manager, fileId, req, reply);
         if (!session) return;
 
         return reply
@@ -253,7 +273,7 @@ export default function streamRoute(env: { TRANSCODE_DIR: string }) {
       { preHandler: requireAuth(app) },
       async (req, reply) => {
         const { fileId } = req.params;
-        const session = await resolveSession(app, manager, fileId, reply);
+        const session = await resolveSession(app, manager, fileId, req, reply);
         if (!session) return;
 
         let initPath: string;
@@ -286,7 +306,7 @@ export default function streamRoute(env: { TRANSCODE_DIR: string }) {
         if (!m) return reply.code(400).send({ error: "bad_segment" });
         const n = parseInt(m[1], 10);
 
-        const session = await resolveSession(app, manager, fileId, reply);
+        const session = await resolveSession(app, manager, fileId, req, reply);
         if (!session) return;
 
         let segPath: string;
