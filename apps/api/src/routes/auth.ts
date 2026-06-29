@@ -8,7 +8,7 @@ export default async function auth(app: FastifyInstance) {
       return reply.code(401).send({ error: "invalid_credentials" });
     }
     const session = await createSession(acct.id, {
-      insert: (s) => app.prisma.session.create({ data: s, select: { id: true, expiresAt: true } }),
+      insert: (s) => app.prisma.session.create({ data: { id: s.id, accountId: s.accountId, expiresAt: s.expiresAt }, select: { id: true, expiresAt: true } }),
     });
     reply.setCookie("orbix_session", session.id, { httpOnly: true, sameSite: "lax", path: "/", maxAge: SESSION_TTL_MS / 1000 });
     return { accountId: acct.id };
@@ -18,6 +18,7 @@ export default async function auth(app: FastifyInstance) {
     const sid = req.cookies["orbix_session"];
     if (sid) await app.prisma.session.deleteMany({ where: { id: sid } });
     reply.clearCookie("orbix_session", { path: "/" });
+    reply.clearCookie("orbix_profile", { path: "/" });
     return reply.code(204).send();
   });
 

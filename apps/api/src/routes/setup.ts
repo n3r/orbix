@@ -14,7 +14,7 @@ export default async function setup(app: FastifyInstance) {
         insert: (a) => app.prisma.account.create({ data: { ...a, isAdmin: true }, select: { id: true } }),
       });
       const session = await createSession(id, {
-        insert: (s) => app.prisma.session.create({ data: s, select: { id: true, expiresAt: true } }),
+        insert: (s) => app.prisma.session.create({ data: { id: s.id, accountId: s.accountId, expiresAt: s.expiresAt }, select: { id: true, expiresAt: true } }),
       });
       reply.setCookie("orbix_session", session.id, { httpOnly: true, sameSite: "lax", path: "/", maxAge: SESSION_TTL_MS / 1000 });
       return { accountId: id };

@@ -26,29 +26,45 @@ export default async function profiles(app: FastifyInstance) {
       });
       return p;
     } catch (e) {
-      if (e instanceof ProfileValidationError) return reply.code(400).send({ error: e.message });
+      if (e instanceof ProfileValidationError) return reply.code(400).send({ error: "invalid_profile" });
       throw e;
     }
   });
 
   app.patch<{ Params: { id: string }; Body: unknown }>("/profiles/:id", { preHandler: requireAdmin(app) }, async (req, reply) => {
     try {
-      const v = validateProfileInput(req.body);
-      const pinHash = v.pin ? await hashPin(v.pin) : null;
+      const existing = await app.prisma.profile.findUnique({ where: { id: req.params.id } });
+      if (!existing) return reply.code(404).send({ error: "not_found" });
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const merged = validateProfileInput({
+        name: body.name ?? existing.name,
+        kind: body.kind ?? existing.kind,
+        maturityCap: body.maturityCap ?? existing.maturityCap ?? undefined,
+        ...(body.pin !== undefined ? { pin: body.pin } : {}),
+      });
+      const pinHash = body.pin !== undefined
+        ? (body.pin ? await hashPin(String(body.pin)) : null)
+        : undefined;
+      const data: Record<string, unknown> = {
+        name: merged.name,
+        kind: merged.kind,
+        maturityCap: merged.maturityCap ?? null,
+      };
+      if (pinHash !== undefined) data.pinHash = pinHash;
       const p = await app.prisma.profile.update({
         where: { id: req.params.id },
-        data: { name: v.name, kind: v.kind, maturityCap: v.maturityCap ?? null, pinHash },
+        data,
         select: { id: true, name: true, kind: true },
       });
       return p;
     } catch (e) {
-      if (e instanceof ProfileValidationError) return reply.code(400).send({ error: e.message });
+      if (e instanceof ProfileValidationError) return reply.code(400).send({ error: "invalid_profile" });
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") return reply.code(404).send({ error: "not_found" });
       throw e;
     }
   });
 
-  app.post<{ Params: { id: string }; Body: { pin?: string } }>("/profiles/:id/select", async (req, reply) => {
+  app.post<{ Params: { id: string }; Body: { pin?: string } }>("/profiles/:id/select", { preHandler: requireAdmin(app) }, async (req, reply) => {
     const p = await app.prisma.profile.findUnique({ where: { id: req.params.id } });
     if (!p) return reply.code(404).send({ error: "not_found" });
     if (p.pinHash) {
