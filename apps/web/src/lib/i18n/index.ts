@@ -12,6 +12,7 @@ export const NAMESPACES = [
   "auth",
   "profiles",
   "nav",
+  "account",
   "settings",
   "libraries",
   "fix",

@@ -1,11 +1,13 @@
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { Button } from "@orbix/ui";
 import { useMenuConfig, saveMenu } from "@/lib/queries";
 import type { MenuItem } from "@/lib/types";
 import { moveItem } from "./menu-order";
 
 export default function ProfileMenuEditor() {
+  const { t } = useTranslation();
   const { data, isLoading } = useMenuConfig();
   const qc = useQueryClient();
   const [order, setOrder] = useState<string[] | null>(null);
@@ -23,7 +25,7 @@ export default function ProfileMenuEditor() {
   }
 
   if (isLoading || !data || order === null || enabled === null) {
-    return <p className="text-[var(--text-dim)]">Loading…</p>;
+    return <p className="text-[var(--text-dim)]">{t("common:status.loading")}</p>;
   }
 
   const toggle = (id: string) => {
@@ -54,9 +56,7 @@ export default function ProfileMenuEditor() {
 
   return (
     <div className="flex max-w-xl flex-col gap-4">
-      <p className="text-sm text-[var(--text-dim)]">
-        Choose which categories show in your menu and put them in order.
-      </p>
+      <p className="text-sm text-[var(--text-dim)]">{t("account:menu.intro")}</p>
       <ul className="flex flex-col gap-1">
         {order.map((id, index) => {
           const section = byId.get(id) as MenuItem | undefined;
@@ -75,9 +75,9 @@ export default function ProfileMenuEditor() {
                 <span className="ml-2 text-xs text-[var(--text-dim)]">{section.libraryName}</span>
               </label>
               <div className="flex gap-1">
-                <button type="button" aria-label={`Move ${section.name} up`} disabled={index === 0}
+                <button type="button" aria-label={t("account:menu.moveUp", { name: section.name })} disabled={index === 0}
                   onClick={() => move(index, -1)} className="px-2 text-[var(--text-dim)] hover:text-[var(--text)] disabled:opacity-30">↑</button>
-                <button type="button" aria-label={`Move ${section.name} down`} disabled={index === order.length - 1}
+                <button type="button" aria-label={t("account:menu.moveDown", { name: section.name })} disabled={index === order.length - 1}
                   onClick={() => move(index, 1)} className="px-2 text-[var(--text-dim)] hover:text-[var(--text)] disabled:opacity-30">↓</button>
               </div>
             </li>
@@ -85,9 +85,9 @@ export default function ProfileMenuEditor() {
         })}
       </ul>
       <div className="flex items-center gap-3">
-        <Button onClick={onSave} disabled={saving || noneEnabled}>{saving ? "Saving…" : "Save menu"}</Button>
-        {noneEnabled && <span className="text-sm text-[var(--text-dim)]">Select at least one category.</span>}
-        {saved && !noneEnabled && <span className="text-sm text-[var(--text-dim)]">Saved.</span>}
+        <Button onClick={onSave} disabled={saving || noneEnabled}>{saving ? t("common:status.saving") : t("account:menu.save")}</Button>
+        {noneEnabled && <span className="text-sm text-[var(--text-dim)]">{t("account:menu.selectOne")}</span>}
+        {saved && !noneEnabled && <span className="text-sm text-[var(--text-dim)]">{t("account:menu.saved")}</span>}
       </div>
     </div>
   );

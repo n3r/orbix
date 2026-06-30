@@ -1,5 +1,12 @@
 {
   "home": "Inicio",
+  "tv": "TV",
+  "catalog": "Catálogo",
+  "account": "Cuenta",
+  "more": "Más",
+  "myList": "Mi lista",
+  "comingSoon": "Próximamente",
+  "noCategories": "Aún no hay categorías.",
   "search": "Buscar",
   "library": "Biblioteca",
   "admin": "Administración",

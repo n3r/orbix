@@ -1,4 +1,5 @@
 import { NavLink, Outlet, Navigate, useLocation } from "react-router";
+import { useTranslation } from "react-i18next";
 import { cn } from "@orbix/ui";
 import { useAuthMe, useMyProfile } from "@/lib/queries";
 
@@ -11,6 +12,7 @@ const tab = ({ isActive }: { isActive: boolean }) =>
   );
 
 export default function AccountLayout() {
+  const { t } = useTranslation();
   const me = useAuthMe();
   const profile = useMyProfile();
   const { pathname } = useLocation();
@@ -27,12 +29,12 @@ export default function AccountLayout() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 md:px-8 py-8">
-      <h1 className="text-2xl font-semibold text-[var(--text)]">Account</h1>
+      <h1 className="text-2xl font-semibold text-[var(--text)]">{t("account:title")}</h1>
       <nav className="mt-4 flex gap-6 border-b border-[var(--surface-2)]">
-        <NavLink to="/account" end className={tab}>Overview</NavLink>
-        <NavLink to="/account/menu" className={tab}>My Menu</NavLink>
-        {isAdmin && <NavLink to="/account/library" className={tab}>Library</NavLink>}
-        {isAdmin && <NavLink to="/account/settings" className={tab}>Settings</NavLink>}
+        <NavLink to="/account" end className={tab}>{t("account:tabs.overview")}</NavLink>
+        <NavLink to="/account/menu" className={tab}>{t("account:tabs.menu")}</NavLink>
+        {isAdmin && <NavLink to="/account/library" className={tab}>{t("nav:library")}</NavLink>}
+        {isAdmin && <NavLink to="/account/settings" className={tab}>{t("nav:settings")}</NavLink>}
       </nav>
       <div className="pt-6">
         <Outlet />

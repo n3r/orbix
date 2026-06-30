@@ -1,4 +1,5 @@
 import { Link } from "react-router";
+import { useTranslation } from "react-i18next";
 import { cn } from "@orbix/ui";
 import type { MenuItem } from "@/lib/types";
 import { ChevronDownIcon } from "./icons";
@@ -30,6 +31,7 @@ export default function NavCategories({
   maxVisible?: number;
   onNavigate?: () => void;
 }) {
+  const { t } = useTranslation();
   const isActive = (id: string) => pathname === `/library/${id}`;
   const visible = items.slice(0, maxVisible);
   const overflow = items.slice(maxVisible);
@@ -42,7 +44,7 @@ export default function NavCategories({
       {overflow.length > 0 && (
         <details className="relative">
           <summary className="flex cursor-pointer list-none items-center gap-1 text-sm text-[var(--text-dim)] hover:text-[var(--text)]">
-            More <ChevronDownIcon />
+            {t("nav:more")} <ChevronDownIcon />
           </summary>
           <div className="absolute right-0 z-50 mt-2 flex min-w-40 flex-col gap-1 rounded-[var(--radius)] border border-[var(--surface-2)] bg-[var(--surface)] p-2 shadow-lg">
             {overflow.map((item) => (
