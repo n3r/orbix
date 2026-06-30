@@ -83,10 +83,19 @@ model MediaItem {
   overview     String?
   runtimeSec   Int?
   rating       String?
+  tagline      String?
+  status       String?
   tmdbId       Int?
   imdbId       String?
   posterPath   String?
   backdropPath String?
+  backdropSource String?
+  logoPath     String?
+  tmdbScore    Float?
+  imdbRating   Float?
+  imdbVotes    Int?
+  rtRating     Int?
+  metacritic   Int?
   matchState   String             @default("unmatched")
   addedAt      DateTime           @default(now())
   updatedAt    DateTime           @updatedAt

@@ -38,10 +38,12 @@ export interface TmdbMovie {
   title: string;
   year?: number;
   overview?: string;
+  tagline?: string;
   runtimeSec?: number;
   posterPath?: string;
   backdropPath?: string;
   imdbId?: string;
+  tmdbScore?: number;
   genres: TmdbGenreRef[];
 }
 
@@ -71,11 +73,17 @@ interface RawMovie {
   title: string;
   release_date?: string;
   overview?: string;
+  tagline?: string | null;
   runtime?: number | null;
   poster_path?: string | null;
   backdrop_path?: string | null;
   imdb_id?: string | null;
+  vote_average?: number | null;
   genres?: { id: number; name: string }[];
+}
+
+interface RawImages {
+  logos?: { file_path: string; iso_639_1: string | null; vote_average?: number }[];
 }
 
 interface RawCredits {
@@ -92,6 +100,29 @@ interface RawReleaseDates {
     iso_3166_1: string;
     release_dates: { certification: string }[];
   }[];
+}
+
+// ---------------------------------------------------------------------------
+// Pure helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Choose the best logo file_path from a TMDB images.logos list. Preference:
+ * exact language match (by vote desc) → language-neutral (iso null) → any.
+ * Pure — unit-tested without the network.
+ */
+export function pickLogoPath(
+  logos: { file_path: string; iso_639_1: string | null; vote_average?: number }[],
+  lang = "en",
+): string | undefined {
+  if (logos.length === 0) return undefined;
+  const byVote = (a: { vote_average?: number }, b: { vote_average?: number }) =>
+    (b.vote_average ?? 0) - (a.vote_average ?? 0);
+  const inLang = logos.filter((l) => l.iso_639_1 === lang).sort(byVote);
+  if (inLang[0]) return inLang[0].file_path;
+  const neutral = logos.filter((l) => l.iso_639_1 == null).sort(byVote);
+  if (neutral[0]) return neutral[0].file_path;
+  return [...logos].sort(byVote)[0]?.file_path;
 }
 
 // ---------------------------------------------------------------------------
@@ -163,12 +194,26 @@ export class TmdbClient {
         ? { year: Number(raw.release_date.slice(0, 4)) }
         : {}),
       ...(raw.overview != null ? { overview: raw.overview } : {}),
+      ...(raw.tagline ? { tagline: raw.tagline } : {}),
       ...(raw.runtime != null ? { runtimeSec: raw.runtime * 60 } : {}),
       ...(raw.poster_path != null ? { posterPath: raw.poster_path } : {}),
       ...(raw.backdrop_path != null ? { backdropPath: raw.backdrop_path } : {}),
       ...(raw.imdb_id != null ? { imdbId: raw.imdb_id } : {}),
+      ...(raw.vote_average != null && raw.vote_average > 0
+        ? { tmdbScore: raw.vote_average }
+        : {}),
       genres: (raw.genres ?? []).map((g) => ({ tmdbId: g.id, name: g.name })),
     };
+  }
+
+  /**
+   * Best title-treatment logo file_path for a movie, preferring the requested
+   * language then language-neutral art, ordered by TMDB vote. Returns undefined
+   * when the movie has no logo images. The caller caches it via image kind "logo".
+   */
+  async movieLogoPath(id: number, lang = "en"): Promise<string | undefined> {
+    const raw = await this.get<RawImages>(`${BASE}/movie/${id}/images`);
+    return pickLogoPath(raw.logos ?? [], lang);
   }
 
   async credits(id: number): Promise<TmdbCredits> {

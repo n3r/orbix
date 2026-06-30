@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { enrichItem } from "./enrich";
 import type { TmdbLike, SaveMetadataInput } from "./enrich";
 import type { TmdbMovie, TmdbCredits, TmdbKeyword, TmdbSearchResult } from "./tmdb";
+import type { ImageKind } from "./images";
 
 // ---------------------------------------------------------------------------
 // Fakes — NO real network, NO real disk, NO real DB.
@@ -14,10 +15,12 @@ const fakeMovie: TmdbMovie = {
   title: "The Matrix",
   year: 1999,
   overview: "A computer hacker learns from mysterious rebels about the true nature of his reality.",
+  tagline: "Welcome to the Real World.",
   runtimeSec: 8160,
   posterPath: "/p.jpg",
   backdropPath: "/b.jpg",
   imdbId: "tt0133093",
+  tmdbScore: 8.7,
   genres: [{ tmdbId: 28, name: "Action" }],
 };
 
@@ -68,7 +71,7 @@ function makeFakeClient(
 
 function makeCacheImageSpy() {
   const calls: { tmdbPath: string; kind: string }[] = [];
-  const cacheImage = vi.fn(async (tmdbPath: string, kind: "poster" | "backdrop"): Promise<string> => {
+  const cacheImage = vi.fn(async (tmdbPath: string, kind: ImageKind): Promise<string> => {
     calls.push({ tmdbPath, kind });
     return `${kind}/${tmdbPath.replace(/^\//, "")}`;
   });
@@ -134,6 +137,41 @@ describe("enrichItem", () => {
     const backdropCall = imageCalls.find((c) => c.kind === "backdrop");
     expect(posterCall).toBeDefined();
     expect(backdropCall).toBeDefined();
+  });
+
+  it("Test 1b: forwards tmdbScore/tagline, resolved logo, and OMDb ratings", async () => {
+    const client = makeFakeClient();
+    const { cacheImage, calls: imageCalls } = makeCacheImageSpy();
+    const { saveMetadata, calls: saveCalls } = makeSaveMetadataSpy();
+
+    const result = await enrichItem(
+      { id: "item-1b", title: "The Matrix", year: 1999 },
+      {
+        client,
+        cacheImage,
+        saveMetadata,
+        resolveLogo: async ({ tmdbId, imdbId }) => {
+          expect(tmdbId).toBe(MATRIX_ID);
+          expect(imdbId).toBe("tt0133093");
+          return "logo/matrix.png";
+        },
+        fetchRatings: async (imdbId) => {
+          expect(imdbId).toBe("tt0133093");
+          return { imdbRating: 8.7, imdbVotes: 2000000, rtRating: 88, metacritic: 73 };
+        },
+      },
+    );
+
+    expect(result.matched).toBe(true);
+    const saved = saveCalls[0];
+    expect(saved.tmdbScore).toBe(8.7);
+    expect(saved.tagline).toBe("Welcome to the Real World.");
+    expect(saved.logoPath).toBe("logo/matrix.png");
+    expect(saved.imdbRating).toBe(8.7);
+    expect(saved.rtRating).toBe(88);
+    expect(saved.metacritic).toBe(73);
+    // logo is resolved via the injected dep, not cacheImage
+    expect(imageCalls.find((c) => c.kind === "logo")).toBeUndefined();
   });
 
   it("Test 2: no match → matched=false, saveMetadata NOT called", async () => {

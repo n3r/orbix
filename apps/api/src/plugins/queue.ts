@@ -1,6 +1,8 @@
 import fp from "fastify-plugin";
 import { Queue, Worker, type Job } from "bullmq";
 import { EventEmitter } from "node:events";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import fs from "node:fs";
 import path from "node:path";
 import type { FastifyInstance } from "fastify";
@@ -12,12 +14,18 @@ import {
   ffprobeRunner,
   enrichItem,
   cacheImage,
+  cacheImageFromUrl,
+  fetchOmdbRatings,
+  fetchFanartLogoUrl,
+  backdropFrameTimestampSec,
   TmdbClient,
   getSetting,
   type MediaFileTechnical,
   type ImageKind,
   type SaveMetadataInput,
 } from "@orbix/core";
+
+const execFileAsync = promisify(execFile);
 
 // ── Module-level in-process EventEmitter for SSE progress ──────────────────
 
@@ -245,40 +253,81 @@ export function queuePlugin(env: Env) {
       } else {
         const client = new TmdbClient(token);
 
+        const omdbKey = await getSetting<string>("omdbKey", {
+          fallback: "",
+          read: (k) => prisma.setting.findUnique({ where: { key: k } }),
+        });
+        const fanartKey = await getSetting<string>("fanartKey", {
+          fallback: "",
+          read: (k) => prisma.setting.findUnique({ where: { key: k } }),
+        });
+
+        const imageIo = {
+          fetchImpl: fetch,
+          exists: (a: string) =>
+            fs.promises.access(a).then(
+              () => true,
+              () => false,
+            ),
+          writeFile: async (a: string, bytes: Uint8Array) => {
+            await fs.promises.mkdir(path.dirname(a), { recursive: true });
+            await fs.promises.writeFile(a, bytes);
+          },
+          baseDir: env.METADATA_DIR,
+        };
+
         const boundCacheImage = (tmdbPath: string, kind: ImageKind): Promise<string> =>
-          cacheImage(tmdbPath, kind, {
-            fetchImpl: fetch,
-            exists: (a) =>
-              fs.promises.access(a).then(
-                () => true,
-                () => false,
-              ),
-            writeFile: async (a, bytes) => {
-              await fs.promises.mkdir(path.dirname(a), { recursive: true });
-              await fs.promises.writeFile(a, bytes);
-            },
-            baseDir: env.METADATA_DIR,
-          });
+          cacheImage(tmdbPath, kind, imageIo);
+
+        // Resolve a hero logo: fanart.tv (transparent PNG, by likes) first, then
+        // TMDB's own logo art. Returns a metadata-relative path or undefined.
+        const resolveLogo = async (id: {
+          tmdbId: number;
+          imdbId?: string;
+        }): Promise<string | undefined> => {
+          if (fanartKey) {
+            const url = await fetchFanartLogoUrl(id, { fetchImpl: fetch, apiKey: fanartKey });
+            if (url) return cacheImageFromUrl(url, "logo", imageIo);
+          }
+          const tmdbLogo = await client.movieLogoPath(id.tmdbId);
+          if (tmdbLogo) return boundCacheImage(tmdbLogo, "logo");
+          return undefined;
+        };
+
+        const fetchRatings = omdbKey
+          ? (imdbId: string) => fetchOmdbRatings(imdbId, { fetchImpl: fetch, apiKey: omdbKey })
+          : undefined;
 
         const saveMetadata = async (input: SaveMetadataInput): Promise<void> => {
           await prisma.$transaction(async (tx) => {
-            // Update MediaItem scalars
-            await tx.mediaItem.update({
-              where: { id: input.itemId },
-              data: {
-                title: input.title,
-                sortTitle: input.title.toLowerCase(),
-                year: input.year ?? null,
-                overview: input.overview ?? null,
-                runtimeSec: input.runtimeSec ?? null,
-                posterPath: input.posterPath ?? null,
-                backdropPath: input.backdropPath ?? null,
-                imdbId: input.imdbId ?? null,
-                tmdbId: input.tmdbId,
-                matchState: "matched",
-                rating: input.rating ?? null,
-              },
-            });
+            // Update MediaItem scalars. Optional artwork/ratings are only written
+            // when present so a run without an OMDb/fanart key (or a TMDB backdrop)
+            // never clobbers data a previous run cached — including frame backdrops.
+            const data: Prisma.MediaItemUpdateInput = {
+              title: input.title,
+              sortTitle: input.title.toLowerCase(),
+              year: input.year ?? null,
+              overview: input.overview ?? null,
+              tagline: input.tagline ?? null,
+              runtimeSec: input.runtimeSec ?? null,
+              posterPath: input.posterPath ?? null,
+              imdbId: input.imdbId ?? null,
+              tmdbId: input.tmdbId,
+              tmdbScore: input.tmdbScore ?? null,
+              matchState: "matched",
+              rating: input.rating ?? null,
+            };
+            if (input.backdropPath !== undefined) {
+              data.backdropPath = input.backdropPath;
+              data.backdropSource = "tmdb";
+            }
+            if (input.logoPath !== undefined) data.logoPath = input.logoPath;
+            if (input.imdbRating !== undefined) data.imdbRating = input.imdbRating;
+            if (input.imdbVotes !== undefined) data.imdbVotes = input.imdbVotes;
+            if (input.rtRating !== undefined) data.rtRating = input.rtRating;
+            if (input.metacritic !== undefined) data.metacritic = input.metacritic;
+
+            await tx.mediaItem.update({ where: { id: input.itemId }, data });
 
             // Clear stale relational data before recreating
             await tx.mediaItemGenre.deleteMany({ where: { mediaItemId: input.itemId } });
@@ -383,7 +432,7 @@ export function queuePlugin(env: Env) {
                 year: item.year ?? undefined,
                 tmdbId: item.tmdbId ?? undefined,
               },
-              { client, cacheImage: boundCacheImage, saveMetadata },
+              { client, cacheImage: boundCacheImage, saveMetadata, resolveLogo, fetchRatings },
             );
             if (result.matched) matched++;
           } catch (err) {
@@ -395,6 +444,55 @@ export function queuePlugin(env: Env) {
             processed: i + 1,
             total: enrichIds.size,
           });
+        }
+
+        // ── Hero backdrop fallback ───────────────────────────────────────
+        // For matched titles that still have no backdrop, grab a representative
+        // frame from the video via ffmpeg. Best-effort: silently skip when
+        // ffmpeg is missing or the file is unreadable.
+        const needBackdrop = await prisma.mediaItem.findMany({
+          where: { id: { in: enrichIdsArr }, backdropPath: null, matchState: "matched" },
+          select: {
+            id: true,
+            files: {
+              where: { probedOk: true },
+              select: { path: true, durationSec: true },
+              take: 1,
+            },
+          },
+        });
+        for (const it of needBackdrop) {
+          const file = it.files[0];
+          if (!file) continue;
+          const rel = `backdrop/frame-${it.id}.jpg`;
+          const outAbs = path.join(env.METADATA_DIR, rel);
+          try {
+            await fs.promises.mkdir(path.dirname(outAbs), { recursive: true });
+            const ts = backdropFrameTimestampSec(file.durationSec);
+            await execFileAsync("ffmpeg", [
+              "-y",
+              "-ss",
+              String(ts),
+              "-i",
+              file.path,
+              "-frames:v",
+              "1",
+              "-vf",
+              "scale=1280:-2",
+              "-q:v",
+              "3",
+              outAbs,
+            ]);
+            await prisma.mediaItem.update({
+              where: { id: it.id },
+              data: { backdropPath: rel, backdropSource: "frame" },
+            });
+          } catch (err) {
+            app.log.debug(
+              { err, itemId: it.id },
+              "[scan] backdrop frame fallback failed (ffmpeg missing or unreadable file)",
+            );
+          }
         }
       }
 
