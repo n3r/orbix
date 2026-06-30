@@ -13,7 +13,7 @@ export interface ScanDeps {
   probe: (path: string) => Promise<MediaFileTechnical>;
   findFileByPath: (path: string) => Promise<{ mtime: Date | null; size: number | null } | null>;
   upsertItemAndFile: (input: {
-    sectionId: string;
+    libraryId: string;
     file: { path: string; mtime: Date; size: number };
     parsed: ReturnType<typeof parseMediaPath>;
     tech: MediaFileTechnical;
@@ -21,7 +21,7 @@ export interface ScanDeps {
 }
 
 export async function scanSource(
-  opts: { sectionId: string; root: string },
+  opts: { libraryId: string; root: string },
   deps: ScanDeps
 ): Promise<ScanResult> {
   const files = await deps.listFiles(opts.root);
@@ -50,7 +50,7 @@ export async function scanSource(
     const parsed = parseMediaPath(file.path);
     const tech = await deps.probe(file.path);
     const { itemId, created } = await deps.upsertItemAndFile({
-      sectionId: opts.sectionId,
+      libraryId: opts.libraryId,
       file,
       parsed,
       tech,
