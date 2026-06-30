@@ -135,14 +135,16 @@ git commit -m "feat(api): /me/profile returns full active profile for the SPA gu
 
 ---
 
-## Task 2: Serve the built SPA from Fastify (`@fastify/static` + SPA fallback)
+## Task 2: Mount API under `/api` + serve the built SPA from Fastify
 
-Fastify serves `apps/web/dist` at `/` when that directory exists (production image), with a fallback that returns `index.html` for client routes and JSON 404s for unknown `/api/*`. Inert in dev (no `dist/`).
+**Two coupled changes for same-origin production.** Today all Fastify routes are bare (`/auth/me`, `/me/profile`, …) and the browser's `/api/*` calls only work because Next's rewrite strips `/api`. With Fastify serving same-origin there is no proxy to strip it, so (a) mount all API routes under an `/api` prefix (keep `/health` at root for the Docker healthcheck), and (b) serve `apps/web/dist` at `/` with a fallback that returns `index.html` for client routes and JSON 404 for unknown `/api/*`. Static serving is inert in dev (no `dist/`). All three plugins (db/session/queue) are `fp`, so their decorations propagate into the prefixed scope; `@fastify/cookie` is global too.
 
 **Files:**
 - Modify: `apps/api/package.json` (add `@fastify/static`)
 - Create: `apps/api/src/plugins/static-web.ts`
-- Modify: `apps/api/src/app.ts` (register after API routes)
+- Modify: `apps/api/src/app.ts` (prefix all routes except health with `/api`; register static last)
+- Modify: `apps/api/src/routes/auth.test.ts` (`/auth/login` → `/api/auth/login`)
+- Modify: `apps/api/src/routes/profiles.test.ts` (`/me/profile` → `/api/me/profile`)
 - Test: `apps/api/src/plugins/static-web.test.ts` (create)
 
 **Interfaces:**
@@ -244,7 +246,7 @@ export const staticWebPlugin = fp(async (app, opts: { distDir?: string }) => {
 });
 ```
 
-- [ ] **Step 5: Register it in `app.ts`**
+- [ ] **Step 5: Mount API routes under `/api` and register static last in `app.ts`**
 
 In `apps/api/src/app.ts`, add the import near the other plugin imports:
 
@@ -252,23 +254,48 @@ In `apps/api/src/app.ts`, add the import near the other plugin imports:
 import { staticWebPlugin } from "./plugins/static-web";
 ```
 
-Then register it **after** all `routes/*` registrations and before the `return app;` (so API routes win and the fallback only catches the rest). Insert after line 48 (`await app.register(refreshRoute(env));`):
+Add `{ prefix: "/api" }` to **every** route registration **except** `health` (which stays at root so the Docker healthcheck `GET /health` keeps working). The registration block becomes:
+
+```ts
+  await app.register(health); // root — used by the Docker healthcheck
+  await app.register(setup, { prefix: "/api" });
+  await app.register(auth, { prefix: "/api" });
+  await app.register(profilesRoute, { prefix: "/api" });
+  await app.register(settingsRoute, { prefix: "/api" });
+  await app.register(librariesRoute, { prefix: "/api" });
+  await app.register(imagesRoute(env), { prefix: "/api" });
+  await app.register(scanRoute, { prefix: "/api" });
+  await app.register(catalogRoute, { prefix: "/api" });
+  await app.register(streamRoute(env), { prefix: "/api" });
+  await app.register(subtitlesRoute, { prefix: "/api" });
+  await app.register(playstateRoute, { prefix: "/api" });
+  await app.register(discoveryRoute, { prefix: "/api" });
+  await app.register(fixRoute(env), { prefix: "/api" });
+  await app.register(refreshRoute(env), { prefix: "/api" });
+```
+
+Then register the SPA **last** (after the refresh timer block is fine; it must be after the routes so its catch-all fallback sits below them), before `return app;`:
 
 ```ts
   // Serve the built SPA last so its catch-all fallback sits below the API routes.
   await app.register(staticWebPlugin, {});
 ```
 
+- [ ] **Step 5b: Update the two HTTP injection tests to the `/api` prefix**
+
+In `apps/api/src/routes/auth.test.ts`: `url: "/auth/login"` → `url: "/api/auth/login"`.
+In `apps/api/src/routes/profiles.test.ts`: both `url: "/me/profile"` → `url: "/api/me/profile"`.
+
 - [ ] **Step 6: Run tests to verify they pass**
 
-Run: `pnpm --filter @orbix/api exec vitest run src/plugins/static-web.test.ts`
-Expected: PASS (3 tests)
+Run: `pnpm --filter @orbix/api exec vitest run` (whole api suite — the prefix change touches auth + profiles tests too)
+Expected: PASS — static-web (3), auth, profiles, and all existing api tests green.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add apps/api/package.json apps/api/src/plugins/static-web.ts apps/api/src/app.ts apps/api/src/plugins/static-web.test.ts pnpm-lock.yaml
-git commit -m "feat(api): serve the Vite SPA with @fastify/static + SPA fallback"
+git add apps/api/package.json apps/api/src/plugins/static-web.ts apps/api/src/app.ts apps/api/src/plugins/static-web.test.ts apps/api/src/routes/auth.test.ts apps/api/src/routes/profiles.test.ts pnpm-lock.yaml
+git commit -m "feat(api): mount API under /api + serve the Vite SPA with @fastify/static fallback"
 ```
 
 ---
@@ -337,7 +364,8 @@ export default defineConfig({
   server: {
     port: 1060,
     proxy: {
-      // SSE scan stream must stream, not buffer.
+      // Forward /api/* unchanged — Fastify mounts the API under /api (Task 2),
+      // so NO path rewrite. SSE scan stream proxies fine (Vite doesn't buffer).
       "/api": { target: API, changeOrigin: true },
     },
   },

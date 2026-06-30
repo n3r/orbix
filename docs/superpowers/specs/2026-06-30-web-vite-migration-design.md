@@ -104,7 +104,8 @@ The selected profile is stored in the **httpOnly `orbix_profile` cookie**, which
 
 - **Build:** `vite build` → static `dist/` (hashed assets + `index.html` app shell).
 - **Dev:** `vite` dev server on **:1060** with `server.proxy = { "/api": { target: "http://localhost:1061", changeOrigin: true } }`, replacing Next rewrites so relative `/api` works in dev. SSE proxying must not buffer (configure proxy for the scan stream).
-- **Prod:** Fastify serves `dist/` via `@fastify/static` at `/`, with an **SPA fallback** (return `index.html` for non-`/api`, non-asset `GET`s) so deep links resolve client-side. `/api` routes are already registered on Fastify → **same origin**. The fallback must explicitly exclude `/api/*` and static asset paths.
+- **Prod:** Fastify serves `dist/` via `@fastify/static` at `/`, with an **SPA fallback** (return `index.html` for non-`/api`, non-asset `GET`s) so deep links resolve client-side. The fallback must explicitly exclude `/api/*` and static asset paths.
+- **API prefix (discovered during planning):** Fastify routes are currently *bare* (`/auth/me`, `/me/profile`, …); the browser's `/api/*` calls work today only because Next's rewrite strips `/api`. Same-origin production has no proxy to strip it, so **all API routes are mounted under an `/api` prefix** (with `/health` kept at root for the Docker healthcheck). Consequently the Vite dev proxy forwards `/api/*` **without** a path rewrite. This supersedes the original idea of stripping the prefix at the edge.
 
 ### 5. Docker / deploy
 
