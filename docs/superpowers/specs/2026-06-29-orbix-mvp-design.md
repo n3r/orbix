@@ -6,11 +6,11 @@
 
 ## 1. Summary
 
-Orbix is a self-hosted, open-source media server that runs on a home NAS via Docker. It deliberately wins on three fronts where the incumbents fall short:
+Orbix is a self-hosted, open-source media server that runs on a home NAS via Docker. It deliberately wins on three fronts where existing self-hosted servers fall short:
 
 1. **Discovery for large libraries** — smart, auto-generated home rows *and* natural-language "mood" search, so you can find something to watch tonight without scrolling thousands of titles.
 2. **Works during an internet outage** — all metadata and artwork are cached to local disk at scan time; browsing and playback never require internet.
-3. **A genuinely nice, responsive UI/UX** — modern, fast, and pleasant, with no account friction or dated interface.
+3. **A genuinely nice, responsive UI/UX** — modern, fast, and pleasant, with no account friction and no dated interface.
 
 The MVP targets **movies** (the data model leaves room for TV later), with multi-profile households, multi-source libraries, full enrichment, browser playback with real transcoding, and the discovery features above.
 

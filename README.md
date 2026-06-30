@@ -1,6 +1,6 @@
 # Orbix
 
-A self-hosted, open-source media server built to do three things better:
+A self-hosted, open-source media server for your own library, built to do three things better:
 
 1. **Discovery for large libraries** — smart, auto-generated home rows *and* natural-language mood search ("something light and funny under 2 hours"), so you can find what to watch tonight without scrolling thousands of titles.
 2. **Works during an internet outage** — all metadata and artwork are cached to local disk at scan time; browsing and playback never need the internet.
