@@ -1,0 +1,45 @@
+{
+  "title": "Библиотеки",
+  "settingsLink": "Настройки",
+  "adding": "Добавление…",
+  "deleteLibrary": "Удалить библиотеку",
+  "add": {
+    "heading": "Добавить библиотеку",
+    "namePlaceholder": "Название библиотеки"
+  },
+  "section": {
+    "addButton": "Добавить раздел",
+    "namePlaceholder": "Название раздела (например, Фильмы)"
+  },
+  "source": {
+    "addButton": "Добавить источник",
+    "pathPlaceholder": "/путь/к/папке/с/медиа",
+    "kindLocal": "Local",
+    "kindSmb": "SMB",
+    "smbHostPlaceholder": "NAS host (e.g. 192.168.1.10)",
+    "smbSharePlaceholder": "Share (e.g. media)",
+    "smbSubpathPlaceholder": "Subpath (optional)",
+    "smbUsernamePlaceholder": "Username (optional)",
+    "smbPasswordPlaceholder": "Password (optional)",
+    "smbDomainPlaceholder": "Domain (optional)",
+    "errorLabel": "error"
+  },
+  "scan": {
+    "button": "Сканировать",
+    "scanning": "Сканирование…",
+    "starting": "Запуск…",
+    "streamError": "Соединение со сканированием потеряно.",
+    "unknownError": "неизвестная ошибка",
+    "done_one": "Готово — добавлен {{count}} тайтл, обновлено {{updated}}, сопоставлено {{matched}}",
+    "done_few": "Готово — добавлено {{count}} тайтла, обновлено {{updated}}, сопоставлено {{matched}}",
+    "done_many": "Готово — добавлено {{count}} тайтлов, обновлено {{updated}}, сопоставлено {{matched}}",
+    "done_other": "Готово — добавлено {{count}} тайтла, обновлено {{updated}}, сопоставлено {{matched}}",
+    "failed": "Сканирование не удалось: {{message}}",
+    "progress": "{{phase}}: {{processed}}/{{total}}"
+  },
+  "errors": {
+    "loadFailed": "Не удалось загрузить библиотеки",
+    "createFailed": "Не удалось создать библиотеку",
+    "addSourceFailed": "Не удалось добавить источник"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "title": "Fix Match",
+  "forTitle": "for “{{title}}”",
+  "noPoster": "No poster",
+  "search": {
+    "heading": "Search TMDB",
+    "placeholder": "Search title…",
+    "button": "Search",
+    "searching": "Searching…",
+    "failed": "Search failed. Please try again.",
+    "noResults": "No results found."
+  },
+  "match": {
+    "button": "Use this match",
+    "applying": "Applying…",
+    "failed": "Failed to apply match."
+  },
+  "poster": {
+    "heading": "Set a specific poster",
+    "help": "Pick any poster from the search results above without changing other metadata.",
+    "success": "Poster updated successfully.",
+    "button": "Set poster",
+    "setting": "Setting…",
+    "failed": "Failed to set poster."
+  }
+}

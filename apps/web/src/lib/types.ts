@@ -34,6 +34,24 @@ export interface Profile {
   maturityCap: number | null;
 }
 
+/** One catalog category in the profile's nav (one per library). */
+export interface MenuItem {
+  libraryId: string;
+  name: string;
+}
+
+/** Editor payload: all libraries + the profile's currently-enabled ordered ids. */
+export interface MenuConfig {
+  libraries: MenuItem[];
+  enabled: string[];
+}
+
+/** Account-level identity for admin gating. */
+export interface AuthMe {
+  accountId: string;
+  isAdmin: boolean;
+}
+
 /** Minimal item shape for poster cards (home rows, library grid, search). */
 export interface MediaCard {
   id: string;

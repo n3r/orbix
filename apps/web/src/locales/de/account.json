@@ -1,0 +1,19 @@
+{
+  "title": "Konto",
+  "tabs": {
+    "overview": "Übersicht",
+    "menu": "Mein Menü"
+  },
+  "profileKind": {
+    "standard": "Standardprofil",
+    "kids": "Kinderprofil"
+  },
+  "menu": {
+    "intro": "Wähle aus, welche Kategorien in deinem Menü erscheinen, und ordne sie an.",
+    "save": "Menü speichern",
+    "saved": "Gespeichert.",
+    "selectOne": "Wähle mindestens eine Kategorie aus.",
+    "moveUp": "{{name}} nach oben verschieben",
+    "moveDown": "{{name}} nach unten verschieben"
+  }
+}

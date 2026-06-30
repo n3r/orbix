@@ -1,0 +1,22 @@
+{
+  "rows": {
+    "continue": "Reprendre la lecture",
+    "hiddenGems": "Perles cachées",
+    "tonight": "Une idée pour ce soir"
+  },
+  "browse": {
+    "title": "Parcourir",
+    "searchPlaceholder": "Rechercher des titres…",
+    "empty": "Aucun élément trouvé.",
+    "sort": {
+      "title": "Titre (A–Z)",
+      "added": "Ajoutés récemment",
+      "year": "Année"
+    }
+  },
+  "hero": {
+    "play": "Lire",
+    "moreInfo": "Plus d'infos",
+    "showSlide": "Afficher {{title}}"
+  }
+}

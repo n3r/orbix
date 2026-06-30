@@ -1,14 +1,14 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { scanEvents, scanDoneCache } from "../plugins/queue";
-import { requireAuth } from "../lib/auth";
+import { requireAuth, requireAdmin } from "../lib/auth";
 import { requireNonKids } from "../lib/catalog-filter";
 
 export default async function scanRoute(app: FastifyInstance) {
   // POST /libraries/:id/scan — enqueue a scan job, return { jobId }
   app.post<{ Params: { id: string } }>(
     "/libraries/:id/scan",
-    { preHandler: [requireAuth(app), requireNonKids(app)] },
+    { preHandler: [requireAuth(app), requireAdmin(app), requireNonKids(app)] },
     async (req, reply) => {
       const libraryId = req.params.id;
 

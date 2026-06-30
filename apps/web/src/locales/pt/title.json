@@ -1,0 +1,32 @@
+{
+  "notFound": "Título não encontrado",
+  "loadFailed": "Falha ao carregar o título",
+  "unmatchedNotice": "Metadados ainda não correspondidos — escaneie com um token do TMDB para enriquecer.",
+  "fixMatch": "Corrigir correspondência / pôster (admin)",
+  "play": "Reproduzir",
+  "playNoMedia": "Reproduzir (sem mídia)",
+  "section": {
+    "overview": "Sinopse",
+    "director": "Diretor",
+    "cast": "Elenco",
+    "genres": "Gêneros"
+  },
+  "rating": {
+    "unrated": "Sem classificação"
+  },
+  "runtime": {
+    "hm": "{{h}}h {{m}}min",
+    "m": "{{m}}min"
+  },
+  "seasonCount_one": "{{count}} temporada",
+  "seasonCount_other": "{{count}} temporadas",
+  "episodeCount_one": "{{count}} episódio",
+  "episodeCount_other": "{{count}} episódios",
+  "noMedia": "Sem mídia",
+  "specials": "Especiais",
+  "seasonNumber": "Temporada {{number}}",
+  "episodeNumber": "Episódio {{number}}",
+  "episodesHeading": "Episódios",
+  "notInLibrary": "Não está na biblioteca",
+  "noEpisodes": "Nenhum episódio encontrado para esta temporada."
+}

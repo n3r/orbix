@@ -1,0 +1,32 @@
+{
+  "notFound": "Título no encontrado",
+  "loadFailed": "No se pudo cargar el título",
+  "unmatchedNotice": "Metadatos aún sin coincidencia: escanea con un token de TMDB para enriquecerlos.",
+  "fixMatch": "Corregir coincidencia / póster (administrador)",
+  "play": "Reproducir",
+  "playNoMedia": "Reproducir (sin contenido)",
+  "section": {
+    "overview": "Sinopsis",
+    "director": "Director",
+    "cast": "Reparto",
+    "genres": "Géneros"
+  },
+  "rating": {
+    "unrated": "Sin clasificar"
+  },
+  "runtime": {
+    "hm": "{{h}} h {{m}} min",
+    "m": "{{m}} min"
+  },
+  "seasonCount_one": "{{count}} temporada",
+  "seasonCount_other": "{{count}} temporadas",
+  "episodeCount_one": "{{count}} episodio",
+  "episodeCount_other": "{{count}} episodios",
+  "noMedia": "Sin contenido",
+  "specials": "Especiales",
+  "seasonNumber": "Temporada {{number}}",
+  "episodeNumber": "Episodio {{number}}",
+  "episodesHeading": "Episodios",
+  "notInLibrary": "No está en la biblioteca",
+  "noEpisodes": "No se encontraron episodios para esta temporada."
+}

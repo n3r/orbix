@@ -1,0 +1,36 @@
+{
+  "notFound": "Тайтл не найден",
+  "loadFailed": "Не удалось загрузить тайтл",
+  "unmatchedNotice": "Метаданные ещё не сопоставлены — выполните сканирование с токеном TMDB для обогащения.",
+  "fixMatch": "Исправить совпадение / постер (админ)",
+  "play": "Смотреть",
+  "playNoMedia": "Смотреть (нет медиа)",
+  "section": {
+    "overview": "Обзор",
+    "director": "Режиссёр",
+    "cast": "В ролях",
+    "genres": "Жанры"
+  },
+  "rating": {
+    "unrated": "Без рейтинга"
+  },
+  "runtime": {
+    "hm": "{{h}} ч {{m}} мин",
+    "m": "{{m}} мин"
+  },
+  "seasonCount_one": "{{count}} сезон",
+  "seasonCount_few": "{{count}} сезона",
+  "seasonCount_many": "{{count}} сезонов",
+  "seasonCount_other": "{{count}} сезона",
+  "episodeCount_one": "{{count}} эпизод",
+  "episodeCount_few": "{{count}} эпизода",
+  "episodeCount_many": "{{count}} эпизодов",
+  "episodeCount_other": "{{count}} эпизода",
+  "noMedia": "Нет медиа",
+  "specials": "Спецвыпуски",
+  "seasonNumber": "Сезон {{number}}",
+  "episodeNumber": "Эпизод {{number}}",
+  "episodesHeading": "Эпизоды",
+  "notInLibrary": "Нет в библиотеке",
+  "noEpisodes": "Эпизоды для этого сезона не найдены."
+}

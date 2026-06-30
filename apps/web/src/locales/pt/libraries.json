@@ -1,0 +1,43 @@
+{
+  "title": "Bibliotecas",
+  "settingsLink": "Configurações",
+  "adding": "Adicionando…",
+  "deleteLibrary": "Excluir biblioteca",
+  "add": {
+    "heading": "Adicionar biblioteca",
+    "namePlaceholder": "Nome da biblioteca"
+  },
+  "section": {
+    "addButton": "Adicionar seção",
+    "namePlaceholder": "Nome da seção (ex.: Filmes)"
+  },
+  "source": {
+    "addButton": "Adicionar origem",
+    "pathPlaceholder": "/caminho/para/a/pasta/de/mídia",
+    "kindLocal": "Local",
+    "kindSmb": "SMB",
+    "smbHostPlaceholder": "NAS host (e.g. 192.168.1.10)",
+    "smbSharePlaceholder": "Share (e.g. media)",
+    "smbSubpathPlaceholder": "Subpath (optional)",
+    "smbUsernamePlaceholder": "Username (optional)",
+    "smbPasswordPlaceholder": "Password (optional)",
+    "smbDomainPlaceholder": "Domain (optional)",
+    "errorLabel": "error"
+  },
+  "scan": {
+    "button": "Escanear",
+    "scanning": "Escaneando…",
+    "starting": "Iniciando…",
+    "streamError": "A conexão com o escaneamento foi perdida.",
+    "unknownError": "erro desconhecido",
+    "done_one": "Concluído — {{count}} título adicionado, {{updated}} atualizados, {{matched}} correspondidos",
+    "done_other": "Concluído — {{count}} títulos adicionados, {{updated}} atualizados, {{matched}} correspondidos",
+    "failed": "Falha no escaneamento: {{message}}",
+    "progress": "{{phase}}: {{processed}}/{{total}}"
+  },
+  "errors": {
+    "loadFailed": "Falha ao carregar as bibliotecas",
+    "createFailed": "Falha ao criar a biblioteca",
+    "addSourceFailed": "Falha ao adicionar a origem"
+  }
+}

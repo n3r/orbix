@@ -1,0 +1,19 @@
+{
+  "title": "Account",
+  "tabs": {
+    "overview": "Overview",
+    "menu": "My Menu"
+  },
+  "profileKind": {
+    "standard": "Standard profile",
+    "kids": "Kids profile"
+  },
+  "menu": {
+    "intro": "Choose which categories show in your menu and put them in order.",
+    "save": "Save menu",
+    "saved": "Saved.",
+    "selectOne": "Select at least one category.",
+    "moveUp": "Move {{name}} up",
+    "moveDown": "Move {{name}} down"
+  }
+}

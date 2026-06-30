@@ -2,6 +2,11 @@ import type { FastifyInstance } from "fastify";
 import { requireAuth } from "../lib/auth";
 import { activeProfile, profileAllowsItem } from "../lib/catalog-filter";
 
+/** Coalesce a nullable base value to a non-empty translation, else the base. */
+function pick(translated: string | null | undefined, base: string | null): string | null {
+  return translated && translated.trim() ? translated : base;
+}
+
 export default async function seriesRoute(app: FastifyInstance) {
   // GET /items/:id/seasons/:n/episodes — episode list for one season of a series.
   // Each episode carries its owned fileId (null when not in the library) and the
@@ -29,6 +34,7 @@ export default async function seriesRoute(app: FastifyInstance) {
       if (!profileAllowsItem(profile, { rating: series.rating })) {
         return reply.code(404).send({ error: "not_found" });
       }
+      const lang = profile?.language ?? "en";
 
       const season = await app.prisma.season.findUnique({
         where: { seriesId_seasonNumber: { seriesId, seasonNumber } },
@@ -48,6 +54,7 @@ export default async function seriesRoute(app: FastifyInstance) {
           runtimeSec: true,
           airDate: true,
           files: { select: { id: true }, take: 1 },
+          translations: { where: { language: lang }, select: { title: true, overview: true } },
         },
       });
 
@@ -75,17 +82,20 @@ export default async function seriesRoute(app: FastifyInstance) {
       }
 
       return reply.send({
-        episodes: episodes.map((e) => ({
-          id: e.id,
-          episodeNumber: e.episodeNumber,
-          title: e.title,
-          overview: e.overview,
-          stillPath: e.stillPath,
-          runtimeSec: e.runtimeSec,
-          airDate: e.airDate ? e.airDate.toISOString() : null,
-          fileId: e.files[0]?.id ?? null,
-          progress: progressByEpisode.get(e.id) ?? null,
-        })),
+        episodes: episodes.map((e) => {
+          const tr = e.translations[0];
+          return {
+            id: e.id,
+            episodeNumber: e.episodeNumber,
+            title: pick(tr?.title, e.title),
+            overview: pick(tr?.overview, e.overview),
+            stillPath: e.stillPath,
+            runtimeSec: e.runtimeSec,
+            airDate: e.airDate ? e.airDate.toISOString() : null,
+            fileId: e.files[0]?.id ?? null,
+            progress: progressByEpisode.get(e.id) ?? null,
+          };
+        }),
       });
     },
   );

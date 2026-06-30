@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router";
+import { useTranslation } from "react-i18next";
 import { Button, Card, Input } from "@orbix/ui";
 import { apiFetch } from "@/lib/api";
+import { errorMessage } from "@/lib/i18n/tError";
 import { queryClient } from "@/lib/queryClient";
 import type { Library, Source } from "@/lib/types";
 
@@ -30,6 +32,7 @@ interface SourceDraft {
 const emptyDraft: SourceDraft = { kind: "local", path: "", host: "", share: "", subpath: "", username: "", password: "", domain: "" };
 
 export default function AdminLibrariesPage() {
+  const { t } = useTranslation();
   const [libraries, setLibraries] = useState<Library[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -56,18 +59,22 @@ export default function AdminLibrariesPage() {
   async function loadLibraries() {
     try {
       const res = await apiFetch("/libraries");
-      if (!res.ok) { setError("Failed to load libraries"); return; }
+      if (!res.ok) { setError(t("libraries:errors.loadFailed")); return; }
       setLibraries((await res.json()) as Library[]);
     } catch {
-      setError("Network error");
+      setError(t("errors:network"));
     } finally {
       setLoading(false);
     }
   }
 
+  // Reload local state AND invalidate the shared queries so dependent views
+  // refresh: ["libraries"] for any library list, ["menu"] so the top-nav
+  // catalog categories reflect added/removed libraries.
   async function refresh() {
     await loadLibraries();
     void queryClient.invalidateQueries({ queryKey: ["libraries"] });
+    void queryClient.invalidateQueries({ queryKey: ["menu"] });
   }
 
   useEffect(() => { loadLibraries(); }, []);
@@ -86,9 +93,12 @@ export default function AdminLibrariesPage() {
     try {
       const res = await apiFetch("/libraries", { method: "POST", body: JSON.stringify({ name: newLibName }) });
       if (res.ok) { setNewLibName(""); await refresh(); }
-      else { const b = (await res.json()) as { error?: string }; setLibError(b.error ?? "Failed to create library"); }
+      else {
+        const body = (await res.json()) as { error?: string };
+        setLibError(body.error ? errorMessage(body.error, t) : t("libraries:errors.createFailed"));
+      }
     } catch {
-      setLibError("Network error");
+      setLibError(t("errors:network"));
     } finally {
       setLibSaving(false);
     }
@@ -111,9 +121,12 @@ export default function AdminLibrariesPage() {
     try {
       const res = await apiFetch(`/libraries/${libraryId}/sources`, { method: "POST", body: JSON.stringify(body) });
       if (res.ok) { setDrafts((dd) => ({ ...dd, [libraryId]: emptyDraft })); await refresh(); }
-      else { const b = (await res.json()) as { error?: string }; setSourceErrors((s) => ({ ...s, [libraryId]: b.error ?? "Failed to add source" })); }
+      else {
+        const b = (await res.json()) as { error?: string };
+        setSourceErrors((s) => ({ ...s, [libraryId]: b.error ? errorMessage(b.error, t) : t("libraries:errors.addSourceFailed") }));
+      }
     } catch {
-      setSourceErrors((s) => ({ ...s, [libraryId]: "Network error" }));
+      setSourceErrors((s) => ({ ...s, [libraryId]: t("errors:network") }));
     } finally {
       setSourceSaving((s) => ({ ...s, [libraryId]: false }));
     }
@@ -126,12 +139,12 @@ export default function AdminLibrariesPage() {
 
   async function handleScan(libraryId: string) {
     setScanLoading((s) => ({ ...s, [libraryId]: true }));
-    setScanStates((s) => ({ ...s, [libraryId]: { phase: "starting" } }));
+    setScanStates((s) => ({ ...s, [libraryId]: { phase: t("libraries:scan.starting") } }));
     try {
       const res = await apiFetch(`/libraries/${libraryId}/scan`, { method: "POST" });
       if (!res.ok) {
         const b = (await res.json()) as { error?: string };
-        setScanStates((s) => ({ ...s, [libraryId]: { phase: "error: " + (b.error ?? "unknown") } }));
+        setScanStates((s) => ({ ...s, [libraryId]: { phase: b.error ? errorMessage(b.error, t) : t("libraries:scan.unknownError") } }));
         setScanLoading((s) => ({ ...s, [libraryId]: false }));
         return;
       }
@@ -150,21 +163,28 @@ export default function AdminLibrariesPage() {
         }
       };
       es.onerror = () => {
-        setScanStates((s) => ({ ...s, [libraryId]: { phase: "stream error" } }));
+        setScanStates((s) => ({ ...s, [libraryId]: { phase: t("libraries:scan.streamError") } }));
         es.close();
         esRef.current.delete(libraryId);
         setScanLoading((s) => ({ ...s, [libraryId]: false }));
       };
     } catch {
-      setScanStates((s) => ({ ...s, [libraryId]: { phase: "error" } }));
+      setScanStates((s) => ({ ...s, [libraryId]: { phase: t("libraries:scan.unknownError") } }));
       setScanLoading((s) => ({ ...s, [libraryId]: false }));
     }
   }
 
   function formatScanState(state: ScanState): string {
-    if (state.phase === "done") return `Done — added: ${state.added ?? 0}, updated: ${state.updated ?? 0}, matched: ${state.matched ?? 0}`;
-    if (state.phase === "error") return `Scan failed: ${state.message ?? "unknown error"}`;
-    if (state.processed !== undefined && state.total !== undefined) return `${state.phase}: ${state.processed}/${state.total}${state.message ? ` — ${state.message}` : ""}`;
+    if (state.phase === "done") {
+      return t("libraries:scan.done", { count: state.added ?? 0, updated: state.updated ?? 0, matched: state.matched ?? 0 });
+    }
+    if (state.phase === "error") {
+      return t("libraries:scan.failed", { message: state.message ?? t("libraries:scan.unknownError") });
+    }
+    if (state.processed !== undefined && state.total !== undefined) {
+      const base = t("libraries:scan.progress", { phase: state.phase, processed: state.processed, total: state.total });
+      return state.message ? `${base} — ${state.message}` : base;
+    }
     return state.phase;
   }
 
@@ -175,25 +195,25 @@ export default function AdminLibrariesPage() {
   }
 
   if (loading) {
-    return <main className="p-8"><p className="text-[var(--text-dim)]">Loading…</p></main>;
+    return <main className="p-8"><p className="text-[var(--text-dim)]">{t("common:status.loading")}</p></main>;
   }
 
   return (
     <main className="px-6 md:px-8 lg:px-10 py-8">
      <div className="mx-auto flex max-w-4xl flex-col gap-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-[var(--text)]">Libraries</h1>
-        <Link to="/admin/settings" className="text-sm text-[var(--text-dim)] hover:text-[var(--text)]">Settings</Link>
+        <h1 className="text-3xl font-bold text-[var(--text)]">{t("libraries:title")}</h1>
+        <Link to="/account/settings" className="text-sm text-[var(--text-dim)] hover:text-[var(--text)]">{t("libraries:settingsLink")}</Link>
       </div>
 
       {error && <p className="text-sm text-red-400">{error}</p>}
 
       {/* Create Library */}
       <Card>
-        <h2 className="mb-4 text-lg font-semibold text-[var(--text)]">Add Library</h2>
+        <h2 className="mb-4 text-lg font-semibold text-[var(--text)]">{t("libraries:add.heading")}</h2>
         <form onSubmit={handleCreateLibrary} className="flex gap-2">
-          <Input value={newLibName} onChange={(e) => setNewLibName(e.target.value)} placeholder="Library name" required />
-          <Button type="submit" disabled={libSaving}>{libSaving ? "Adding…" : "Add"}</Button>
+          <Input value={newLibName} onChange={(e) => setNewLibName(e.target.value)} placeholder={t("libraries:add.namePlaceholder")} required />
+          <Button type="submit" disabled={libSaving}>{libSaving ? t("libraries:adding") : t("common:actions.add")}</Button>
         </form>
         {libError && <p className="mt-2 text-sm text-red-400">{libError}</p>}
       </Card>
@@ -207,9 +227,9 @@ export default function AdminLibrariesPage() {
             <h2 className="text-xl font-semibold text-[var(--text)]">{lib.name}</h2>
             <div className="flex gap-2 items-center">
               <Button onClick={() => handleScan(lib.id)} disabled={scanLoading[lib.id]}>
-                {scanLoading[lib.id] ? "Scanning…" : "Scan"}
+                {scanLoading[lib.id] ? t("libraries:scan.scanning") : t("libraries:scan.button")}
               </Button>
-              <Button variant="ghost" onClick={() => handleDeleteLibrary(lib.id)}>Delete</Button>
+              <Button variant="ghost" onClick={() => handleDeleteLibrary(lib.id)}>{t("common:actions.delete")}</Button>
             </div>
           </div>
 
@@ -223,9 +243,9 @@ export default function AdminLibrariesPage() {
                 <li key={src.id} className="flex items-center justify-between text-sm text-[var(--text-dim)]">
                   <span className="font-mono truncate">
                     {sourceLabel(src)}
-                    {src.status === "error" && <span className="ml-2 text-red-400">(error: {src.statusMessage})</span>}
+                    {src.status === "error" && <span className="ml-2 text-red-400">({t("libraries:source.errorLabel")}: {src.statusMessage})</span>}
                   </span>
-                  <Button variant="ghost" onClick={() => handleDeleteSource(src.id)}>Remove</Button>
+                  <Button variant="ghost" onClick={() => handleDeleteSource(src.id)}>{t("common:actions.remove")}</Button>
                 </li>
               ))}
             </ul>
@@ -239,23 +259,23 @@ export default function AdminLibrariesPage() {
                 onChange={(e) => setDraft(lib.id, { kind: e.target.value as SourceKind })}
                 className="rounded-[var(--radius-sm)] border border-[var(--surface-2)] bg-[var(--surface)] px-2 text-[var(--text)]"
               >
-                <option value="local">Local</option>
-                <option value="smb">SMB</option>
+                <option value="local">{t("libraries:source.kindLocal")}</option>
+                <option value="smb">{t("libraries:source.kindSmb")}</option>
               </select>
               {d.kind === "local" ? (
-                <Input value={d.path} onChange={(e) => setDraft(lib.id, { path: e.target.value })} placeholder="/path/to/media/folder" required />
+                <Input value={d.path} onChange={(e) => setDraft(lib.id, { path: e.target.value })} placeholder={t("libraries:source.pathPlaceholder")} required />
               ) : (
-                <Input value={d.host} onChange={(e) => setDraft(lib.id, { host: e.target.value })} placeholder="NAS host (e.g. 192.168.1.10)" required />
+                <Input value={d.host} onChange={(e) => setDraft(lib.id, { host: e.target.value })} placeholder={t("libraries:source.smbHostPlaceholder")} required />
               )}
-              <Button type="submit" disabled={sourceSaving[lib.id]}>{sourceSaving[lib.id] ? "Adding…" : "Add Source"}</Button>
+              <Button type="submit" disabled={sourceSaving[lib.id]}>{sourceSaving[lib.id] ? t("libraries:adding") : t("libraries:source.addButton")}</Button>
             </div>
             {d.kind === "smb" && (
               <div className="grid grid-cols-2 gap-2">
-                <Input value={d.share} onChange={(e) => setDraft(lib.id, { share: e.target.value })} placeholder="Share (e.g. media)" required />
-                <Input value={d.subpath} onChange={(e) => setDraft(lib.id, { subpath: e.target.value })} placeholder="Subpath (optional)" />
-                <Input value={d.username} onChange={(e) => setDraft(lib.id, { username: e.target.value })} placeholder="Username (optional)" />
-                <Input type="password" value={d.password} onChange={(e) => setDraft(lib.id, { password: e.target.value })} placeholder="Password (optional)" />
-                <Input value={d.domain} onChange={(e) => setDraft(lib.id, { domain: e.target.value })} placeholder="Domain (optional)" />
+                <Input value={d.share} onChange={(e) => setDraft(lib.id, { share: e.target.value })} placeholder={t("libraries:source.smbSharePlaceholder")} required />
+                <Input value={d.subpath} onChange={(e) => setDraft(lib.id, { subpath: e.target.value })} placeholder={t("libraries:source.smbSubpathPlaceholder")} />
+                <Input value={d.username} onChange={(e) => setDraft(lib.id, { username: e.target.value })} placeholder={t("libraries:source.smbUsernamePlaceholder")} />
+                <Input type="password" value={d.password} onChange={(e) => setDraft(lib.id, { password: e.target.value })} placeholder={t("libraries:source.smbPasswordPlaceholder")} />
+                <Input value={d.domain} onChange={(e) => setDraft(lib.id, { domain: e.target.value })} placeholder={t("libraries:source.smbDomainPlaceholder")} />
               </div>
             )}
           </form>

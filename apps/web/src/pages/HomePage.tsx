@@ -1,10 +1,13 @@
 import { useQueries } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
+import { cn } from "@orbix/ui";
 import { apiJson } from "@/lib/api";
 import { useHomeRows } from "@/lib/queries";
 import HomeRows from "@/components/HomeRows";
 import Hero, { type HeroItem } from "@/components/Hero";
 
 export default function HomePage() {
+  const { t } = useTranslation();
   const { data, isLoading } = useHomeRows();
   const rows = data?.rows ?? [];
 
@@ -23,10 +26,13 @@ export default function HomePage() {
     .filter((d): d is HeroItem => Boolean(d && d.backdropPath))
     .slice(0, 5);
 
-  if (isLoading) return <div className="p-8 text-[var(--text-dim)]">Loading…</div>;
+  if (isLoading)
+    return <div className="p-8 text-[var(--text-dim)]">{t("common:status.loading")}</div>;
 
   return (
-    <div className="flex flex-col gap-6 pb-4">
+    // When a hero is shown, pull it up under the fixed transparent TopNav (it
+    // cancels AppShell's pt-14) so the gradient bar overlays the backdrop art.
+    <div className={cn("flex flex-col gap-6 pb-4", heroItems.length > 0 && "-mt-14")}>
       {heroItems.length > 0 && <Hero items={heroItems} />}
       {/* MediaRow self-pads (px-6/8/10) so rows are full-bleed within main. */}
       <HomeRows rows={rows} />

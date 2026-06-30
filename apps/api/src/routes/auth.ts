@@ -24,6 +24,10 @@ export default async function auth(app: FastifyInstance) {
 
   app.get("/auth/me", async (req, reply) => {
     if (!req.accountId) return reply.code(401).send({ error: "unauthenticated" });
-    return { accountId: req.accountId };
+    const acct = await app.prisma.account.findUnique({
+      where: { id: req.accountId },
+      select: { isAdmin: true },
+    });
+    return { accountId: req.accountId, isAdmin: acct?.isAdmin ?? false };
   });
 }

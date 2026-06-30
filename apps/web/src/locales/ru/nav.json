@@ -1,0 +1,19 @@
+{
+  "home": "Главная",
+  "tv": "TV",
+  "catalog": "Каталог",
+  "account": "Аккаунт",
+  "more": "Ещё",
+  "myList": "Мой список",
+  "comingSoon": "Скоро",
+  "noCategories": "Категорий пока нет.",
+  "search": "Поиск",
+  "library": "Библиотека",
+  "admin": "Администрирование",
+  "manage": "Управление",
+  "settings": "Настройки",
+  "switchProfile": "Сменить профиль",
+  "logout": "Выйти",
+  "openNavigation": "Открыть навигацию",
+  "tmdbAttribution": "Этот продукт использует API TMDB, но не одобрен и не сертифицирован TMDB."
+}

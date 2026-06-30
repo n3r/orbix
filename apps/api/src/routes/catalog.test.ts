@@ -18,7 +18,7 @@ describe("GET /libraries/:id/items", () => {
     (app as any).prisma.mediaItem = {
       findMany: async (args: { where: { libraryId: string } }) => {
         captured = args.where;
-        return [{ id: "m1", title: "Heat", year: 1995, posterPath: null, matchState: "matched" }];
+        return [{ id: "m1", title: "Heat", year: 1995, posterPath: null, matchState: "matched", translations: [] }];
       },
     };
     const res = await app.inject({ method: "GET", url: "/api/libraries/lib1/items", cookies: { orbix_session: "s1" } });

@@ -1,0 +1,64 @@
+{
+  "title": "Configurações",
+  "backToLibraries": "Voltar para as Bibliotecas",
+  "saveButton": "Salvar configurações",
+  "saveSuccess": "Configurações salvas.",
+  "providers": {
+    "heading": "Provedores de metadados",
+    "statusLabel": "Status:",
+    "optional": "(opcional)",
+    "status": {
+      "configured": "configurado",
+      "notConfigured": "não configurado",
+      "notSet": "não definido"
+    },
+    "placeholderKeyConfigured": "Deixe em branco para manter a chave existente",
+    "placeholderKeyEmpty": "Cole a chave para configurar",
+    "tmdb": {
+      "label": "Token da API do TMDB",
+      "placeholderConfigured": "Deixe em branco para manter o token existente",
+      "placeholderEmpty": "Cole o token para configurar"
+    },
+    "omdb": {
+      "label": "Chave da API do OMDb"
+    },
+    "fanart": {
+      "label": "Chave da API do Fanart.tv"
+    }
+  },
+  "transcode": {
+    "heading": "Transcodificação",
+    "encoderLabel": "Codificador de vídeo",
+    "encoderHelp": "Escolha o codificador de hardware ou software usado na transcodificação. Software (libx264) sempre funciona; codificadores de hardware exigem o suporte correspondente de driver de GPU/VAAPI/NVENC no servidor.",
+    "encoders": {
+      "software": "Software (libx264)",
+      "vaapi": "VA-API (h264_vaapi)",
+      "qsv": "Intel QSV (h264_qsv)",
+      "nvenc": "NVIDIA NVENC (h264_nvenc)"
+    }
+  },
+  "library": {
+    "heading": "Biblioteca",
+    "cadenceLabel": "Frequência de atualização de metadados (dias)",
+    "cadenceHelp": "Quantos dias entre as atualizações automáticas de metadados. Defina um valor maior para reduzir as chamadas de API."
+  },
+  "maintenance": {
+    "heading": "Manutenção",
+    "help": "Busque novamente os metadados e as artes de cada título no TMDB agora. Use isto após adicionar ou alterar seu token do TMDB. Os títulos que você corrigiu manualmente mantêm o pôster escolhido. Bibliotecas grandes podem demorar um pouco.",
+    "rebuildButton": "Reconstruir metadados",
+    "rebuilding": "Reconstruindo…",
+    "failed": "Falha na reconstrução — verifique os logs do servidor.",
+    "noToken": "Adicione um token da API do TMDB acima e clique em Salvar configurações antes de reconstruir.",
+    "networkError": "Erro de rede durante a reconstrução.",
+    "rebuiltCount_one": "{{count}} título reconstruído",
+    "rebuiltCount_other": "{{count}} títulos reconstruídos",
+    "unmatchedCount_one": "{{count}} sem correspondência no TMDB",
+    "unmatchedCount_other": "{{count}} sem correspondências no TMDB",
+    "skippedCount_one": "{{count}} com erro",
+    "skippedCount_other": "{{count}} com erro"
+  },
+  "errors": {
+    "loadFailed": "Falha ao carregar as configurações",
+    "saveFailed": "Falha ao salvar as configurações"
+  }
+}

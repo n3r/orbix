@@ -25,6 +25,7 @@ model Profile {
   kind        String   @default("standard") // "standard" | "kids"
   pinHash     String?
   maturityCap Int? // null = unrestricted
+  language    String   @default("en") // ISO 639-1 UI + metadata language
   createdAt   DateTime @default(now())
 }
 
@@ -41,12 +42,13 @@ model Session {
 // ── Catalog models ──────────────────────────────────────────────────────────
 
 model Library {
-  id        String      @id @default(cuid())
-  name      String
-  order     Int         @default(0)
-  createdAt DateTime    @default(now())
-  sources   Source[]
-  items     MediaItem[]
+  id          String             @id @default(cuid())
+  name        String
+  order       Int                @default(0)
+  createdAt   DateTime           @default(now())
+  sources     Source[]
+  items       MediaItem[]
+  menuEntries ProfileMenuEntry[]
 }
 
 model Source {
@@ -69,48 +71,60 @@ model Source {
   @@index([libraryId])
 }
 
+model ProfileMenuEntry {
+  id        String  @id @default(cuid())
+  profileId String
+  libraryId String
+  position  Int
+  library   Library @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, libraryId])
+  @@index([profileId])
+}
+
 model MediaItem {
-  id           String             @id @default(cuid())
-  libraryId    String
-  library      Library            @relation(fields: [libraryId], references: [id], onDelete: Cascade)
-  kind         String             @default("movie")
-  title        String
-  sortTitle    String
-  year         Int?
-  overview     String?
-  runtimeSec   Int?
-  rating       String?
-  tagline      String?
-  status       String?
-  tmdbId       Int?
-  imdbId       String?
-  posterPath   String?
-  backdropPath String?
+  id             String                 @id @default(cuid())
+  libraryId      String
+  library        Library                @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+  kind           String                 @default("movie")
+  title          String
+  sortTitle      String
+  year           Int?
+  overview       String?
+  runtimeSec     Int?
+  rating         String?
+  tagline        String?
+  status         String?
+  tmdbId         Int?
+  imdbId         String?
+  posterPath     String?
+  backdropPath   String?
   backdropSource String?
-  logoPath     String?
-  tmdbScore    Float?
-  imdbRating   Float?
-  imdbVotes    Int?
-  rtRating     Int?
-  metacritic   Int?
-  matchState   String             @default("unmatched")
-  addedAt      DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
-  files        MediaFile[]
-  genres       MediaItemGenre[]
-  keywords     MediaItemKeyword[]
-  credits      Credit[]
-  seasons      Season[]
-  episodes     Episode[]
+  logoPath       String?
+  tmdbScore      Float?
+  imdbRating     Float?
+  imdbVotes      Int?
+  rtRating       Int?
+  metacritic     Int?
+  matchState     String                 @default("unmatched")
+  addedAt        DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  files          MediaFile[]
+  genres         MediaItemGenre[]
+  keywords       MediaItemKeyword[]
+  credits        Credit[]
+  translations   MediaItemTranslation[]
+  seasons        Season[]
+  episodes       Episode[]
 
   @@index([libraryId, sortTitle])
   @@index([tmdbId])
 }
 
 model Season {
-  id           String    @id @default(cuid())
+  id           String              @id @default(cuid())
   seriesId     String
-  series       MediaItem @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  series       MediaItem           @relation(fields: [seriesId], references: [id], onDelete: Cascade)
   seasonNumber Int
   name         String?
   overview     String?
@@ -118,16 +132,17 @@ model Season {
   airYear      Int?
   tmdbSeasonId Int?
   episodes     Episode[]
+  translations SeasonTranslation[]
 
   @@unique([seriesId, seasonNumber])
 }
 
 model Episode {
-  id            String      @id @default(cuid())
+  id            String               @id @default(cuid())
   seasonId      String
-  season        Season      @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  season        Season               @relation(fields: [seasonId], references: [id], onDelete: Cascade)
   seriesId      String
-  series        MediaItem   @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  series        MediaItem            @relation(fields: [seriesId], references: [id], onDelete: Cascade)
   episodeNumber Int
   title         String?
   overview      String?
@@ -136,6 +151,7 @@ model Episode {
   airDate       DateTime?
   tmdbEpisodeId Int?
   files         MediaFile[]
+  translations  EpisodeTranslation[]
 
   @@unique([seasonId, episodeNumber])
   @@index([seriesId])
@@ -166,10 +182,11 @@ model MediaFile {
 }
 
 model Genre {
-  id     Int              @id @default(autoincrement())
-  tmdbId Int?             @unique
-  name   String           @unique
-  items  MediaItemGenre[]
+  id           Int                @id @default(autoincrement())
+  tmdbId       Int?               @unique
+  name         String             @unique
+  items        MediaItemGenre[]
+  translations GenreTranslation[]
 }
 
 model Keyword {
@@ -249,9 +266,56 @@ model PlayEvent {
 }
 
 model Embedding {
-  mediaItemId String                      @id
+  mediaItemId String                     @id
   vector      Unsupported("vector(384)")
   text        String
   model       String
-  updatedAt   DateTime                    @updatedAt
+  updatedAt   DateTime                   @updatedAt
+}
+
+// ── i18n metadata translations ───────────────────────────────────────────────
+// Additive per-language overrides for catalog metadata. The base MediaItem /
+// Genre rows hold the default-language (en) values, which are the permanent
+// fallback when a translation row is missing.
+
+model MediaItemTranslation {
+  mediaItemId String
+  mediaItem   MediaItem @relation(fields: [mediaItemId], references: [id], onDelete: Cascade)
+  language    String
+  title       String?
+  overview    String?
+
+  @@id([mediaItemId, language])
+  @@index([mediaItemId])
+}
+
+model GenreTranslation {
+  genreId  Int
+  genre    Genre  @relation(fields: [genreId], references: [id], onDelete: Cascade)
+  language String
+  name     String
+
+  @@id([genreId, language])
+}
+
+model SeasonTranslation {
+  seasonId String
+  season   Season  @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  language String
+  name     String?
+  overview String?
+
+  @@id([seasonId, language])
+  @@index([seasonId])
+}
+
+model EpisodeTranslation {
+  episodeId String
+  episode   Episode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  language  String
+  title     String?
+  overview  String?
+
+  @@id([episodeId, language])
+  @@index([episodeId])
 }

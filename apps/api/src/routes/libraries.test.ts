@@ -37,6 +37,7 @@ function fakePrisma() {
   const id = () => `id${++n}`;
   return {
     session: { findUnique: async () => ({ id: "s1", accountId: "a1", expiresAt: new Date(Date.now() + 3_600_000) }) },
+    account: { findUnique: async () => ({ isAdmin: true }) },
     profile: { findUnique: async () => null },
     library: {
       findMany: async (args: { orderBy?: { order: "asc" }; include?: { sources?: { select?: Record<string, boolean> } } }) => {
@@ -168,6 +169,41 @@ describe("library + source routes", () => {
     expect(del.statusCode).toBe(204);
     const list = await app.inject({ method: "GET", url: "/api/libraries", cookies: COOKIE });
     expect(list.json()).toHaveLength(0);
+    await app.close();
+  });
+});
+
+describe("admin gating (requireAdmin)", () => {
+  it("403s POST /libraries for a non-admin account", async () => {
+    const app = await buildApp(env);
+    (app as any).prisma.session = {
+      findUnique: async () => ({ id: "s1", accountId: "a1", expiresAt: new Date(Date.now() + 3_600_000) }),
+    };
+    (app as any).prisma.account = { findUnique: async () => ({ isAdmin: false }) };
+    (app as any).prisma.profile = { findUnique: async () => ({ id: "p1", name: "A", avatar: null, kind: "standard", maturityCap: null }) };
+    const res = await app.inject({
+      method: "POST", url: "/api/libraries",
+      cookies: { orbix_session: "s1", orbix_profile: "p1" },
+      payload: { name: "New Lib" },
+    });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it("allows POST /libraries for an admin account", async () => {
+    const app = await buildApp(env);
+    (app as any).prisma.session = {
+      findUnique: async () => ({ id: "s1", accountId: "a1", expiresAt: new Date(Date.now() + 3_600_000) }),
+    };
+    (app as any).prisma.account = { findUnique: async () => ({ isAdmin: true }) };
+    (app as any).prisma.profile = { findUnique: async () => ({ id: "p1", name: "A", avatar: null, kind: "standard", maturityCap: null }) };
+    (app as any).prisma.library = { create: async () => ({ id: "lib1", name: "New Lib" }) };
+    const res = await app.inject({
+      method: "POST", url: "/api/libraries",
+      cookies: { orbix_session: "s1", orbix_profile: "p1" },
+      payload: { name: "New Lib" },
+    });
+    expect(res.statusCode).toBe(200);
     await app.close();
   });
 });

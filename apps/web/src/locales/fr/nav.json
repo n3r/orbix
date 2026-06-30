@@ -1,0 +1,19 @@
+{
+  "home": "Accueil",
+  "tv": "TV",
+  "catalog": "Catalogue",
+  "account": "Compte",
+  "more": "Plus",
+  "myList": "Ma liste",
+  "comingSoon": "Bientôt disponible",
+  "noCategories": "Aucune catégorie pour le moment.",
+  "search": "Rechercher",
+  "library": "Bibliothèque",
+  "admin": "Admin",
+  "manage": "Gérer",
+  "settings": "Paramètres",
+  "switchProfile": "Changer de profil",
+  "logout": "Se déconnecter",
+  "openNavigation": "Ouvrir la navigation",
+  "tmdbAttribution": "Ce produit utilise l'API TMDB mais n'est ni approuvé ni certifié par TMDB."
+}

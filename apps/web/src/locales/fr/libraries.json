@@ -1,0 +1,43 @@
+{
+  "title": "Bibliothèques",
+  "settingsLink": "Paramètres",
+  "adding": "Ajout…",
+  "deleteLibrary": "Supprimer la bibliothèque",
+  "add": {
+    "heading": "Ajouter une bibliothèque",
+    "namePlaceholder": "Nom de la bibliothèque"
+  },
+  "section": {
+    "addButton": "Ajouter une section",
+    "namePlaceholder": "Nom de la section (par ex. Films)"
+  },
+  "source": {
+    "addButton": "Ajouter une source",
+    "pathPlaceholder": "/chemin/vers/dossier/média",
+    "kindLocal": "Local",
+    "kindSmb": "SMB",
+    "smbHostPlaceholder": "NAS host (e.g. 192.168.1.10)",
+    "smbSharePlaceholder": "Share (e.g. media)",
+    "smbSubpathPlaceholder": "Subpath (optional)",
+    "smbUsernamePlaceholder": "Username (optional)",
+    "smbPasswordPlaceholder": "Password (optional)",
+    "smbDomainPlaceholder": "Domain (optional)",
+    "errorLabel": "error"
+  },
+  "scan": {
+    "button": "Analyser",
+    "scanning": "Analyse…",
+    "starting": "Démarrage…",
+    "streamError": "La connexion à l'analyse a été perdue.",
+    "unknownError": "erreur inconnue",
+    "done_one": "Terminé — {{count}} titre ajouté, {{updated}} mis à jour, {{matched}} associés",
+    "done_other": "Terminé — {{count}} titres ajoutés, {{updated}} mis à jour, {{matched}} associés",
+    "failed": "Échec de l'analyse : {{message}}",
+    "progress": "{{phase}} : {{processed}}/{{total}}"
+  },
+  "errors": {
+    "loadFailed": "Échec du chargement des bibliothèques",
+    "createFailed": "Échec de la création de la bibliothèque",
+    "addSourceFailed": "Échec de l'ajout de la source"
+  }
+}

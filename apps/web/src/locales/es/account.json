@@ -1,0 +1,19 @@
+{
+  "title": "Cuenta",
+  "tabs": {
+    "overview": "Resumen",
+    "menu": "Mi menú"
+  },
+  "profileKind": {
+    "standard": "Perfil estándar",
+    "kids": "Perfil infantil"
+  },
+  "menu": {
+    "intro": "Elige qué categorías aparecen en tu menú y ordénalas.",
+    "save": "Guardar menú",
+    "saved": "Guardado.",
+    "selectOne": "Selecciona al menos una categoría.",
+    "moveUp": "Subir {{name}}",
+    "moveDown": "Bajar {{name}}"
+  }
+}

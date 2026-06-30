@@ -1,0 +1,16 @@
+{
+  "loading": "Loading player…",
+  "close": "Close player",
+  "seek": {
+    "backward": "Seek backward {{seconds}} seconds",
+    "forward": "Seek forward {{seconds}} seconds"
+  },
+  "track": {
+    "label": "Track {{index}}"
+  },
+  "error": {
+    "decision": "Could not get playback decision",
+    "network": "Network error loading player",
+    "generic": "Failed to load player"
+  }
+}

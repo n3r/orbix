@@ -33,12 +33,12 @@ export function kidsRatingWhere(
 export async function activeProfile(
   app: FastifyInstance,
   req: FastifyRequest,
-): Promise<{ id: string; name: string; avatar: string | null; kind: string; maturityCap: number | null } | null> {
+): Promise<{ id: string; name: string; avatar: string | null; kind: string; maturityCap: number | null; language: string } | null> {
   const profileId = req.cookies["orbix_profile"];
   if (!profileId) return null;
   return app.prisma.profile.findUnique({
     where: { id: profileId },
-    select: { id: true, name: true, avatar: true, kind: true, maturityCap: true },
+    select: { id: true, name: true, avatar: true, kind: true, maturityCap: true, language: true },
   });
 }
 

@@ -1,0 +1,22 @@
+{
+  "rows": {
+    "continue": "Seguir viendo",
+    "hiddenGems": "Joyas ocultas",
+    "tonight": "Elige algo para esta noche"
+  },
+  "browse": {
+    "title": "Explorar",
+    "searchPlaceholder": "Buscar títulos…",
+    "empty": "No se encontraron elementos.",
+    "sort": {
+      "title": "Título (A–Z)",
+      "added": "Añadido recientemente",
+      "year": "Año"
+    }
+  },
+  "hero": {
+    "play": "Reproducir",
+    "moreInfo": "Más información",
+    "showSlide": "Mostrar {{title}}"
+  }
+}

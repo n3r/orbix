@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import {
   MediaPlayer,
   MediaProvider,
@@ -43,34 +44,36 @@ interface Props {
 
 const SAVE_INTERVAL_MS = 10_000;
 
-// The default large (desktop) layout renders no on-screen seek buttons, so add a
-// Netflix/Plex-style −10s / +30s pair flanking the play button (via the large
-// layout's before/after-play-button slots). Uses the matching numbered seek
-// icons and the default layout's button CSS classes so they sit seamlessly in
-// the control bar. Keyboard seeking uses `seekStep` (see below).
-const seekBackward10 = (
-  <SeekButton
-    seconds={-10}
-    className="vds-seek-button vds-button"
-    aria-label="Seek backward 10 seconds"
-  >
-    <SeekBackward10Icon className="vds-icon" />
-  </SeekButton>
-);
-const seekForward30 = (
-  <SeekButton
-    seconds={30}
-    className="vds-seek-button vds-button"
-    aria-label="Seek forward 30 seconds"
-  >
-    <SeekForward30Icon className="vds-icon" />
-  </SeekButton>
-);
-
 export default function Player({ fileId, mediaItemId, title, episodeId }: Props) {
+  const { t } = useTranslation();
   const progressQuery = episodeId
     ? `?episodeId=${encodeURIComponent(episodeId)}`
     : "";
+
+  // The default large (desktop) layout renders no on-screen seek buttons, so add
+  // a Netflix/Plex-style −10s / +30s pair flanking the play button (via the large
+  // layout's before/after-play-button slots). Uses the matching numbered seek
+  // icons and the default layout's button CSS classes so they sit seamlessly in
+  // the control bar. Keyboard seeking uses `seekStep` (see below).
+  const seekBackward10 = (
+    <SeekButton
+      seconds={-10}
+      className="vds-seek-button vds-button"
+      aria-label={t("player:seek.backward", { seconds: 10 })}
+    >
+      <SeekBackward10Icon className="vds-icon" />
+    </SeekButton>
+  );
+  const seekForward30 = (
+    <SeekButton
+      seconds={30}
+      className="vds-seek-button vds-button"
+      aria-label={t("player:seek.forward", { seconds: 30 })}
+    >
+      <SeekForward30Icon className="vds-icon" />
+    </SeekButton>
+  );
+
   const [decision, setDecision] = useState<Decision | null>(null);
   const [subs, setSubs] = useState<SubTrack[]>([]);
   const [resume, setResume] = useState<Progress | null>(null);
@@ -91,7 +94,7 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
         ]);
 
         if (!decisionRes.ok) {
-          setError("Could not get playback decision");
+          setError(t("player:error.decision"));
           return;
         }
         const d = (await decisionRes.json()) as Decision;
@@ -107,12 +110,12 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
           setResume(p);
         }
       } catch {
-        setError("Network error loading player");
+        setError(t("player:error.network"));
       } finally {
         setLoading(false);
       }
     })();
-  }, [fileId, mediaItemId, progressQuery]);
+  }, [fileId, mediaItemId, progressQuery, t]);
 
   // Save progress to the server (reads live state from the player ref)
   const saveProgress = useCallback(async () => {
@@ -179,7 +182,7 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
   if (loading) {
     return (
       <div className="grid h-full w-full place-items-center text-sm text-[var(--text-dim)]">
-        Loading player…
+        {t("player:loading")}
       </div>
     );
   }
@@ -187,7 +190,7 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
   if (error || !decision) {
     return (
       <div className="grid h-full w-full place-items-center text-sm text-red-400">
-        {error ?? "Failed to load player"}
+        {error ?? t("player:error.generic")}
       </div>
     );
   }
@@ -214,7 +217,7 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
             key={String(track.index)}
             src={`/api/play/${fileId}/subs/${track.index}.vtt`}
             kind="subtitles"
-            label={track.language ?? `Track ${track.index}`}
+            label={track.language ?? t("player:track.label", { index: track.index })}
             language={track.language ?? ""}
           />
         ))}

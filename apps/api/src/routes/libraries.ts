@@ -8,7 +8,7 @@ import {
 } from "@orbix/core";
 import { Prisma } from "@orbix/db";
 import type { Env } from "@orbix/config";
-import { requireAuth } from "../lib/auth";
+import { requireAuth, requireAdmin } from "../lib/auth";
 import { requireNonKids } from "../lib/catalog-filter";
 import { encryptSecret } from "../lib/secrets";
 import { buildMountRuntime, type MountRuntime } from "../lib/mount-runtime";
@@ -34,6 +34,8 @@ export function librariesRoute(env: Env, deps?: { runtime?: MountRuntime }) {
   const runtime = deps?.runtime ?? buildMountRuntime(env);
 
   return async function libraries(app: FastifyInstance) {
+    const manage = { preHandler: [requireAuth(app), requireAdmin(app), requireNonKids(app)] };
+
     // GET /libraries — libraries + sanitized sources
     app.get("/libraries", { preHandler: requireAuth(app) }, async () =>
       app.prisma.library.findMany({
@@ -43,7 +45,7 @@ export function librariesRoute(env: Env, deps?: { runtime?: MountRuntime }) {
     );
 
     // POST /libraries
-    app.post<{ Body: unknown }>("/libraries", { preHandler: [requireAuth(app), requireNonKids(app)] }, async (req, reply) => {
+    app.post<{ Body: unknown }>("/libraries", manage, async (req, reply) => {
       try {
         const v = validateLibraryInput(req.body);
         return await app.prisma.library.create({ data: { name: v.name }, select: { id: true, name: true } });
@@ -54,7 +56,7 @@ export function librariesRoute(env: Env, deps?: { runtime?: MountRuntime }) {
     });
 
     // PATCH /libraries/:id
-    app.patch<{ Params: { id: string }; Body: unknown }>("/libraries/:id", { preHandler: [requireAuth(app), requireNonKids(app)] }, async (req, reply) => {
+    app.patch<{ Params: { id: string }; Body: unknown }>("/libraries/:id", manage, async (req, reply) => {
       try {
         const patch = validateLibraryPatch(req.body);
         const data: { name?: string; order?: number } = {};
@@ -69,7 +71,7 @@ export function librariesRoute(env: Env, deps?: { runtime?: MountRuntime }) {
     });
 
     // DELETE /libraries/:id
-    app.delete<{ Params: { id: string } }>("/libraries/:id", { preHandler: [requireAuth(app), requireNonKids(app)] }, async (req, reply) => {
+    app.delete<{ Params: { id: string } }>("/libraries/:id", manage, async (req, reply) => {
       // Unmount any SMB sources first (best-effort).
       const smb = await app.prisma.source.findMany({ where: { libraryId: req.params.id, kind: "smb" }, select: { id: true } });
       await Promise.all(smb.map((s) => runtime.unmount(s.id).catch(() => {})));
@@ -83,7 +85,7 @@ export function librariesRoute(env: Env, deps?: { runtime?: MountRuntime }) {
     });
 
     // POST /libraries/:id/sources
-    app.post<{ Params: { id: string }; Body: unknown }>("/libraries/:id/sources", { preHandler: [requireAuth(app), requireNonKids(app)] }, async (req, reply) => {
+    app.post<{ Params: { id: string }; Body: unknown }>("/libraries/:id/sources", manage, async (req, reply) => {
       const libraryId = req.params.id;
       let v;
       try {
@@ -132,7 +134,7 @@ export function librariesRoute(env: Env, deps?: { runtime?: MountRuntime }) {
     });
 
     // PATCH /sources/:id — { enabled?: boolean }
-    app.patch<{ Params: { id: string }; Body: { enabled?: boolean } }>("/sources/:id", { preHandler: [requireAuth(app), requireNonKids(app)] }, async (req, reply) => {
+    app.patch<{ Params: { id: string }; Body: { enabled?: boolean } }>("/sources/:id", manage, async (req, reply) => {
       const enabled = req.body?.enabled;
       if (typeof enabled !== "boolean") return reply.code(400).send({ error: "invalid" });
       try {
@@ -146,7 +148,7 @@ export function librariesRoute(env: Env, deps?: { runtime?: MountRuntime }) {
     });
 
     // DELETE /sources/:id
-    app.delete<{ Params: { id: string } }>("/sources/:id", { preHandler: [requireAuth(app), requireNonKids(app)] }, async (req, reply) => {
+    app.delete<{ Params: { id: string } }>("/sources/:id", manage, async (req, reply) => {
       const existing = await app.prisma.source.findUnique({ where: { id: req.params.id }, select: { id: true, kind: true } });
       if (existing?.kind === "smb") await runtime.unmount(existing.id).catch(() => {});
       try {

@@ -1,0 +1,19 @@
+{
+  "unknown": "Une erreur s'est produite. Veuillez réessayer.",
+  "network": "Erreur réseau. Veuillez réessayer.",
+  "invalid_credentials": "Adresse e-mail ou mot de passe invalide.",
+  "unauthenticated": "Veuillez vous connecter pour continuer.",
+  "unauthorized": "Vous n'avez pas l'autorisation de faire cela.",
+  "invalid": "Ces informations ne sont pas valides.",
+  "invalid_profile": "Ces informations de profil ne sont pas valides.",
+  "not_found": "Introuvable.",
+  "pin_required": "Ce profil nécessite un code PIN.",
+  "setup_complete": "La configuration est déjà terminée.",
+  "no_sources": "Ajoutez un dossier de bibliothèque avant de lancer une analyse.",
+  "tmdb_not_configured": "Définissez d'abord votre jeton TMDB dans les Paramètres.",
+  "tmdbId_required": "Une correspondance TMDB est requise.",
+  "tmdbPosterPath_required": "Une affiche est requise.",
+  "not_allowed_for_kids": "Cette section n'est pas disponible sur un profil enfant.",
+  "blocked_by_rating": "Ce titre est bloqué par le réglage de maturité du profil.",
+  "invalid_sort": "Cette option de tri n'est pas valide."
+}

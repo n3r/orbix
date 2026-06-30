@@ -1,0 +1,18 @@
+{
+  "title": "¿Quién está viendo?",
+  "addProfile": "Añadir perfil",
+  "form": {
+    "title": "Nuevo perfil",
+    "nameLabel": "Nombre",
+    "namePlaceholder": "Nombre del perfil"
+  },
+  "language": {
+    "label": "Idioma",
+    "help": "El idioma que usa Orbix para este perfil."
+  },
+  "errors": {
+    "loadFailed": "No se pudieron cargar los perfiles.",
+    "selectFailed": "No se pudo seleccionar el perfil.",
+    "pinNotSupported": "Este perfil requiere un PIN. La introducción de PIN aún no es compatible."
+  }
+}

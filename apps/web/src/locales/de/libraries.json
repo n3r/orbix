@@ -1,0 +1,43 @@
+{
+  "title": "Bibliotheken",
+  "settingsLink": "Einstellungen",
+  "adding": "Wird hinzugefügt…",
+  "deleteLibrary": "Bibliothek löschen",
+  "add": {
+    "heading": "Bibliothek hinzufügen",
+    "namePlaceholder": "Bibliotheksname"
+  },
+  "section": {
+    "addButton": "Bereich hinzufügen",
+    "namePlaceholder": "Bereichsname (z. B. Filme)"
+  },
+  "source": {
+    "addButton": "Quelle hinzufügen",
+    "pathPlaceholder": "/pfad/zum/medien/ordner",
+    "kindLocal": "Local",
+    "kindSmb": "SMB",
+    "smbHostPlaceholder": "NAS host (e.g. 192.168.1.10)",
+    "smbSharePlaceholder": "Share (e.g. media)",
+    "smbSubpathPlaceholder": "Subpath (optional)",
+    "smbUsernamePlaceholder": "Username (optional)",
+    "smbPasswordPlaceholder": "Password (optional)",
+    "smbDomainPlaceholder": "Domain (optional)",
+    "errorLabel": "error"
+  },
+  "scan": {
+    "button": "Scannen",
+    "scanning": "Wird gescannt…",
+    "starting": "Wird gestartet…",
+    "streamError": "Die Verbindung zum Scan wurde unterbrochen.",
+    "unknownError": "unbekannter Fehler",
+    "done_one": "Fertig – {{count}} Titel hinzugefügt, {{updated}} aktualisiert, {{matched}} zugeordnet",
+    "done_other": "Fertig – {{count}} Titel hinzugefügt, {{updated}} aktualisiert, {{matched}} zugeordnet",
+    "failed": "Scan fehlgeschlagen: {{message}}",
+    "progress": "{{phase}}: {{processed}}/{{total}}"
+  },
+  "errors": {
+    "loadFailed": "Bibliotheken konnten nicht geladen werden",
+    "createFailed": "Bibliothek konnte nicht erstellt werden",
+    "addSourceFailed": "Quelle konnte nicht hinzugefügt werden"
+  }
+}

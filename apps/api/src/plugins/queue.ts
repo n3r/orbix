@@ -7,7 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import type { Env } from "@orbix/config";
-import { Prisma } from "@orbix/db";
+import { Prisma, type PrismaClient } from "@orbix/db";
 import { buildMountRuntime, type MountRuntime } from "../lib/mount-runtime";
 import {
   scanSource,
@@ -21,6 +21,7 @@ import {
   fetchFanartLogoUrl,
   backdropFrameTimestampSec,
   TmdbClient,
+  tmdbLanguageTag,
   getSetting,
   type MediaFileTechnical,
   type ImageKind,
@@ -99,10 +100,55 @@ export interface ScanJobData {
   sources: ScanSourceRow[];
 }
 
+export interface TranslateJobData {
+  language: string;
+}
+
+/**
+ * The set of content languages whose metadata must be cached: every distinct
+ * profile language except the en base (which lives on the MediaItem/Genre rows).
+ */
+export async function activeContentLanguages(prisma: PrismaClient): Promise<string[]> {
+  const rows = await prisma.profile.findMany({
+    select: { language: true },
+    distinct: ["language"],
+  });
+  return [...new Set(rows.map((r) => r.language))].filter((l) => l && l !== "en");
+}
+
+/**
+ * Ensure a profile language's catalog metadata is (being) cached. No-op for en
+ * (the base) or when translations already exist; otherwise enqueues an
+ * idempotent backfill job. Safe to call on every profile create/language change.
+ */
+export async function ensureMetadataLanguage(
+  app: FastifyInstance,
+  language: string,
+): Promise<void> {
+  if (!language || language === "en") return;
+  const existing = await app.prisma.mediaItemTranslation.findFirst({
+    where: { language },
+    select: { mediaItemId: true },
+  });
+  if (existing) return; // already backfilled (or a backfill is in flight)
+  await app.translateQueue.add("translate-metadata", { language });
+}
+
 // ── Plugin factory ───────────────────────────────────────────────────────────
 
 export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
   return fp(async (app: FastifyInstance) => {
+    // Tests never enqueue jobs and point REDIS_URL at a bogus host. Creating real
+    // BullMQ queues/workers opens ioredis connections whose DNS failures (EAI_AGAIN
+    // under a retry storm) leak as unhandled rejections and fail the run. Decorate
+    // inert stubs and skip all Redis setup; production behaviour is unchanged.
+    if (env.NODE_ENV === "test") {
+      const stub = { add: async () => undefined, close: async () => undefined };
+      app.decorate("scanQueue", stub as unknown as Queue<ScanJobData>);
+      app.decorate("translateQueue", stub as unknown as Queue<TranslateJobData>);
+      return;
+    }
+
     const connection = { url: env.REDIS_URL };
     const runtime = deps?.runtime ?? buildMountRuntime(env);
 
@@ -335,6 +381,16 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
       } else {
         const client = new TmdbClient(token);
 
+        // Active content languages = distinct profile languages, excluding the
+        // en base. Each item is also fetched in these languages at enrich time.
+        const activeLanguages = await activeContentLanguages(prisma);
+        // One language-configured client per active language; satisfies both the
+        // movie (movie) and series (tv/tvSeason) translate-client surfaces.
+        const translateClients = new Map<string, TmdbClient>();
+        for (const lang of activeLanguages) {
+          translateClients.set(lang, new TmdbClient(token, undefined, tmdbLanguageTag(lang)));
+        }
+
         const omdbKey = await getSetting<string>("omdbKey", {
           fallback: "",
           read: (k) => prisma.setting.findUnique({ where: { key: k } }),
@@ -489,6 +545,20 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
                 },
               });
             }
+
+            // Per-language metadata translations (additive; base row is en fallback)
+            for (const tr of input.translations ?? []) {
+              await tx.mediaItemTranslation.upsert({
+                where: { mediaItemId_language: { mediaItemId: input.itemId, language: tr.language } },
+                create: {
+                  mediaItemId: input.itemId,
+                  language: tr.language,
+                  title: tr.title,
+                  overview: tr.overview ?? null,
+                },
+                update: { title: tr.title, overview: tr.overview ?? null },
+              });
+            }
           }, { timeout: 20_000, maxWait: 10_000 });
         };
 
@@ -534,6 +604,20 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
                 data: { mediaItemId: input.itemId, genreId: genre.id },
               });
             }
+
+            // Series-level title/overview translations (additive; base = en).
+            for (const tr of input.translations ?? []) {
+              await tx.mediaItemTranslation.upsert({
+                where: { mediaItemId_language: { mediaItemId: input.itemId, language: tr.language } },
+                create: {
+                  mediaItemId: input.itemId,
+                  language: tr.language,
+                  title: tr.title,
+                  overview: tr.overview ?? null,
+                },
+                update: { title: tr.title, overview: tr.overview ?? null },
+              });
+            }
           });
 
           for (const s of input.seasons) {
@@ -553,6 +637,14 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
               select: { id: true },
             });
 
+            for (const tr of s.translations ?? []) {
+              await prisma.seasonTranslation.upsert({
+                where: { seasonId_language: { seasonId: season.id, language: tr.language } },
+                create: { seasonId: season.id, language: tr.language, name: tr.name ?? null, overview: tr.overview ?? null },
+                update: { name: tr.name ?? null, overview: tr.overview ?? null },
+              });
+            }
+
             for (const e of s.episodes) {
               const epData = {
                 title: e.title ?? null,
@@ -562,13 +654,22 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
                 airDate: e.airDate ? new Date(e.airDate) : null,
                 tmdbEpisodeId: e.tmdbEpisodeId ?? null,
               };
-              await prisma.episode.upsert({
+              const episode = await prisma.episode.upsert({
                 where: {
                   seasonId_episodeNumber: { seasonId: season.id, episodeNumber: e.episodeNumber },
                 },
                 create: { seasonId: season.id, seriesId: input.itemId, episodeNumber: e.episodeNumber, ...epData },
                 update: epData,
+                select: { id: true },
               });
+
+              for (const tr of e.translations ?? []) {
+                await prisma.episodeTranslation.upsert({
+                  where: { episodeId_language: { episodeId: episode.id, language: tr.language } },
+                  create: { episodeId: episode.id, language: tr.language, title: tr.title ?? null, overview: tr.overview ?? null },
+                  update: { title: tr.title ?? null, overview: tr.overview ?? null },
+                });
+              }
             }
           }
         };
@@ -620,6 +721,7 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
                 resolveLogo: resolveLogoTv,
                 fetchRatings,
                 localSeasonNumbers: localSeasons.map((s) => s.seasonNumber),
+                translateClients,
               });
             } else {
               result = await enrichItem(base, {
@@ -628,8 +730,10 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
                 saveMetadata,
                 resolveLogo,
                 fetchRatings,
+                translateClients,
               });
             }
+
             if (result.matched) matched++;
           } catch (err) {
             app.log.warn({ err, itemId }, "enrich failed — continuing with remaining items");
@@ -728,9 +832,143 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
 
     app.decorate("scanQueue", queue);
 
+    // ── Metadata translation backfill ───────────────────────────────────────
+
+    const translateQueue = new Queue<TranslateJobData>("translate-metadata", { connection });
+
+    async function translateProcessor(job: Job<TranslateJobData>): Promise<void> {
+      const { language } = job.data;
+      const { prisma } = app;
+      const tag = tmdbLanguageTag(language);
+      const channel = `translate-${language}`;
+
+      const token = await getSetting<string>("tmdbToken", {
+        fallback: "",
+        read: (k) => prisma.setting.findUnique({ where: { key: k } }),
+      });
+      if (!token) {
+        app.log.warn({ language }, "No TMDB token — skipping metadata translation.");
+        return;
+      }
+
+      const client = new TmdbClient(token, undefined, tag);
+
+      // Localized genre names (fixed TMDB list per language).
+      try {
+        for (const kind of ["movie", "tv"] as const) {
+          const genres = await client.genreList(kind);
+          for (const g of genres) {
+            if (g.tmdbId == null) continue;
+            const local = await prisma.genre.findUnique({
+              where: { tmdbId: g.tmdbId },
+              select: { id: true },
+            });
+            if (!local) continue; // only translate genres we actually have
+            await prisma.genreTranslation.upsert({
+              where: { genreId_language: { genreId: local.id, language } },
+              create: { genreId: local.id, language, name: g.name },
+              update: { name: g.name },
+            });
+          }
+        }
+      } catch (err) {
+        app.log.warn({ err, language }, "genre translation failed — continuing");
+      }
+
+      // Backfill a series: localized title/overview (series), season names, and
+      // episode titles/overviews — matched to local rows by season/episode number.
+      async function translateSeries(seriesId: string, tmdbId: number): Promise<void> {
+        const tv = await client.tv(tmdbId);
+        await prisma.mediaItemTranslation.upsert({
+          where: { mediaItemId_language: { mediaItemId: seriesId, language } },
+          create: { mediaItemId: seriesId, language, title: tv.title, overview: tv.overview ?? null },
+          update: { title: tv.title, overview: tv.overview ?? null },
+        });
+
+        const localSeasons = await prisma.season.findMany({
+          where: { seriesId },
+          select: { id: true, seasonNumber: true },
+        });
+        const tvSeasonByNumber = new Map(tv.seasons.map((s) => [s.seasonNumber, s]));
+
+        for (const ls of localSeasons) {
+          const ts = tvSeasonByNumber.get(ls.seasonNumber);
+          if (ts && (ts.name != null || ts.overview != null)) {
+            await prisma.seasonTranslation.upsert({
+              where: { seasonId_language: { seasonId: ls.id, language } },
+              create: { seasonId: ls.id, language, name: ts.name ?? null, overview: ts.overview ?? null },
+              update: { name: ts.name ?? null, overview: ts.overview ?? null },
+            });
+          }
+
+          let tmdbEpisodes: Awaited<ReturnType<typeof client.tvSeason>> = [];
+          try {
+            tmdbEpisodes = await client.tvSeason(tmdbId, ls.seasonNumber);
+          } catch {
+            tmdbEpisodes = [];
+          }
+          if (tmdbEpisodes.length === 0) continue;
+
+          const localEpisodes = await prisma.episode.findMany({
+            where: { seasonId: ls.id },
+            select: { id: true, episodeNumber: true },
+          });
+          const tmdbEpByNumber = new Map(tmdbEpisodes.map((e) => [e.episodeNumber, e]));
+          for (const le of localEpisodes) {
+            const te = tmdbEpByNumber.get(le.episodeNumber);
+            if (!te || (te.title == null && te.overview == null)) continue;
+            await prisma.episodeTranslation.upsert({
+              where: { episodeId_language: { episodeId: le.id, language } },
+              create: { episodeId: le.id, language, title: te.title ?? null, overview: te.overview ?? null },
+              update: { title: te.title ?? null, overview: te.overview ?? null },
+            });
+          }
+        }
+      }
+
+      // Per-item localized text for every matched item (movie or series).
+      const items = await prisma.mediaItem.findMany({
+        where: { tmdbId: { not: null }, matchState: { not: "unmatched" } },
+        select: { id: true, kind: true, tmdbId: true },
+      });
+
+      let processed = 0;
+      for (const item of items) {
+        try {
+          if (item.kind === "series") {
+            await translateSeries(item.id, item.tmdbId!);
+          } else {
+            const m = await client.movie(item.tmdbId!);
+            await prisma.mediaItemTranslation.upsert({
+              where: { mediaItemId_language: { mediaItemId: item.id, language } },
+              create: { mediaItemId: item.id, language, title: m.title, overview: m.overview ?? null },
+              update: { title: m.title, overview: m.overview ?? null },
+            });
+          }
+        } catch (err) {
+          app.log.warn({ err, itemId: item.id, language }, "item translation failed — continuing");
+        }
+        processed++;
+        scanEvents.emit(channel, { phase: "translating", processed, total: items.length, language });
+      }
+
+      scanEvents.emit(channel, { phase: "done", processed, total: items.length, language });
+    }
+
+    const translateWorker = new Worker<TranslateJobData, void>(
+      "translate-metadata",
+      translateProcessor,
+      { connection },
+    );
+    translateWorker.on("error", (err) => app.log.error({ err }, "translate worker error"));
+
+    app.decorate("translateQueue", translateQueue);
+
     app.addHook("onClose", async () => {
       await worker.close();
       await queue.close();
+      await translateWorker.close();
+      await translateQueue.close();
     });
   });
 }
@@ -740,5 +978,6 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
 declare module "fastify" {
   interface FastifyInstance {
     scanQueue: Queue<ScanJobData>;
+    translateQueue: Queue<TranslateJobData>;
   }
 }

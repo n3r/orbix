@@ -1,4 +1,5 @@
 import { useState, lazy, Suspense, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "react-router";
 import { apiJson, ApiError } from "@/lib/api";
@@ -16,6 +17,7 @@ interface PlayTarget {
 }
 
 export default function TitlePage() {
+  const { t } = useTranslation();
   const { id } = useParams();
   const [playTarget, setPlayTarget] = useState<PlayTarget | null>(null);
   // Bumped by the hero Play button so the episode list plays the first episode.
@@ -37,7 +39,7 @@ export default function TitlePage() {
   if (itemQuery.isLoading) {
     return (
       <main className="p-8">
-        <p className="text-[var(--text-dim)]">Loading…</p>
+        <p className="text-[var(--text-dim)]">{t("common:status.loading")}</p>
       </main>
     );
   }
@@ -45,7 +47,7 @@ export default function TitlePage() {
   if (notFound) {
     return (
       <main className="p-8">
-        <h1 className="text-2xl font-bold text-[var(--text)]">Title not found</h1>
+        <h1 className="text-2xl font-bold text-[var(--text)]">{t("title:notFound")}</h1>
       </main>
     );
   }
@@ -54,7 +56,7 @@ export default function TitlePage() {
   if (!item) {
     return (
       <main className="p-8">
-        <p className="text-sm text-red-400">Failed to load title</p>
+        <p className="text-sm text-red-400">{t("title:loadFailed")}</p>
       </main>
     );
   }
@@ -65,7 +67,7 @@ export default function TitlePage() {
 
   const handleHeroPlay = () => {
     if (isSeries) {
-      setHeroPlayToken((t) => t + 1);
+      setHeroPlayToken((n) => n + 1);
     } else if (firstFileId) {
       setPlayTarget({ fileId: firstFileId, episodeId: undefined, title: item.title });
     }
@@ -73,7 +75,7 @@ export default function TitlePage() {
 
   return (
     <main className="flex w-full flex-col">
-      <TitleHero item={item} canPlay={canPlay} playLabel="Play" onPlay={handleHeroPlay} />
+      <TitleHero item={item} canPlay={canPlay} playLabel={t("title:play")} onPlay={handleHeroPlay} />
 
       {/* Full-page player overlay (portaled to <body>) */}
       {playTarget && id && (
@@ -102,15 +104,13 @@ export default function TitlePage() {
       <div className="flex w-full flex-col gap-10 px-6 py-8 md:px-12 lg:px-16">
         {/* Unmatched notice */}
         {item.matchState !== "matched" && item.matchState !== "manual" && (
-          <p className="text-sm text-yellow-400">
-            Metadata not matched yet — scan with a TMDB token to enrich.
-          </p>
+          <p className="text-sm text-yellow-400">{t("title:unmatchedNotice")}</p>
         )}
 
         {/* Cast */}
         {item.cast.length > 0 && (
           <section>
-            <h2 className="mb-3 text-xl font-semibold text-[var(--text)]">Cast</h2>
+            <h2 className="mb-3 text-xl font-semibold text-[var(--text)]">{t("title:section.cast")}</h2>
             <div className="flex gap-4 overflow-x-auto pb-2">
               {item.cast.map((c, i) => (
                 <div key={i} className="w-32 shrink-0 rounded-[var(--radius)] bg-[var(--surface)] p-3">
@@ -132,12 +132,12 @@ export default function TitlePage() {
       <div className="flex w-full flex-col gap-4 px-6 py-8 md:px-12 lg:px-16">
         {item.director && (
           <p className="text-sm text-[var(--text-dim)]">
-            <span className="text-[var(--text)]">Director:</span> {item.director.name}
+            <span className="text-[var(--text)]">{t("title:section.director")}:</span> {item.director.name}
           </p>
         )}
         {item.genres.length > 0 && (
           <p className="text-sm text-[var(--text-dim)]">
-            <span className="text-[var(--text)]">Genres:</span> {item.genres.join(", ")}
+            <span className="text-[var(--text)]">{t("title:section.genres")}:</span> {item.genres.join(", ")}
           </p>
         )}
       </div>
