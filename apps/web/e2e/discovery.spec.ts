@@ -144,7 +144,9 @@ async function cleanDb() {
 
 async function doOnboarding(page: Page) {
   await page.goto("http://localhost:1060/");
-  await page.waitForURL(/\/(setup|login|profiles|$)/, { timeout: 15_000 });
+  // SPA redirects client-side; auto-retry until we land on an unauth screen
+  // (a waitForURL matching "/" would resolve before the redirect fires).
+  await expect(page).toHaveURL(/\/(setup|login)$/, { timeout: 15_000 });
 
   if (page.url().includes("/setup")) {
     // We are the first spec to run — create our account via the setup wizard.
@@ -208,11 +210,13 @@ test.describe("NL search — constraint path", () => {
     await input.fill("comedy under 2 hours");
     await page.getByRole("button", { name: /^search$/i }).click();
 
-    // Both comedies must appear in results
-    await expect(page.getByText("Short Comedy Film")).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("Classic Comedy Film")).toBeVisible({ timeout: 15_000 });
+    // Both comedies must appear in results. Target the poster-card LINK (not bare
+    // text): a no-poster card renders its title in both the placeholder and the
+    // caption, so getByText would match two nodes (strict-mode violation).
+    await expect(page.getByRole("link", { name: /Short Comedy Film/ })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("link", { name: /Classic Comedy Film/ })).toBeVisible({ timeout: 15_000 });
 
     // The 180-min drama must NOT be present (excluded by both runtime and genre filters)
-    await expect(page.getByText("Epic Drama Film")).not.toBeVisible();
+    await expect(page.getByRole("link", { name: /Epic Drama Film/ })).not.toBeVisible();
   });
 });

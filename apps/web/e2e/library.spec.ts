@@ -95,9 +95,12 @@ async function cleanDb() {
 //   2. Already set up (test 2+)   → logs in → selects existing profile
 
 async function doOnboarding(page: Page) {
-  // The home page server-redirects based on state; use it as the entry point
+  // The home page redirects based on state. In the SPA this redirect happens
+  // client-side (after the guard's async queries), so wait with an auto-retrying
+  // assertion until we actually land on an unauthenticated screen — a plain
+  // waitForURL matching "/" would resolve before the client redirect fires.
   await page.goto("http://localhost:1060/");
-  await page.waitForURL(/\/(setup|login|profiles|$)/, { timeout: 15_000 });
+  await expect(page).toHaveURL(/\/(setup|login)$/, { timeout: 15_000 });
 
   if (page.url().includes("/setup")) {
     // Case 1: brand-new — run setup

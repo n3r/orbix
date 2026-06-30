@@ -150,7 +150,9 @@ async function cleanDb() {
 
 async function doOnboarding(page: Page) {
   await page.goto("http://localhost:1060/");
-  await page.waitForURL(/\/(setup|login|profiles|$)/, { timeout: 15_000 });
+  // SPA redirects client-side; auto-retry until we land on an unauth screen
+  // (a waitForURL matching "/" would resolve before the redirect fires).
+  await expect(page).toHaveURL(/\/(setup|login)$/, { timeout: 15_000 });
 
   if (page.url().includes("/setup")) {
     // Our account already exists in the DB (from seedDb), but the home page
