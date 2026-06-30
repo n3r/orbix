@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiJson } from "@/lib/api";
 import type { SeasonSummary, EpisodeCard } from "@/lib/types";
@@ -49,7 +49,7 @@ export default function SeasonEpisodeList({
       apiJson<{ episodes: EpisodeCard[] }>(`/items/${seriesId}/seasons/${selected}/episodes`),
     retry: false,
   });
-  const episodes = data?.episodes ?? [];
+  const episodes = useMemo(() => data?.episodes ?? [], [data]);
 
   // Hero "Play": play the first owned episode of the loaded season.
   const handledToken = useRef(0);

@@ -89,7 +89,13 @@ export default function TitleHero({
 
         <div className="mt-2 flex items-center gap-3">
           <Button onClick={onPlay} disabled={!canPlay}>
-            {canPlay ? `▶ ${playLabel}` : "No media"}
+            {canPlay ? (
+              <>
+                <span aria-hidden="true">▶</span> {playLabel}
+              </>
+            ) : (
+              "No media"
+            )}
           </Button>
         </div>
       </div>

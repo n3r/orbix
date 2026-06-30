@@ -37,7 +37,7 @@ describe("TitleHero", () => {
   it("fires onPlay when the play button is clicked", () => {
     const onPlay = vi.fn();
     render(<TitleHero item={base} onPlay={onPlay} canPlay playLabel="Play" />);
-    screen.getByRole("button", { name: "▶ Play" }).click();
+    screen.getByRole("button", { name: "Play" }).click();
     expect(onPlay).toHaveBeenCalledOnce();
   });
 });
