@@ -152,8 +152,11 @@ async function cleanDb() {
 // to other specs' afterAll deleting all profiles.
 
 async function doOnboarding(page: Page) {
+  // The Vite SPA renders at "/" and THEN the client-side guard redirects to
+  // setup/login/profiles — wait for that redirect to land (the old `|$`
+  // alternative matched the transient bare "/" and skipped onboarding).
   await page.goto("http://localhost:1060/");
-  await page.waitForURL(/\/(setup|login|profiles|$)/, { timeout: 15_000 });
+  await page.waitForURL(/\/(setup|login|profiles)/, { timeout: 15_000 });
 
   if (page.url().includes("/setup")) {
     // Our account already exists in the DB (from seedDb), but the home page

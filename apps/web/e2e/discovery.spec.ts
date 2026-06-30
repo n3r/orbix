@@ -144,7 +144,12 @@ async function cleanDb() {
 
 async function doOnboarding(page: Page) {
   await page.goto("http://localhost:1060/");
-  await page.waitForURL(/\/(setup|login|profiles|$)/, { timeout: 15_000 });
+  // The Vite SPA renders at "/" and THEN the client-side guard redirects to
+  // setup/login/profiles. Wait for that redirect to land — the old `|$`
+  // alternative matched the transient bare "/" and skipped onboarding entirely
+  // (under SSR the redirect happened before the page loaded; the SPA redirects
+  // after first render). Every spec starts logged-out, so "/" always redirects.
+  await page.waitForURL(/\/(setup|login|profiles)/, { timeout: 15_000 });
 
   if (page.url().includes("/setup")) {
     // We are the first spec to run — create our account via the setup wizard.
@@ -211,9 +216,11 @@ test.describe("NL search — constraint path", () => {
     await input.fill("comedy under 2 hours");
     await page.getByRole("button", { name: /^search$/i }).click();
 
-    // Both comedies must appear in results
-    await expect(page.getByText("Short Comedy Film")).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("Classic Comedy Film")).toBeVisible({ timeout: 15_000 });
+    // Both comedies must appear in results. Each result is a single card <Link>;
+    // assert on the link role (the title text itself renders twice per card —
+    // poster overlay + caption — which would trip Playwright strict mode).
+    await expect(page.getByRole("link", { name: /Short Comedy Film/ })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("link", { name: /Classic Comedy Film/ })).toBeVisible({ timeout: 15_000 });
 
     // The 180-min drama must NOT be present (excluded by both runtime and genre filters)
     await expect(page.getByText("Epic Drama Film")).not.toBeVisible();
