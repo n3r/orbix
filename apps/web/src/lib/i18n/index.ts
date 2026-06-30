@@ -58,4 +58,15 @@ void i18n.use(initReactI18next).init({
   returnNull: false,
 });
 
+// Keep <html lang> in sync with the active language for accessibility. This
+// covers the initial language resolved from storage at startup (before any
+// profile-sync or switcher runs) as well as every later language change.
+if (typeof document !== "undefined") {
+  const applyHtmlLang = (lng: string) => {
+    document.documentElement.lang = lng;
+  };
+  i18n.on("languageChanged", applyHtmlLang);
+  applyHtmlLang(initialLanguage());
+}
+
 export default i18n;
