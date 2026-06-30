@@ -17,5 +17,20 @@
   "runtime": {
     "hm": "{{h}} ч {{m}} мин",
     "m": "{{m}} мин"
-  }
+  },
+  "seasonCount_one": "{{count}} сезон",
+  "seasonCount_few": "{{count}} сезона",
+  "seasonCount_many": "{{count}} сезонов",
+  "seasonCount_other": "{{count}} сезона",
+  "episodeCount_one": "{{count}} эпизод",
+  "episodeCount_few": "{{count}} эпизода",
+  "episodeCount_many": "{{count}} эпизодов",
+  "episodeCount_other": "{{count}} эпизода",
+  "noMedia": "Нет медиа",
+  "specials": "Спецвыпуски",
+  "seasonNumber": "Сезон {{number}}",
+  "episodeNumber": "Эпизод {{number}}",
+  "episodesHeading": "Эпизоды",
+  "notInLibrary": "Нет в библиотеке",
+  "noEpisodes": "Эпизоды для этого сезона не найдены."
 }

@@ -17,5 +17,16 @@
   "runtime": {
     "hm": "{{h}}h {{m}}min",
     "m": "{{m}}min"
-  }
+  },
+  "seasonCount_one": "{{count}} temporada",
+  "seasonCount_other": "{{count}} temporadas",
+  "episodeCount_one": "{{count}} episódio",
+  "episodeCount_other": "{{count}} episódios",
+  "noMedia": "Sem mídia",
+  "specials": "Especiais",
+  "seasonNumber": "Temporada {{number}}",
+  "episodeNumber": "Episódio {{number}}",
+  "episodesHeading": "Episódios",
+  "notInLibrary": "Não está na biblioteca",
+  "noEpisodes": "Nenhum episódio encontrado para esta temporada."
 }
