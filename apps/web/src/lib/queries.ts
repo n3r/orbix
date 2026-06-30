@@ -37,10 +37,11 @@ export function useSectionItems(sectionId: string | undefined, sort: string, q: 
   });
 }
 
+export interface SearchResponse { items: MediaCard[]; usedEmbeddings: boolean }
 export function useSearch(q: string) {
   return useQuery({
     queryKey: ["search", q],
     enabled: q.trim().length > 0,
-    queryFn: () => apiJson<MediaCard[]>(`/search?q=${encodeURIComponent(q.trim())}`),
+    queryFn: () => apiJson<SearchResponse>(`/search?q=${encodeURIComponent(q.trim())}`),
   });
 }
