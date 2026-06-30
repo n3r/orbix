@@ -8,7 +8,8 @@
   "section": {
     "overview": "Overview",
     "director": "Director",
-    "cast": "Cast"
+    "cast": "Cast",
+    "genres": "Genres"
   },
   "rating": {
     "unrated": "Unrated"

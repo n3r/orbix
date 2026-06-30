@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router";
-import { useTranslation } from "react-i18next";
 import Sidebar from "./Sidebar";
 import TopBar from "./TopBar";
 import type { Library, Profile } from "@/lib/types";
@@ -18,7 +17,6 @@ export default function AppShell({
 }) {
   const [open, setOpen] = useState(false);
   const { pathname } = useLocation();
-  const { t } = useTranslation();
 
   // Close the mobile drawer whenever the route changes.
   useEffect(() => {
@@ -57,9 +55,6 @@ export default function AppShell({
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar className="md:hidden" onMenu={() => setOpen(true)} />
         <main className="min-w-0 flex-1">{children}</main>
-        <footer className="py-4 px-6 md:px-8 text-center text-xs text-[var(--text-dim)]">
-          {t("nav:tmdbAttribution")}
-        </footer>
       </div>
     </div>
   );

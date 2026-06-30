@@ -35,4 +35,47 @@ describe("parseMediaPath", () => {
     expect(r.title).toBe("Interstellar");
     expect(r.year).toBe(2014);
   });
+
+  it("does not flag a normal movie as an episode", () => {
+    const r = parseMediaPath("/m/The Matrix (1999)/The Matrix (1999).mkv");
+    expect(r.seasonNumber).toBeUndefined();
+    expect(r.episodeNumber).toBeUndefined();
+  });
+
+  describe("TV episodes", () => {
+    it("parses SxxExx with a Season folder, using the show folder for title+year", () => {
+      const r = parseMediaPath("/tv/Arcane (2021)/Season 01/Arcane.S01E03.1080p.mkv");
+      expect(r.title).toBe("Arcane");
+      expect(r.year).toBe(2021);
+      expect(r.seasonNumber).toBe(1);
+      expect(r.episodeNumber).toBe(3);
+    });
+
+    it("parses a flat SxxExx filename (no season folder)", () => {
+      const r = parseMediaPath("/tv/Breaking Bad/Breaking.Bad.S05E14.mkv");
+      expect(r.title).toBe("Breaking Bad");
+      expect(r.seasonNumber).toBe(5);
+      expect(r.episodeNumber).toBe(14);
+    });
+
+    it("parses the 1x02 form", () => {
+      const r = parseMediaPath("/tv/The Office/The Office 3x07.mkv");
+      expect(r.seasonNumber).toBe(3);
+      expect(r.episodeNumber).toBe(7);
+    });
+
+    it("derives the episode from a Season folder + anime-style trailing number", () => {
+      const r = parseMediaPath("/tv/Frieren (2023)/Season 01/Frieren - 12.mkv");
+      expect(r.title).toBe("Frieren");
+      expect(r.year).toBe(2023);
+      expect(r.seasonNumber).toBe(1);
+      expect(r.episodeNumber).toBe(12);
+    });
+
+    it("treats a Specials folder as season 0", () => {
+      const r = parseMediaPath("/tv/Show (2020)/Specials/Show - 02.mkv");
+      expect(r.seasonNumber).toBe(0);
+      expect(r.episodeNumber).toBe(2);
+    });
+  });
 });

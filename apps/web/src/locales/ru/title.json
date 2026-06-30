@@ -8,7 +8,8 @@
   "section": {
     "overview": "Обзор",
     "director": "Режиссёр",
-    "cast": "В ролях"
+    "cast": "В ролях",
+    "genres": "Жанры"
   },
   "rating": {
     "unrated": "Без рейтинга"

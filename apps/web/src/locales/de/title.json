@@ -8,7 +8,8 @@
   "section": {
     "overview": "Übersicht",
     "director": "Regie",
-    "cast": "Besetzung"
+    "cast": "Besetzung",
+    "genres": "Genres"
   },
   "rating": {
     "unrated": "Keine Freigabe"

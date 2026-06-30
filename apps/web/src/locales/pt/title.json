@@ -8,7 +8,8 @@
   "section": {
     "overview": "Sinopse",
     "director": "Diretor",
-    "cast": "Elenco"
+    "cast": "Elenco",
+    "genres": "Gêneros"
   },
   "rating": {
     "unrated": "Sem classificação"

@@ -8,7 +8,8 @@
   "section": {
     "overview": "Synopsis",
     "director": "Réalisateur",
-    "cast": "Distribution"
+    "cast": "Distribution",
+    "genres": "Genres"
   },
   "rating": {
     "unrated": "Non classé"

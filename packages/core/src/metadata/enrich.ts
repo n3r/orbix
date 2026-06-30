@@ -1,5 +1,6 @@
 import type { TmdbSearchResult, TmdbMovie, TmdbCredits, TmdbKeyword } from "./tmdb";
 import type { ImageKind } from "./images";
+import type { ExternalRatings } from "./omdb";
 
 // ---------------------------------------------------------------------------
 // Structural interface — real TmdbClient satisfies this.
@@ -29,10 +30,17 @@ export interface SaveMetadataInput {
   title: string;
   year?: number;
   overview?: string;
+  tagline?: string;
   runtimeSec?: number;
   posterPath?: string;
   backdropPath?: string;
+  logoPath?: string;
   imdbId?: string;
+  tmdbScore?: number;
+  imdbRating?: number;
+  imdbVotes?: number;
+  rtRating?: number;
+  metacritic?: number;
   genres: { tmdbId: number; name: string }[];
   cast: { tmdbId: number; name: string; character?: string; order: number }[];
   director?: { tmdbId: number; name: string };
@@ -62,6 +70,10 @@ export async function enrichItem(
     saveMetadata: (input: SaveMetadataInput) => Promise<void>;
     /** Per-language clients used to fetch localized title/overview. */
     translateClients?: Map<string, TranslateClient>;
+    /** Resolve + cache a hero logo (fanart.tv → TMDB); returns a metadata-relative path. */
+    resolveLogo?: (input: { tmdbId: number; imdbId?: string }) => Promise<string | undefined>;
+    /** Fetch external ratings (OMDb) for an IMDb id. */
+    fetchRatings?: (imdbId: string) => Promise<ExternalRatings | undefined>;
   },
 ): Promise<EnrichResult> {
   // Step 1: resolve tmdbId
@@ -95,6 +107,26 @@ export async function enrichItem(
   const backdropPath = movie.backdropPath
     ? await deps.cacheImage(movie.backdropPath, "backdrop")
     : undefined;
+
+  // Step 3b: hero logo art (optional dep) — never fail enrichment on its account
+  let logoPath: string | undefined;
+  if (deps.resolveLogo) {
+    try {
+      logoPath = await deps.resolveLogo({ tmdbId, imdbId: movie.imdbId });
+    } catch {
+      logoPath = undefined;
+    }
+  }
+
+  // Step 3c: external ratings (OMDb, optional dep) — tolerate failures
+  let extraRatings: ExternalRatings | undefined;
+  if (deps.fetchRatings && movie.imdbId) {
+    try {
+      extraRatings = await deps.fetchRatings(movie.imdbId);
+    } catch {
+      extraRatings = undefined;
+    }
+  }
 
   // Step 4: extract cast (top 15, sorted by order asc) and director
   const cast = [...credits.cast]
@@ -131,10 +163,17 @@ export async function enrichItem(
     title: movie.title,
     year: movie.year,
     overview: movie.overview,
+    tagline: movie.tagline,
     runtimeSec: movie.runtimeSec,
     posterPath,
     backdropPath,
+    logoPath,
     imdbId: movie.imdbId,
+    tmdbScore: movie.tmdbScore,
+    imdbRating: extraRatings?.imdbRating,
+    imdbVotes: extraRatings?.imdbVotes,
+    rtRating: extraRatings?.rtRating,
+    metacritic: extraRatings?.metacritic,
     genres: movie.genres,
     cast,
     director,

@@ -8,7 +8,8 @@
   "section": {
     "overview": "Sinopsis",
     "director": "Director",
-    "cast": "Reparto"
+    "cast": "Reparto",
+    "genres": "Géneros"
   },
   "rating": {
     "unrated": "Sin clasificar"

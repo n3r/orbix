@@ -24,6 +24,8 @@ interface Props {
   fileId: string;
   mediaItemId: string;
   title: string;
+  /** Set for TV episodes so progress is keyed per-episode (movies omit it). */
+  episodeId?: string;
   onClose: () => void;
 }
 
@@ -32,7 +34,7 @@ interface Props {
  * to <body> (above the app shell, no URL change), locks body scroll, and closes
  * on the top-left chevron or `Esc`.
  */
-export default function PlayerOverlay({ fileId, mediaItemId, title, onClose }: Props) {
+export default function PlayerOverlay({ fileId, mediaItemId, title, episodeId, onClose }: Props) {
   const { t } = useTranslation();
 
   // Lock background scroll while the overlay is open.
@@ -59,7 +61,7 @@ export default function PlayerOverlay({ fileId, mediaItemId, title, onClose }: P
 
   return createPortal(
     <div className="fixed inset-0 z-50 bg-black">
-      <Player fileId={fileId} mediaItemId={mediaItemId} title={title} />
+      <Player fileId={fileId} mediaItemId={mediaItemId} title={title} episodeId={episodeId} />
 
       {/* Back / close affordance — always visible, top-left, above the player. */}
       <button

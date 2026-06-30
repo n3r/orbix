@@ -38,12 +38,17 @@ interface Props {
   fileId: string;
   mediaItemId: string;
   title: string;
+  /** Set for TV episodes so progress is keyed per-episode (movies omit it). */
+  episodeId?: string;
 }
 
 const SAVE_INTERVAL_MS = 10_000;
 
-export default function Player({ fileId, mediaItemId, title }: Props) {
+export default function Player({ fileId, mediaItemId, title, episodeId }: Props) {
   const { t } = useTranslation();
+  const progressQuery = episodeId
+    ? `?episodeId=${encodeURIComponent(episodeId)}`
+    : "";
 
   // The default large (desktop) layout renders no on-screen seek buttons, so add
   // a Netflix/Plex-style −10s / +30s pair flanking the play button (via the large
@@ -85,7 +90,7 @@ export default function Player({ fileId, mediaItemId, title }: Props) {
         const [decisionRes, subsRes, progressRes] = await Promise.all([
           apiFetch(`/play/${fileId}/decision`),
           apiFetch(`/play/${fileId}/subs`),
-          apiFetch(`/items/${mediaItemId}/progress`),
+          apiFetch(`/items/${mediaItemId}/progress${progressQuery}`),
         ]);
 
         if (!decisionRes.ok) {
@@ -110,7 +115,7 @@ export default function Player({ fileId, mediaItemId, title }: Props) {
         setLoading(false);
       }
     })();
-  }, [fileId, mediaItemId, t]);
+  }, [fileId, mediaItemId, progressQuery, t]);
 
   // Save progress to the server (reads live state from the player ref)
   const saveProgress = useCallback(async () => {
@@ -122,12 +127,12 @@ export default function Player({ fileId, mediaItemId, title }: Props) {
     try {
       await apiFetch(`/items/${mediaItemId}/progress`, {
         method: "PUT",
-        body: JSON.stringify({ positionSec: pos, durationSec: dur }),
+        body: JSON.stringify({ positionSec: pos, durationSec: dur, episodeId }),
       });
     } catch {
       // Ignore transient save errors
     }
-  }, [mediaItemId]);
+  }, [mediaItemId, episodeId]);
 
   // Periodic progress save (every 10s while playing)
   useEffect(() => {

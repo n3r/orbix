@@ -74,13 +74,22 @@ export default async function catalogRoute(app: FastifyInstance) {
           where: { id: req.params.id },
           select: {
             id: true,
+            kind: true,
             title: true,
             year: true,
             overview: true,
+            tagline: true,
+            status: true,
             runtimeSec: true,
             rating: true,
             posterPath: true,
             backdropPath: true,
+            logoPath: true,
+            tmdbScore: true,
+            imdbRating: true,
+            imdbVotes: true,
+            rtRating: true,
+            metacritic: true,
             matchState: true,
             translations: { where: { language: lang }, select: { title: true, overview: true } },
             genres: {
@@ -93,6 +102,15 @@ export default async function catalogRoute(app: FastifyInstance) {
                   },
                 },
               },
+            },
+            seasons: {
+              select: {
+                seasonNumber: true,
+                name: true,
+                posterPath: true,
+                _count: { select: { episodes: true } },
+              },
+              orderBy: { seasonNumber: "asc" },
             },
             credits: {
               select: {
@@ -155,15 +173,34 @@ export default async function catalogRoute(app: FastifyInstance) {
 
       return {
         id: item.id,
+        kind: item.kind,
         title: localized.title,
         year: item.year,
         overview: localized.overview,
+        tagline: item.tagline,
+        status: item.status,
         runtimeSec: item.runtimeSec,
         rating: item.rating,
         posterPath: item.posterPath,
         backdropPath: item.backdropPath,
+        logoPath: item.logoPath,
+        tmdbScore: item.tmdbScore,
+        imdbRating: item.imdbRating,
+        imdbVotes: item.imdbVotes,
+        rtRating: item.rtRating,
+        metacritic: item.metacritic,
         matchState: item.matchState,
         genres,
+        ...(item.kind === "series"
+          ? {
+              seasons: item.seasons.map((s) => ({
+                seasonNumber: s.seasonNumber,
+                name: s.name,
+                episodeCount: s._count.episodes,
+                posterPath: s.posterPath,
+              })),
+            }
+          : {}),
         cast,
         director,
         // CRITICAL: BigInt size must be serialized as string to avoid JSON.stringify error
