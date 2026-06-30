@@ -1,6 +1,7 @@
 services:
   postgres:
     image: pgvector/pgvector:pg16
+    restart: unless-stopped
     environment:
       POSTGRES_USER: orbix
       POSTGRES_PASSWORD: orbix
@@ -12,18 +13,22 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+      start_period: 10s
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     ports: ["1063:6379"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 10
+      start_period: 10s
 
   api:
     build: { context: ., dockerfile: apps/api/Dockerfile.dev }
+    restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://orbix:orbix@postgres:5432/orbix
       REDIS_URL: redis://redis:6379
@@ -53,6 +58,7 @@ services:
   # built SPA same-origin — there is no web service in deploy/portainer-stack.yml.
   web:
     build: { context: ., dockerfile: apps/web/Dockerfile.dev }
+    restart: unless-stopped
     environment:
       # Vite proxies browser /api/* to the API service over the container network.
       API_INTERNAL_URL: http://api:1061
@@ -63,3 +69,9 @@ services:
       - ./packages/ui/src:/app/packages/ui/src
     depends_on:
       api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:1060/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s

@@ -13,6 +13,7 @@ const POLL_INTERVAL_MS = 100;
 const DEFAULT_TIMEOUT_MS = 30_000;
 const REAP_INTERVAL_MS = 60_000;
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const DEFAULT_MAX_SESSIONS = 4; // cap concurrent ffmpeg transcode sessions
 
 export class SegmentTimeoutError extends Error {
   constructor(seg: string) {
@@ -42,22 +43,28 @@ export type SpawnFn = (command: string, args: readonly string[], options?: any) 
 
 export class SessionManager {
   private sessions = new Map<string, Session>();
+  /** Per-session spawn-decision mutex tail (keyed by session id). */
+  private locks = new Map<string, Promise<void>>();
   private transcodeDir: string;
   private spawnFn: SpawnFn;
   private reapTimer: ReturnType<typeof setInterval>;
   private timeoutMs: number;
+  private maxSessions: number;
   private getEncoder: (() => Promise<string>) | undefined;
 
   constructor({
     transcodeDir,
     spawn,
     timeoutMs,
+    maxSessions,
     getEncoder,
   }: {
     transcodeDir: string;
     spawn?: SpawnFn;
     /** Override the segment wait timeout (ms). Useful for fast-failing tests. */
     timeoutMs?: number;
+    /** Cap on concurrent transcode sessions (LRU-evicted past the cap). */
+    maxSessions?: number;
     /**
      * Optional async getter for the current encoder setting (e.g. reads from
      * the DB). Returns a value like `"software"`, `"vaapi"`, `"qsv"`, or
@@ -69,11 +76,30 @@ export class SessionManager {
     this.transcodeDir = transcodeDir;
     this.spawnFn = spawn ?? (nodeSpawn as SpawnFn);
     this.timeoutMs = timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    this.maxSessions = maxSessions ?? DEFAULT_MAX_SESSIONS;
     this.getEncoder = getEncoder;
     this.reapTimer = setInterval(() => {
       void this.reap();
     }, REAP_INTERVAL_MS);
     this.reapTimer.unref();
+  }
+
+  /** Number of live sessions (observability + cap enforcement). */
+  activeCount(): number {
+    return this.sessions.size;
+  }
+
+  /**
+   * Run `fn` exclusively per session id: the spawn-decision critical region
+   * (stat → decide restart → spawn) must not interleave or two concurrent
+   * callers can both spawn ffmpeg for the same session.
+   */
+  private runExclusive<T>(id: string, fn: () => Promise<T>): Promise<T> {
+    const prev = this.locks.get(id) ?? Promise.resolve();
+    const result = prev.then(fn, fn);
+    // Tail never rejects, so the next waiter always proceeds.
+    this.locks.set(id, result.then(() => {}, () => {}));
+    return result;
   }
 
   /** Deterministic, filesystem-safe session id derived from the key. */
@@ -90,6 +116,20 @@ export class SessionManager {
     if (existing) {
       existing.lastAccess = Date.now();
       return existing;
+    }
+    // Enforce the concurrent-session cap: evict the least-recently-accessed
+    // session(s) before admitting a new one, killing their ffmpeg + temp dir.
+    while (this.sessions.size >= this.maxSessions) {
+      let lruKey: string | undefined;
+      let lruAccess = Infinity;
+      for (const [k, s] of this.sessions) {
+        if (s.lastAccess < lruAccess) {
+          lruAccess = s.lastAccess;
+          lruKey = k;
+        }
+      }
+      if (lruKey === undefined) break;
+      await this.removeSession(lruKey, this.sessions.get(lruKey)!);
     }
     const id = this.sessionId(key);
     const dir = path.join(this.transcodeDir, id);
@@ -115,7 +155,11 @@ export class SessionManager {
   }
 
   private isProcAlive(session: Session): boolean {
-    return session.proc !== null && !session.proc.killed;
+    const p = session.proc;
+    // exitCode/signalCode become non-null the instant the process exits — check
+    // them too so we don't treat a just-exited proc (before its "exit" event
+    // fires) as alive and skip a needed respawn.
+    return p !== null && !p.killed && p.exitCode === null && p.signalCode === null;
   }
 
   private killProc(session: Session): void {
@@ -201,22 +245,26 @@ export class SessionManager {
   async ensureSegment(session: Session, n: number): Promise<string> {
     const segPath = path.join(session.dir, `seg${n}.m4s`);
 
-    let alreadyPresent = false;
-    try {
-      const stat = await fs.promises.stat(segPath);
-      alreadyPresent = stat.size > 0;
-    } catch {
-      /* not present */
-    }
+    // Spawn decision is serialized per session so two concurrent callers can't
+    // both restart ffmpeg. The (slow) waitForFile below runs outside the lock.
+    await this.runExclusive(session.id, async () => {
+      let alreadyPresent = false;
+      try {
+        const stat = await fs.promises.stat(segPath);
+        alreadyPresent = stat.size > 0;
+      } catch {
+        /* not present */
+      }
 
-    const needsRestart =
-      !this.isProcAlive(session) ||
-      n < session.currentStart ||
-      (n > session.currentStart + AHEAD_WINDOW && !alreadyPresent);
+      const needsRestart =
+        !this.isProcAlive(session) ||
+        n < session.currentStart ||
+        (n > session.currentStart + AHEAD_WINDOW && !alreadyPresent);
 
-    if (needsRestart) {
-      await this.spawnFfmpeg(session, n);
-    }
+      if (needsRestart) {
+        await this.spawnFfmpeg(session, n);
+      }
+    });
 
     try {
       const result = await this.waitForFile(segPath);
@@ -248,9 +296,11 @@ export class SessionManager {
       /* not present — fall through to spawn */
     }
 
-    if (!this.isProcAlive(session)) {
-      await this.spawnFfmpeg(session, session.currentStart);
-    }
+    await this.runExclusive(session.id, async () => {
+      if (!this.isProcAlive(session)) {
+        await this.spawnFfmpeg(session, session.currentStart);
+      }
+    });
 
     try {
       const result = await this.waitForFile(initPath);
@@ -276,6 +326,7 @@ export class SessionManager {
   private async removeSession(key: string, session: Session): Promise<void> {
     this.killProc(session);
     this.sessions.delete(key);
+    this.locks.delete(session.id);
     try {
       await fs.promises.rm(session.dir, { recursive: true, force: true });
     } catch {

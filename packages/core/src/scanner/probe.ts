@@ -13,6 +13,8 @@ export interface MediaFileTechnical {
   bitrate?: number;
   subtitleTracks: { index: number; codec?: string; language?: string }[];
   audioTracks: { index: number; codec?: string; channels?: number; language?: string }[];
+  /** Whether ffprobe succeeded. false = empty tech from a probe failure / missing ffprobe. */
+  probedOk?: boolean;
 }
 
 interface FfprobeStream {

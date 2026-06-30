@@ -95,9 +95,13 @@ async function cleanDb() {
 //   2. Already set up (test 2+)   → logs in → selects existing profile
 
 async function doOnboarding(page: Page) {
-  // The home page server-redirects based on state; use it as the entry point
+  // Use the home page as the entry point. The Vite SPA renders at "/" and THEN
+  // the client-side guard redirects to setup/login/profiles — wait for that
+  // redirect to land (the old `|$` alternative matched the transient bare "/"
+  // and skipped onboarding). Every spec starts logged-out, so "/" always
+  // redirects.
   await page.goto("http://localhost:1060/");
-  await page.waitForURL(/\/(setup|login|profiles|$)/, { timeout: 15_000 });
+  await page.waitForURL(/\/(setup|login|profiles)/, { timeout: 15_000 });
 
   if (page.url().includes("/setup")) {
     // Case 1: brand-new — run setup
@@ -140,7 +144,9 @@ test.describe("Library browse + title detail", () => {
   test("library grid shows seeded movie", async ({ page }) => {
     await doOnboarding(page);
     await page.goto(`http://localhost:1060/library/${SECTION_ID}`);
-    await expect(page.getByText("Seeded Movie")).toBeVisible({ timeout: 15_000 });
+    // Each grid item is a single card <Link>; assert on the link role (the title
+    // text renders twice per card — poster overlay + caption — tripping strict mode).
+    await expect(page.getByRole("link", { name: /Seeded Movie/ })).toBeVisible({ timeout: 15_000 });
   });
 
   test("title detail shows overview", async ({ page }) => {

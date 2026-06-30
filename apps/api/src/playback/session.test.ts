@@ -21,6 +21,8 @@ interface SpawnCall {
 interface FakeProc {
   kill: ReturnType<typeof vi.fn>;
   killed: boolean;
+  exitCode: number | null;
+  signalCode: NodeJS.Signals | null;
   on: ReturnType<typeof vi.fn>;
   once: ReturnType<typeof vi.fn>;
 }
@@ -52,6 +54,8 @@ function makeFakeSpawn(writeDelayMs = 50) {
         }
       }),
       killed: false,
+      exitCode: null,   // running process: exitCode/signalCode are null until exit
+      signalCode: null,
       on: vi.fn(),
       once: vi.fn(),
     };
@@ -215,6 +219,87 @@ describe("SessionManager", () => {
     const err = new SegmentTimeoutError("seg99.m4s");
     expect(err.name).toBe("SegmentTimeoutError");
     expect(err.message).toContain("seg99.m4s");
+  });
+
+  it("serializes concurrent ensureSegment(0) calls into a single spawn (no double-spawn)", async () => {
+    const { spawn, calls } = makeFakeSpawn();
+    // A yielding getEncoder (consulted for transcode plans) opens the window
+    // where two concurrent callers could both pass the alive-check and spawn.
+    const getEncoder = async () => {
+      await new Promise((r) => setTimeout(r, 10));
+      return "software";
+    };
+    const manager = new SessionManager({ transcodeDir: testDir, spawn, getEncoder });
+
+    const plan = decideStrategy({ container: "mkv", videoCodec: "hevc", audioCodecs: ["aac"] });
+    expect(plan.mode).toBe("transcode"); // guard: getEncoder is only consulted for transcode
+    const session = await manager.getOrCreate("file-race:default", {
+      inputPath: "/fake/video.mkv",
+      plan,
+      durationSec: 120,
+      segSec: 6,
+    });
+
+    // Two callers race for the same first segment.
+    const [a, b] = await Promise.all([
+      manager.ensureSegment(session, 0),
+      manager.ensureSegment(session, 0),
+    ]);
+
+    expect(calls).toHaveLength(1); // only ONE ffmpeg spawned
+    expect(a).toBe(path.join(session.dir, "seg0.m4s"));
+    expect(b).toBe(a);
+
+    await manager.closeAll();
+  });
+
+  it("respawns when the previous proc exited naturally (exitCode set, not killed)", async () => {
+    const { spawn, calls } = makeFakeSpawn();
+    const manager = new SessionManager({ transcodeDir: testDir, spawn });
+
+    const plan = decideStrategy({ container: "mkv", videoCodec: "hevc", audioCodecs: ["aac"] });
+    const session = await manager.getOrCreate("file-exit:default", {
+      inputPath: "/fake/video.mkv",
+      plan,
+      durationSec: 120,
+      segSec: 6,
+    });
+
+    await manager.ensureSegment(session, 0);
+    expect(calls).toHaveLength(1);
+
+    // Simulate ffmpeg exiting on its own — exitCode is set but killed stays false.
+    (session.proc as unknown as { exitCode: number }).exitCode = 0;
+
+    // Re-requesting seg0 must respawn (dead proc), not silently reuse the corpse.
+    await manager.ensureSegment(session, 0);
+    expect(calls).toHaveLength(2);
+
+    await manager.closeAll();
+  });
+
+  it("enforces maxSessions by LRU-evicting the least-recently-accessed session", async () => {
+    const { spawn } = makeFakeSpawn();
+    const manager = new SessionManager({ transcodeDir: testDir, spawn, maxSessions: 2 });
+
+    const plan = decideStrategy({ container: "mkv", videoCodec: "hevc", audioCodecs: ["aac"] });
+    const opts = { inputPath: "/fake/video.mkv", plan, durationSec: 120, segSec: 6 };
+
+    const s1 = await manager.getOrCreate("k1", opts);
+    const s2 = await manager.getOrCreate("k2", opts);
+    // Force a deterministic LRU ordering: s2 is the oldest.
+    s1.lastAccess = 2000;
+    s2.lastAccess = 1000;
+
+    const s3 = await manager.getOrCreate("k3", opts);
+
+    expect(manager.activeCount()).toBe(2);
+    // s2 (LRU) evicted → its dir removed; s1 and s3 survive.
+    await expect(fsp.stat(s2.dir)).rejects.toThrow();
+    await fsp.stat(s1.dir);
+    await fsp.stat(s3.dir);
+
+    await manager.closeAll();
   });
 
   it("ensureSegment rejects with SegmentTimeoutError AND kills proc when ffmpeg never writes", async () => {

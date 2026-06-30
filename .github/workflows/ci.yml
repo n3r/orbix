@@ -68,3 +68,21 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      # End-to-end (Playwright) — the only guard of the api↔web cookie/CORS
+      # integration. CI's Postgres is ephemeral, so the destructive global-setup
+      # wipe is safe (E2E_ALLOW_DB_RESET=1). ffmpeg is needed: playback.spec
+      # generates a tiny seed video.
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install Playwright browser
+        run: pnpm --filter @orbix/web exec playwright install --with-deps chromium
+
+      - name: E2E (Playwright)
+        run: pnpm --filter @orbix/web test:e2e
+        env:
+          E2E_ALLOW_DB_RESET: "1"
