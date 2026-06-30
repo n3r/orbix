@@ -29,6 +29,8 @@ ENV API_INTERNAL_URL=http://api:1061
 # Build Next.js app
 RUN pnpm --filter @orbix/web build
 
-EXPOSE 1060
+# Web binds to $WEB_PORT at runtime (the stack sets it, default 8080).
+# EXPOSE is advisory only; the actual published port is set in portainer-stack.yml.
+EXPOSE 8080
 
 CMD ["sh", "-c", "pnpm --filter @orbix/web exec next start -p ${WEB_PORT:-1060}"]

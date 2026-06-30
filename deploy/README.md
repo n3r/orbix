@@ -150,7 +150,10 @@ To use an external volume for the model instead (e.g. to share it between image 
 1. Uncomment `# - orbix-models:/data/models` in the volumes section of `portainer-stack.yml`
 2. Uncomment `# orbix-models:` in the top-level `volumes:` section
 3. Set `MODELS_DIR=/data/models` in your environment
-4. Remove the `RUN node scripts/download-model.mjs` step from `apps/api/Dockerfile` to avoid baking
+4. Remove the `RUN ... node apps/api/scripts/download-model.mjs` step from `apps/api/Dockerfile` to avoid
+   baking the model into the image. The model is then fetched once on first use; to allow that one-time
+   download set `ORBIX_ALLOW_MODEL_DOWNLOAD=true` in your environment (network required on first run only).
+   Leave it unset/`false` afterwards to keep the app fully offline.
 
 ---
 
