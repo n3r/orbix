@@ -1,0 +1,16 @@
+{
+  "loading": "Carregando o player…",
+  "close": "Fechar o player",
+  "seek": {
+    "backward": "Retroceder {{seconds}} segundos",
+    "forward": "Avançar {{seconds}} segundos"
+  },
+  "track": {
+    "label": "Faixa {{index}}"
+  },
+  "error": {
+    "decision": "Não foi possível obter a decisão de reprodução",
+    "network": "Erro de rede ao carregar o player",
+    "generic": "Falha ao carregar o player"
+  }
+}

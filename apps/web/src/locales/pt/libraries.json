@@ -1,0 +1,34 @@
+{
+  "title": "Bibliotecas",
+  "settingsLink": "Configurações",
+  "adding": "Adicionando…",
+  "deleteLibrary": "Excluir biblioteca",
+  "add": {
+    "heading": "Adicionar biblioteca",
+    "namePlaceholder": "Nome da biblioteca"
+  },
+  "section": {
+    "addButton": "Adicionar seção",
+    "namePlaceholder": "Nome da seção (ex.: Filmes)"
+  },
+  "source": {
+    "addButton": "Adicionar origem",
+    "pathPlaceholder": "/caminho/para/a/pasta/de/mídia"
+  },
+  "scan": {
+    "button": "Escanear",
+    "scanning": "Escaneando…",
+    "starting": "Iniciando…",
+    "streamError": "A conexão com o escaneamento foi perdida.",
+    "unknownError": "erro desconhecido",
+    "done_one": "Concluído — {{count}} título adicionado, {{updated}} atualizados, {{matched}} correspondidos",
+    "done_other": "Concluído — {{count}} títulos adicionados, {{updated}} atualizados, {{matched}} correspondidos",
+    "failed": "Falha no escaneamento: {{message}}",
+    "progress": "{{phase}}: {{processed}}/{{total}}"
+  },
+  "errors": {
+    "loadFailed": "Falha ao carregar as bibliotecas",
+    "createFailed": "Falha ao criar a biblioteca",
+    "addSourceFailed": "Falha ao adicionar a origem"
+  }
+}

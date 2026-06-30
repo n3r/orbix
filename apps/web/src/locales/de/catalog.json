@@ -1,0 +1,22 @@
+{
+  "rows": {
+    "continue": "Weiterschauen",
+    "hiddenGems": "Verborgene Schätze",
+    "tonight": "Etwas für heute Abend"
+  },
+  "browse": {
+    "title": "Durchstöbern",
+    "searchPlaceholder": "Titel suchen…",
+    "empty": "Keine Einträge gefunden.",
+    "sort": {
+      "title": "Titel (A–Z)",
+      "added": "Kürzlich hinzugefügt",
+      "year": "Jahr"
+    }
+  },
+  "hero": {
+    "play": "Abspielen",
+    "moreInfo": "Mehr Infos",
+    "showSlide": "{{title}} anzeigen"
+  }
+}

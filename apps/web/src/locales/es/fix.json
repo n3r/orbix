@@ -1,0 +1,26 @@
+{
+  "title": "Corregir coincidencia",
+  "forTitle": "de «{{title}}»",
+  "noPoster": "Sin póster",
+  "search": {
+    "heading": "Buscar en TMDB",
+    "placeholder": "Buscar título…",
+    "button": "Buscar",
+    "searching": "Buscando…",
+    "failed": "La búsqueda falló. Inténtalo de nuevo.",
+    "noResults": "No se encontraron resultados."
+  },
+  "match": {
+    "button": "Usar esta coincidencia",
+    "applying": "Aplicando…",
+    "failed": "No se pudo aplicar la coincidencia."
+  },
+  "poster": {
+    "heading": "Establecer un póster específico",
+    "help": "Elige cualquier póster de los resultados de búsqueda anteriores sin cambiar otros metadatos.",
+    "success": "Póster actualizado correctamente.",
+    "button": "Establecer póster",
+    "setting": "Estableciendo…",
+    "failed": "No se pudo establecer el póster."
+  }
+}

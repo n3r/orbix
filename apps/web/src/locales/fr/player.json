@@ -1,0 +1,16 @@
+{
+  "loading": "Chargement du lecteur…",
+  "close": "Fermer le lecteur",
+  "seek": {
+    "backward": "Reculer de {{seconds}} secondes",
+    "forward": "Avancer de {{seconds}} secondes"
+  },
+  "track": {
+    "label": "Piste {{index}}"
+  },
+  "error": {
+    "decision": "Impossible d'obtenir la décision de lecture",
+    "network": "Erreur réseau lors du chargement du lecteur",
+    "generic": "Échec du chargement du lecteur"
+  }
+}

@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { ApiError } from "@/lib/api";
 import { useSearch } from "@/lib/queries";
 import PosterCard from "@/components/PosterCard";
 import { SearchIcon } from "@/components/shell/icons";
 
 export default function SearchPage() {
+  const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const [submitted, setSubmitted] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -22,8 +24,8 @@ export default function SearchPage() {
 
   const errorMsg = error
     ? error instanceof ApiError && error.status === 401
-      ? "Please sign in to search."
-      : "Search failed. Please try again."
+      ? t("errors:unauthenticated")
+      : t("search:errors.failed")
     : null;
   const results = data?.items ?? null;
   const usedEmbeddings = data?.usedEmbeddings ?? false;
@@ -38,11 +40,11 @@ export default function SearchPage() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search — e.g. comedy under 2 hours, something funny and lighthearted"
+            placeholder={t("search:placeholder")}
             className="flex-1 bg-transparent text-[var(--text)] placeholder:text-[var(--text-dim)] focus:outline-none"
-            aria-label="Search query"
+            aria-label={t("search:queryAriaLabel")}
           />
-          {isFetching && <span className="text-xs text-[var(--text-dim)]">Searching…</span>}
+          {isFetching && <span className="text-xs text-[var(--text-dim)]">{t("search:searching")}</span>}
         </div>
       </form>
 
@@ -52,19 +54,19 @@ export default function SearchPage() {
         <>
           <div className="flex items-center gap-3">
             <p className="text-sm text-[var(--text-dim)]">
-              {results.length} result{results.length !== 1 ? "s" : ""}
+              {t("search:results", { count: results.length })}
             </p>
             <span
               className={`rounded-full px-2 py-0.5 text-xs ${
                 usedEmbeddings ? "bg-purple-900/50 text-purple-300" : "bg-[var(--surface)] text-[var(--text-dim)]"
               }`}
             >
-              {usedEmbeddings ? "semantic" : "keyword"}
+              {usedEmbeddings ? t("search:mode.semantic") : t("search:mode.keyword")}
             </span>
           </div>
 
           {results.length === 0 ? (
-            <p className="text-[var(--text-dim)]">No results found.</p>
+            <p className="text-[var(--text-dim)]">{t("search:empty")}</p>
           ) : (
             <div className="grid grid-cols-3 gap-4 sm:grid-cols-4 md:grid-cols-5 md:gap-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8">
               {results.map((item) => (

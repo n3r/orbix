@@ -1,0 +1,64 @@
+{
+  "title": "Settings",
+  "backToLibraries": "Back to Libraries",
+  "saveButton": "Save Settings",
+  "saveSuccess": "Settings saved.",
+  "providers": {
+    "heading": "Metadata Providers",
+    "statusLabel": "Status:",
+    "optional": "(optional)",
+    "status": {
+      "configured": "configured",
+      "notConfigured": "not configured",
+      "notSet": "not set"
+    },
+    "placeholderKeyConfigured": "Leave blank to keep existing key",
+    "placeholderKeyEmpty": "Paste key to configure",
+    "tmdb": {
+      "label": "TMDB API Token",
+      "placeholderConfigured": "Leave blank to keep existing token",
+      "placeholderEmpty": "Paste token to configure"
+    },
+    "omdb": {
+      "label": "OMDb API Key"
+    },
+    "fanart": {
+      "label": "Fanart.tv API Key"
+    }
+  },
+  "transcode": {
+    "heading": "Transcoding",
+    "encoderLabel": "Video Encoder",
+    "encoderHelp": "Choose the hardware or software encoder used when transcoding. Software (libx264) always works; hardware encoders require the corresponding GPU driver/VAAPI/NVENC support on the server.",
+    "encoders": {
+      "software": "Software (libx264)",
+      "vaapi": "VA-API (h264_vaapi)",
+      "qsv": "Intel QSV (h264_qsv)",
+      "nvenc": "NVIDIA NVENC (h264_nvenc)"
+    }
+  },
+  "library": {
+    "heading": "Library",
+    "cadenceLabel": "Metadata Refresh Cadence (days)",
+    "cadenceHelp": "How many days between automatic metadata refreshes. Set higher to reduce API calls."
+  },
+  "maintenance": {
+    "heading": "Maintenance",
+    "help": "Re-fetch metadata and artwork for every title from TMDB now. Use this after adding or changing your TMDB token. Titles you fixed manually keep their chosen poster. Large libraries may take a while.",
+    "rebuildButton": "Rebuild metadata",
+    "rebuilding": "Rebuilding…",
+    "failed": "Rebuild failed — check the server logs.",
+    "noToken": "Add a TMDB API token above and click Save Settings before rebuilding.",
+    "networkError": "Network error during rebuild.",
+    "rebuiltCount_one": "Rebuilt {{count}} title",
+    "rebuiltCount_other": "Rebuilt {{count}} titles",
+    "unmatchedCount_one": "{{count}} with no TMDB match",
+    "unmatchedCount_other": "{{count}} with no TMDB matches",
+    "skippedCount_one": "{{count}} errored",
+    "skippedCount_other": "{{count}} errored"
+  },
+  "errors": {
+    "loadFailed": "Failed to load settings",
+    "saveFailed": "Failed to save settings"
+  }
+}

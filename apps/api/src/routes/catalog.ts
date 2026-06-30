@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { localizeItem, localizeGenres } from "@orbix/core";
 import { requireAuth } from "../lib/auth";
 import { activeProfile, kidsRatingWhere, profileAllowsItem } from "../lib/catalog-filter";
 
@@ -29,8 +30,11 @@ export default async function catalogRoute(app: FastifyInstance) {
 
       const profile = await activeProfile(app, req);
       const ratingFilter = kidsRatingWhere(profile);
+      const lang = profile?.language ?? "en";
 
       // MVP cap at 500 items
+      // NOTE: the `q` filter matches the base (en) title only; localized-title
+      // search is a deliberate Phase-2 follow-up, not required here.
       const items = await app.prisma.mediaItem.findMany({
         where: {
           sectionId: id,
@@ -43,12 +47,17 @@ export default async function catalogRoute(app: FastifyInstance) {
           year: true,
           posterPath: true,
           matchState: true,
+          translations: { where: { language: lang }, select: { title: true } },
         },
         orderBy,
         take: 500,
       });
 
-      return items;
+      // Coalesce title → requested-language translation, else base.
+      return items.map(({ translations, ...rest }) => ({
+        ...rest,
+        title: localizeItem({ title: rest.title }, translations[0]).title,
+      }));
     },
   );
 
@@ -57,6 +66,9 @@ export default async function catalogRoute(app: FastifyInstance) {
     "/items/:id",
     { preHandler: requireAuth(app) },
     async (req, reply) => {
+      const profilePromise = activeProfile(app, req);
+      const lang = (await profilePromise)?.language ?? "en";
+
       const [item, profile] = await Promise.all([
         app.prisma.mediaItem.findUnique({
           where: { id: req.params.id },
@@ -79,8 +91,17 @@ export default async function catalogRoute(app: FastifyInstance) {
             rtRating: true,
             metacritic: true,
             matchState: true,
+            translations: { where: { language: lang }, select: { title: true, overview: true } },
             genres: {
-              select: { genre: { select: { name: true } } },
+              select: {
+                genre: {
+                  select: {
+                    tmdbId: true,
+                    name: true,
+                    translations: { where: { language: lang }, select: { name: true } },
+                  },
+                },
+              },
             },
             seasons: {
               select: {
@@ -115,7 +136,7 @@ export default async function catalogRoute(app: FastifyInstance) {
             },
           },
         }),
-        activeProfile(app, req),
+        profilePromise,
       ]);
 
       if (!item) return reply.code(404).send({ error: "not_found" });
@@ -135,12 +156,27 @@ export default async function catalogRoute(app: FastifyInstance) {
       );
       const director = directorCredit ? { name: directorCredit.person.name } : null;
 
+      // Coalesce localized title/overview/genres → requested language, else base.
+      const localized = localizeItem(
+        { title: item.title, overview: item.overview },
+        item.translations[0],
+      );
+      const genreTrMap = new Map<number, string>();
+      for (const g of item.genres) {
+        const trName = g.genre.translations[0]?.name;
+        if (g.genre.tmdbId != null && trName) genreTrMap.set(g.genre.tmdbId, trName);
+      }
+      const genres = localizeGenres(
+        item.genres.map((g) => ({ tmdbId: g.genre.tmdbId, name: g.genre.name })),
+        genreTrMap,
+      ).map((x) => x.name);
+
       return {
         id: item.id,
         kind: item.kind,
-        title: item.title,
+        title: localized.title,
         year: item.year,
-        overview: item.overview,
+        overview: localized.overview,
         tagline: item.tagline,
         status: item.status,
         runtimeSec: item.runtimeSec,
@@ -154,7 +190,7 @@ export default async function catalogRoute(app: FastifyInstance) {
         rtRating: item.rtRating,
         metacritic: item.metacritic,
         matchState: item.matchState,
-        genres: item.genres.map((g) => g.genre.name),
+        genres,
         ...(item.kind === "series"
           ? {
               seasons: item.seasons.map((s) => ({

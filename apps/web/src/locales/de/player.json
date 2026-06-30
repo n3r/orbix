@@ -1,0 +1,16 @@
+{
+  "loading": "Player wird geladen…",
+  "close": "Player schließen",
+  "seek": {
+    "backward": "{{seconds}} Sekunden zurückspulen",
+    "forward": "{{seconds}} Sekunden vorspulen"
+  },
+  "track": {
+    "label": "Spur {{index}}"
+  },
+  "error": {
+    "decision": "Wiedergabeentscheidung konnte nicht abgerufen werden",
+    "network": "Netzwerkfehler beim Laden des Players",
+    "generic": "Player konnte nicht geladen werden"
+  }
+}

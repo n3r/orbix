@@ -1,0 +1,12 @@
+{
+  "home": "Startseite",
+  "search": "Suche",
+  "library": "Bibliothek",
+  "admin": "Administration",
+  "manage": "Verwalten",
+  "settings": "Einstellungen",
+  "switchProfile": "Profil wechseln",
+  "logout": "Abmelden",
+  "openNavigation": "Navigation öffnen",
+  "tmdbAttribution": "Dieses Produkt verwendet die TMDB-API, wird aber nicht von TMDB unterstützt oder zertifiziert."
+}

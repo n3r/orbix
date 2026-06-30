@@ -1,12 +1,14 @@
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { Button } from "@orbix/ui";
 import RatingBadges from "@/components/RatingBadges";
 import type { TitleDetail } from "@/lib/types";
 
-function formatRuntime(seconds: number | null): string | null {
+function formatRuntime(seconds: number | null, t: TFunction): string | null {
   if (seconds == null) return null;
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
-  return h === 0 ? `${m}m` : `${h}h ${m}m`;
+  return h === 0 ? t("title:runtime.m", { m }) : t("title:runtime.hm", { h, m });
 }
 
 /**
@@ -25,7 +27,8 @@ export default function TitleHero({
   canPlay: boolean;
   playLabel: string;
 }) {
-  const runtime = formatRuntime(item.runtimeSec);
+  const { t } = useTranslation();
+  const runtime = formatRuntime(item.runtimeSec, t);
   const seasonCount = item.seasons?.length;
   const episodeCount = item.seasons?.reduce((n, s) => n + s.episodeCount, 0);
 
@@ -70,8 +73,8 @@ export default function TitleHero({
           {item.year != null && <span>{item.year}</span>}
           {item.kind === "series" && seasonCount ? (
             <span>
-              {seasonCount} season{seasonCount > 1 ? "s" : ""}
-              {episodeCount ? ` · ${episodeCount} episodes` : ""}
+              {t("title:seasonCount", { count: seasonCount })}
+              {episodeCount ? ` · ${t("title:episodeCount", { count: episodeCount })}` : ""}
             </span>
           ) : (
             runtime && <span>{runtime}</span>
@@ -94,7 +97,7 @@ export default function TitleHero({
                 <span aria-hidden="true">▶</span> {playLabel}
               </>
             ) : (
-              "No media"
+              t("title:noMedia")
             )}
           </Button>
         </div>

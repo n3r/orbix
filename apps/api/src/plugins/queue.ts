@@ -7,7 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import type { Env } from "@orbix/config";
-import { Prisma } from "@orbix/db";
+import { Prisma, type PrismaClient } from "@orbix/db";
 import {
   scanSource,
   probeFile,
@@ -20,10 +20,12 @@ import {
   fetchFanartLogoUrl,
   backdropFrameTimestampSec,
   TmdbClient,
+  tmdbLanguageTag,
   getSetting,
   type MediaFileTechnical,
   type ImageKind,
   type SaveMetadataInput,
+  type TranslateClient,
   type SaveSeriesInput,
 } from "@orbix/core";
 
@@ -84,6 +86,40 @@ export interface ScanJobData {
   jobId: string;
   sectionId: string;
   sources: { id: string; path: string }[];
+}
+
+export interface TranslateJobData {
+  language: string;
+}
+
+/**
+ * The set of content languages whose metadata must be cached: every distinct
+ * profile language except the en base (which lives on the MediaItem/Genre rows).
+ */
+export async function activeContentLanguages(prisma: PrismaClient): Promise<string[]> {
+  const rows = await prisma.profile.findMany({
+    select: { language: true },
+    distinct: ["language"],
+  });
+  return [...new Set(rows.map((r) => r.language))].filter((l) => l && l !== "en");
+}
+
+/**
+ * Ensure a profile language's catalog metadata is (being) cached. No-op for en
+ * (the base) or when translations already exist; otherwise enqueues an
+ * idempotent backfill job. Safe to call on every profile create/language change.
+ */
+export async function ensureMetadataLanguage(
+  app: FastifyInstance,
+  language: string,
+): Promise<void> {
+  if (!language || language === "en") return;
+  const existing = await app.prisma.mediaItemTranslation.findFirst({
+    where: { language },
+    select: { mediaItemId: true },
+  });
+  if (existing) return; // already backfilled (or a backfill is in flight)
+  await app.translateQueue.add("translate-metadata", { language });
 }
 
 // ── Plugin factory ───────────────────────────────────────────────────────────
@@ -308,6 +344,14 @@ export function queuePlugin(env: Env) {
       } else {
         const client = new TmdbClient(token);
 
+        // Active content languages = distinct profile languages, excluding the
+        // en base. Each item is also fetched in these languages at enrich time.
+        const activeLanguages = await activeContentLanguages(prisma);
+        const translateClients = new Map<string, TranslateClient>();
+        for (const lang of activeLanguages) {
+          translateClients.set(lang, new TmdbClient(token, undefined, tmdbLanguageTag(lang)));
+        }
+
         const omdbKey = await getSetting<string>("omdbKey", {
           fallback: "",
           read: (k) => prisma.setting.findUnique({ where: { key: k } }),
@@ -462,6 +506,20 @@ export function queuePlugin(env: Env) {
                 },
               });
             }
+
+            // Per-language metadata translations (additive; base row is en fallback)
+            for (const tr of input.translations ?? []) {
+              await tx.mediaItemTranslation.upsert({
+                where: { mediaItemId_language: { mediaItemId: input.itemId, language: tr.language } },
+                create: {
+                  mediaItemId: input.itemId,
+                  language: tr.language,
+                  title: tr.title,
+                  overview: tr.overview ?? null,
+                },
+                update: { title: tr.title, overview: tr.overview ?? null },
+              });
+            }
           }, { timeout: 20_000, maxWait: 10_000 });
         };
 
@@ -601,8 +659,10 @@ export function queuePlugin(env: Env) {
                 saveMetadata,
                 resolveLogo,
                 fetchRatings,
+                translateClients,
               });
             }
+
             if (result.matched) matched++;
           } catch (err) {
             app.log.warn({ err, itemId }, "enrich failed — continuing with remaining items");
@@ -701,9 +761,88 @@ export function queuePlugin(env: Env) {
 
     app.decorate("scanQueue", queue);
 
+    // ── Metadata translation backfill ───────────────────────────────────────
+
+    const translateQueue = new Queue<TranslateJobData>("translate-metadata", { connection });
+
+    async function translateProcessor(job: Job<TranslateJobData>): Promise<void> {
+      const { language } = job.data;
+      const { prisma } = app;
+      const tag = tmdbLanguageTag(language);
+      const channel = `translate-${language}`;
+
+      const token = await getSetting<string>("tmdbToken", {
+        fallback: "",
+        read: (k) => prisma.setting.findUnique({ where: { key: k } }),
+      });
+      if (!token) {
+        app.log.warn({ language }, "No TMDB token — skipping metadata translation.");
+        return;
+      }
+
+      const client = new TmdbClient(token, undefined, tag);
+
+      // Localized genre names (fixed TMDB list per language).
+      try {
+        for (const kind of ["movie", "tv"] as const) {
+          const genres = await client.genreList(kind);
+          for (const g of genres) {
+            if (g.tmdbId == null) continue;
+            const local = await prisma.genre.findUnique({
+              where: { tmdbId: g.tmdbId },
+              select: { id: true },
+            });
+            if (!local) continue; // only translate genres we actually have
+            await prisma.genreTranslation.upsert({
+              where: { genreId_language: { genreId: local.id, language } },
+              create: { genreId: local.id, language, name: g.name },
+              update: { name: g.name },
+            });
+          }
+        }
+      } catch (err) {
+        app.log.warn({ err, language }, "genre translation failed — continuing");
+      }
+
+      // Per-item localized title/overview for every matched item.
+      const items = await prisma.mediaItem.findMany({
+        where: { tmdbId: { not: null }, matchState: { not: "unmatched" } },
+        select: { id: true, tmdbId: true },
+      });
+
+      let processed = 0;
+      for (const item of items) {
+        try {
+          const m = await client.movie(item.tmdbId!);
+          await prisma.mediaItemTranslation.upsert({
+            where: { mediaItemId_language: { mediaItemId: item.id, language } },
+            create: { mediaItemId: item.id, language, title: m.title, overview: m.overview ?? null },
+            update: { title: m.title, overview: m.overview ?? null },
+          });
+        } catch (err) {
+          app.log.warn({ err, itemId: item.id, language }, "item translation failed — continuing");
+        }
+        processed++;
+        scanEvents.emit(channel, { phase: "translating", processed, total: items.length, language });
+      }
+
+      scanEvents.emit(channel, { phase: "done", processed, total: items.length, language });
+    }
+
+    const translateWorker = new Worker<TranslateJobData, void>(
+      "translate-metadata",
+      translateProcessor,
+      { connection },
+    );
+    translateWorker.on("error", (err) => app.log.error({ err }, "translate worker error"));
+
+    app.decorate("translateQueue", translateQueue);
+
     app.addHook("onClose", async () => {
       await worker.close();
       await queue.close();
+      await translateWorker.close();
+      await translateQueue.close();
     });
   });
 }
@@ -713,5 +852,6 @@ export function queuePlugin(env: Env) {
 declare module "fastify" {
   interface FastifyInstance {
     scanQueue: Queue<ScanJobData>;
+    translateQueue: Queue<TranslateJobData>;
   }
 }

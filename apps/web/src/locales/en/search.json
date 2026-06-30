@@ -1,0 +1,17 @@
+{
+  "title": "Search",
+  "placeholder": "e.g. comedy under 2 hours, something funny and lighthearted",
+  "queryAriaLabel": "Search query",
+  "submit": "Search",
+  "searching": "Searching…",
+  "results_one": "{{count}} result",
+  "results_other": "{{count}} results",
+  "mode": {
+    "semantic": "semantic",
+    "keyword": "keyword"
+  },
+  "empty": "No results found.",
+  "errors": {
+    "failed": "Search failed. Please try again."
+  }
+}

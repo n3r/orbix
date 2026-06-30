@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router";
+import { useTranslation } from "react-i18next";
 import { Button, Input } from "@orbix/ui";
 import { apiFetch } from "@/lib/api";
 
@@ -11,6 +12,7 @@ interface Candidate {
 }
 
 export default function FixMatchPage() {
+  const { t } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
   const [itemTitle, setItemTitle] = useState<string>("");
@@ -53,18 +55,18 @@ export default function FixMatchPage() {
     try {
       const res = await apiFetch(`/items/${id}/match-candidates?q=${encodeURIComponent(query)}`);
       if (res.status === 503) {
-        setSearchError("TMDB token not configured. Go to Settings to add your API token.");
+        setSearchError(t("errors:tmdb_not_configured"));
         return;
       }
       if (!res.ok) {
-        setSearchError("Search failed. Please try again.");
+        setSearchError(t("fix:search.failed"));
         return;
       }
       const data = (await res.json()) as Candidate[];
       setCandidates(data);
-      if (data.length === 0) setSearchError("No results found.");
+      if (data.length === 0) setSearchError(t("fix:search.noResults"));
     } catch {
-      setSearchError("Network error.");
+      setSearchError(t("errors:network"));
     } finally {
       setSearching(false);
     }
@@ -80,16 +82,16 @@ export default function FixMatchPage() {
         body: JSON.stringify({ tmdbId }),
       });
       if (res.status === 503) {
-        setMatchError("TMDB token not configured.");
+        setMatchError(t("errors:tmdb_not_configured"));
         return;
       }
       if (!res.ok) {
-        setMatchError("Failed to apply match.");
+        setMatchError(t("fix:match.failed"));
         return;
       }
       navigate(`/title/${id}`);
     } catch {
-      setMatchError("Network error.");
+      setMatchError(t("errors:network"));
     } finally {
       setMatchingId(null);
     }
@@ -105,16 +107,16 @@ export default function FixMatchPage() {
         body: JSON.stringify({ tmdbPosterPath }),
       });
       if (res.status === 503) {
-        setPosterError("TMDB token not configured.");
+        setPosterError(t("errors:tmdb_not_configured"));
         return;
       }
       if (!res.ok) {
-        setPosterError("Failed to set poster.");
+        setPosterError(t("fix:poster.failed"));
         return;
       }
       setPosterPath(tmdbPosterPath);
     } catch {
-      setPosterError("Network error.");
+      setPosterError(t("errors:network"));
     } finally {
       setSettingPoster(null);
     }
@@ -125,27 +127,27 @@ export default function FixMatchPage() {
       {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="ghost" onClick={() => id && navigate(`/title/${id}`)}>
-          &larr; Back
+          &larr; {t("common:actions.back")}
         </Button>
-        <h1 className="text-2xl font-bold text-[var(--text)]">Fix Match</h1>
+        <h1 className="text-2xl font-bold text-[var(--text)]">{t("fix:title")}</h1>
         {itemTitle && (
-          <span className="text-[var(--text-dim)] text-sm">for &ldquo;{itemTitle}&rdquo;</span>
+          <span className="text-[var(--text-dim)] text-sm">{t("fix:forTitle", { title: itemTitle })}</span>
         )}
       </div>
 
       {/* Search section */}
       <section className="flex flex-col gap-4">
-        <h2 className="text-lg font-semibold text-[var(--text)]">Search TMDB</h2>
+        <h2 className="text-lg font-semibold text-[var(--text)]">{t("fix:search.heading")}</h2>
         <div className="flex gap-2">
           <Input
             className="flex-1"
-            placeholder="Search title…"
+            placeholder={t("fix:search.placeholder")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && void handleSearch()}
           />
           <Button onClick={() => void handleSearch()} disabled={searching || !query.trim()}>
-            {searching ? "Searching…" : "Search"}
+            {searching ? t("fix:search.searching") : t("fix:search.button")}
           </Button>
         </div>
 
@@ -168,7 +170,7 @@ export default function FixMatchPage() {
                   />
                 ) : (
                   <div className="w-full rounded-[var(--radius-sm)] bg-[var(--surface-2)] aspect-[2/3] flex items-center justify-center text-[var(--text-dim)] text-xs">
-                    No poster
+                    {t("fix:noPoster")}
                   </div>
                 )}
                 <p className="text-sm font-medium text-[var(--text)] leading-snug">{c.title}</p>
@@ -178,7 +180,7 @@ export default function FixMatchPage() {
                   onClick={() => void handleMatch(c.tmdbId)}
                   disabled={matchingId !== null}
                 >
-                  {matchingId === c.tmdbId ? "Applying…" : "Use this match"}
+                  {matchingId === c.tmdbId ? t("fix:match.applying") : t("fix:match.button")}
                 </Button>
               </div>
             ))}
@@ -189,14 +191,14 @@ export default function FixMatchPage() {
       {/* Poster picker */}
       {candidates.length > 0 && (
         <section className="flex flex-col gap-4">
-          <h2 className="text-lg font-semibold text-[var(--text)]">Set a specific poster</h2>
+          <h2 className="text-lg font-semibold text-[var(--text)]">{t("fix:poster.heading")}</h2>
           <p className="text-sm text-[var(--text-dim)]">
-            Pick any poster from the search results above without changing other metadata.
+            {t("fix:poster.help")}
           </p>
 
           {posterError && <p className="text-sm text-red-400">{posterError}</p>}
           {posterPath && (
-            <p className="text-sm text-green-400">Poster updated successfully.</p>
+            <p className="text-sm text-green-400">{t("fix:poster.success")}</p>
           )}
 
           <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-3">
@@ -216,7 +218,7 @@ export default function FixMatchPage() {
                     onClick={() => void handleSetPoster(c.posterPath!)}
                     disabled={settingPoster !== null}
                   >
-                    {settingPoster === c.posterPath ? "Setting…" : "Set poster"}
+                    {settingPoster === c.posterPath ? t("fix:poster.setting") : t("fix:poster.button")}
                   </Button>
                 </div>
               ))}

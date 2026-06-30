@@ -1,0 +1,64 @@
+{
+  "title": "Ajustes",
+  "backToLibraries": "Volver a Bibliotecas",
+  "saveButton": "Guardar ajustes",
+  "saveSuccess": "Ajustes guardados.",
+  "providers": {
+    "heading": "Proveedores de metadatos",
+    "statusLabel": "Estado:",
+    "optional": "(opcional)",
+    "status": {
+      "configured": "configurado",
+      "notConfigured": "sin configurar",
+      "notSet": "no establecido"
+    },
+    "placeholderKeyConfigured": "Déjalo en blanco para mantener la clave actual",
+    "placeholderKeyEmpty": "Pega la clave para configurarlo",
+    "tmdb": {
+      "label": "Token de la API de TMDB",
+      "placeholderConfigured": "Déjalo en blanco para mantener el token actual",
+      "placeholderEmpty": "Pega el token para configurarlo"
+    },
+    "omdb": {
+      "label": "Clave de la API de OMDb"
+    },
+    "fanart": {
+      "label": "Clave de la API de Fanart.tv"
+    }
+  },
+  "transcode": {
+    "heading": "Transcodificación",
+    "encoderLabel": "Codificador de vídeo",
+    "encoderHelp": "Elige el codificador por hardware o software que se usará al transcodificar. Software (libx264) siempre funciona; los codificadores por hardware requieren el controlador de GPU correspondiente o compatibilidad con VAAPI/NVENC en el servidor.",
+    "encoders": {
+      "software": "Software (libx264)",
+      "vaapi": "VA-API (h264_vaapi)",
+      "qsv": "Intel QSV (h264_qsv)",
+      "nvenc": "NVIDIA NVENC (h264_nvenc)"
+    }
+  },
+  "library": {
+    "heading": "Biblioteca",
+    "cadenceLabel": "Frecuencia de actualización de metadatos (días)",
+    "cadenceHelp": "Cuántos días transcurren entre actualizaciones automáticas de metadatos. Auméntalo para reducir las llamadas a la API."
+  },
+  "maintenance": {
+    "heading": "Mantenimiento",
+    "help": "Vuelve a obtener los metadatos y las imágenes de cada título desde TMDB ahora. Úsalo después de añadir o cambiar tu token de TMDB. Los títulos que corregiste manualmente conservan el póster elegido. Las bibliotecas grandes pueden tardar un rato.",
+    "rebuildButton": "Reconstruir metadatos",
+    "rebuilding": "Reconstruyendo…",
+    "failed": "La reconstrucción falló — revisa los registros del servidor.",
+    "noToken": "Añade un token de la API de TMDB arriba y haz clic en Guardar ajustes antes de reconstruir.",
+    "networkError": "Error de red durante la reconstrucción.",
+    "rebuiltCount_one": "Se reconstruyó {{count}} título",
+    "rebuiltCount_other": "Se reconstruyeron {{count}} títulos",
+    "unmatchedCount_one": "{{count}} sin coincidencia en TMDB",
+    "unmatchedCount_other": "{{count}} sin coincidencias en TMDB",
+    "skippedCount_one": "{{count}} con error",
+    "skippedCount_other": "{{count}} con errores"
+  },
+  "errors": {
+    "loadFailed": "No se pudieron cargar los ajustes",
+    "saveFailed": "No se pudieron guardar los ajustes"
+  }
+}
