@@ -25,7 +25,6 @@ import {
   type MediaFileTechnical,
   type ImageKind,
   type SaveMetadataInput,
-  type TranslateClient,
   type SaveSeriesInput,
 } from "@orbix/core";
 
@@ -347,7 +346,9 @@ export function queuePlugin(env: Env) {
         // Active content languages = distinct profile languages, excluding the
         // en base. Each item is also fetched in these languages at enrich time.
         const activeLanguages = await activeContentLanguages(prisma);
-        const translateClients = new Map<string, TranslateClient>();
+        // One language-configured client per active language; satisfies both the
+        // movie (movie) and series (tv/tvSeason) translate-client surfaces.
+        const translateClients = new Map<string, TmdbClient>();
         for (const lang of activeLanguages) {
           translateClients.set(lang, new TmdbClient(token, undefined, tmdbLanguageTag(lang)));
         }
@@ -565,6 +566,20 @@ export function queuePlugin(env: Env) {
                 data: { mediaItemId: input.itemId, genreId: genre.id },
               });
             }
+
+            // Series-level title/overview translations (additive; base = en).
+            for (const tr of input.translations ?? []) {
+              await tx.mediaItemTranslation.upsert({
+                where: { mediaItemId_language: { mediaItemId: input.itemId, language: tr.language } },
+                create: {
+                  mediaItemId: input.itemId,
+                  language: tr.language,
+                  title: tr.title,
+                  overview: tr.overview ?? null,
+                },
+                update: { title: tr.title, overview: tr.overview ?? null },
+              });
+            }
           });
 
           for (const s of input.seasons) {
@@ -584,6 +599,14 @@ export function queuePlugin(env: Env) {
               select: { id: true },
             });
 
+            for (const tr of s.translations ?? []) {
+              await prisma.seasonTranslation.upsert({
+                where: { seasonId_language: { seasonId: season.id, language: tr.language } },
+                create: { seasonId: season.id, language: tr.language, name: tr.name ?? null, overview: tr.overview ?? null },
+                update: { name: tr.name ?? null, overview: tr.overview ?? null },
+              });
+            }
+
             for (const e of s.episodes) {
               const epData = {
                 title: e.title ?? null,
@@ -593,13 +616,22 @@ export function queuePlugin(env: Env) {
                 airDate: e.airDate ? new Date(e.airDate) : null,
                 tmdbEpisodeId: e.tmdbEpisodeId ?? null,
               };
-              await prisma.episode.upsert({
+              const episode = await prisma.episode.upsert({
                 where: {
                   seasonId_episodeNumber: { seasonId: season.id, episodeNumber: e.episodeNumber },
                 },
                 create: { seasonId: season.id, seriesId: input.itemId, episodeNumber: e.episodeNumber, ...epData },
                 update: epData,
+                select: { id: true },
               });
+
+              for (const tr of e.translations ?? []) {
+                await prisma.episodeTranslation.upsert({
+                  where: { episodeId_language: { episodeId: episode.id, language: tr.language } },
+                  create: { episodeId: episode.id, language: tr.language, title: tr.title ?? null, overview: tr.overview ?? null },
+                  update: { title: tr.title ?? null, overview: tr.overview ?? null },
+                });
+              }
             }
           }
         };
@@ -651,6 +683,7 @@ export function queuePlugin(env: Env) {
                 resolveLogo: resolveLogoTv,
                 fetchRatings,
                 localSeasonNumbers: localSeasons.map((s) => s.seasonNumber),
+                translateClients,
               });
             } else {
               result = await enrichItem(base, {
@@ -804,21 +837,76 @@ export function queuePlugin(env: Env) {
         app.log.warn({ err, language }, "genre translation failed — continuing");
       }
 
-      // Per-item localized title/overview for every matched item.
+      // Backfill a series: localized title/overview (series), season names, and
+      // episode titles/overviews — matched to local rows by season/episode number.
+      async function translateSeries(seriesId: string, tmdbId: number): Promise<void> {
+        const tv = await client.tv(tmdbId);
+        await prisma.mediaItemTranslation.upsert({
+          where: { mediaItemId_language: { mediaItemId: seriesId, language } },
+          create: { mediaItemId: seriesId, language, title: tv.title, overview: tv.overview ?? null },
+          update: { title: tv.title, overview: tv.overview ?? null },
+        });
+
+        const localSeasons = await prisma.season.findMany({
+          where: { seriesId },
+          select: { id: true, seasonNumber: true },
+        });
+        const tvSeasonByNumber = new Map(tv.seasons.map((s) => [s.seasonNumber, s]));
+
+        for (const ls of localSeasons) {
+          const ts = tvSeasonByNumber.get(ls.seasonNumber);
+          if (ts && (ts.name != null || ts.overview != null)) {
+            await prisma.seasonTranslation.upsert({
+              where: { seasonId_language: { seasonId: ls.id, language } },
+              create: { seasonId: ls.id, language, name: ts.name ?? null, overview: ts.overview ?? null },
+              update: { name: ts.name ?? null, overview: ts.overview ?? null },
+            });
+          }
+
+          let tmdbEpisodes: Awaited<ReturnType<typeof client.tvSeason>> = [];
+          try {
+            tmdbEpisodes = await client.tvSeason(tmdbId, ls.seasonNumber);
+          } catch {
+            tmdbEpisodes = [];
+          }
+          if (tmdbEpisodes.length === 0) continue;
+
+          const localEpisodes = await prisma.episode.findMany({
+            where: { seasonId: ls.id },
+            select: { id: true, episodeNumber: true },
+          });
+          const tmdbEpByNumber = new Map(tmdbEpisodes.map((e) => [e.episodeNumber, e]));
+          for (const le of localEpisodes) {
+            const te = tmdbEpByNumber.get(le.episodeNumber);
+            if (!te || (te.title == null && te.overview == null)) continue;
+            await prisma.episodeTranslation.upsert({
+              where: { episodeId_language: { episodeId: le.id, language } },
+              create: { episodeId: le.id, language, title: te.title ?? null, overview: te.overview ?? null },
+              update: { title: te.title ?? null, overview: te.overview ?? null },
+            });
+          }
+        }
+      }
+
+      // Per-item localized text for every matched item (movie or series).
       const items = await prisma.mediaItem.findMany({
         where: { tmdbId: { not: null }, matchState: { not: "unmatched" } },
-        select: { id: true, tmdbId: true },
+        select: { id: true, kind: true, tmdbId: true },
       });
 
       let processed = 0;
       for (const item of items) {
         try {
-          const m = await client.movie(item.tmdbId!);
-          await prisma.mediaItemTranslation.upsert({
-            where: { mediaItemId_language: { mediaItemId: item.id, language } },
-            create: { mediaItemId: item.id, language, title: m.title, overview: m.overview ?? null },
-            update: { title: m.title, overview: m.overview ?? null },
-          });
+          if (item.kind === "series") {
+            await translateSeries(item.id, item.tmdbId!);
+          } else {
+            const m = await client.movie(item.tmdbId!);
+            await prisma.mediaItemTranslation.upsert({
+              where: { mediaItemId_language: { mediaItemId: item.id, language } },
+              create: { mediaItemId: item.id, language, title: m.title, overview: m.overview ?? null },
+              update: { title: m.title, overview: m.overview ?? null },
+            });
+          }
         } catch (err) {
           app.log.warn({ err, itemId: item.id, language }, "item translation failed — continuing");
         }
