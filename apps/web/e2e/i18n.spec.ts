@@ -38,6 +38,7 @@ test("Spanish locale renders localized UI through onboarding", async ({ page }) 
   await page.getByText("Sofía").click();
   await expect(page).toHaveURL(/\/$/);
 
-  // In-app nav chrome is localized too.
-  await expect(page.getByText("Inicio")).toBeVisible();
+  // In-app nav chrome is localized too. Scope to the top bar (banner) — the same
+  // "Inicio" label also exists in the hidden mobile bottom nav.
+  await expect(page.getByRole("banner").getByText("Inicio")).toBeVisible();
 });
