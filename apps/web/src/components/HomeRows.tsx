@@ -1,13 +1,7 @@
 import MediaRow from "./MediaRow";
-import type { MediaCard } from "@/lib/types";
+import type { HomeRow } from "@/lib/types";
 
-export interface HomeRow {
-  key: string;
-  title: string;
-  items: MediaCard[];
-}
-
-/** Presentational — rows are fetched server-side and passed in. */
+/** Presentational — rows are fetched client-side and passed in. */
 export default function HomeRows({ rows }: { rows: HomeRow[] }) {
   if (rows.length === 0) return null;
   return (

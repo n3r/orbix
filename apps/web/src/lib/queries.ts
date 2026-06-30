@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiJson } from "./api";
-import type { Library, MediaCard, Profile } from "./types";
+import type { HomeRow, Library, MediaCard, Profile } from "./types";
 
 export interface SetupStatus { complete: boolean }
 export interface ActiveProfile {
@@ -21,7 +21,6 @@ export function useProfiles() {
   return useQuery({ queryKey: ["profiles"], queryFn: () => apiJson<Profile[]>("/profiles") });
 }
 
-export interface HomeRow { key: string; title: string; items: MediaCard[] }
 export function useHomeRows() {
   return useQuery({ queryKey: ["home-rows"], queryFn: () => apiJson<{ rows: HomeRow[] }>("/home/rows") });
 }
