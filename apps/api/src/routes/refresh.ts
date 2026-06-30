@@ -15,7 +15,7 @@
 import type { FastifyInstance } from "fastify";
 import fs from "node:fs";
 import path from "node:path";
-import { requireAuth } from "../lib/auth";
+import { requireAuth, requireAdmin } from "../lib/auth";
 import { requireNonKids } from "../lib/catalog-filter";
 import { TmdbClient, getSetting } from "@orbix/core";
 import type { Env } from "@orbix/config";
@@ -28,7 +28,7 @@ export function refreshRoute(env: Env) {
 
     app.post(
       "/maintenance/refresh",
-      { preHandler: [requireAuth(app), requireNonKids(app)] },
+      { preHandler: [requireAuth(app), requireAdmin(app), requireNonKids(app)] },
       async (_req, reply) => {
         const token = await getSetting<string>("tmdbToken", {
           fallback: "",
@@ -61,7 +61,7 @@ export function refreshRoute(env: Env) {
 
     app.post(
       "/maintenance/rebuild",
-      { preHandler: [requireAuth(app), requireNonKids(app)] },
+      { preHandler: [requireAuth(app), requireAdmin(app), requireNonKids(app)] },
       async (_req, reply) => {
         const token = await getSetting<string>("tmdbToken", {
           fallback: "",
@@ -85,7 +85,7 @@ export function refreshRoute(env: Env) {
 
     app.delete(
       "/maintenance/cache",
-      { preHandler: [requireAuth(app), requireNonKids(app)] },
+      { preHandler: [requireAuth(app), requireAdmin(app), requireNonKids(app)] },
       async (_req, reply) => {
         const safeBase = path.resolve(env.METADATA_DIR);
         const subdirs = ["poster", "backdrop"] as const;

@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router";
+import { createBrowserRouter, Navigate } from "react-router";
 import RequireProfile from "./routes/RequireProfile";
 import LoginPage from "./pages/LoginPage";
 import SetupPage from "./pages/SetupPage";
@@ -10,6 +10,9 @@ import TitlePage from "./pages/TitlePage";
 import FixMatchPage from "./pages/FixMatchPage";
 import AdminLibrariesPage from "./pages/AdminLibrariesPage";
 import AdminSettingsPage from "./pages/AdminSettingsPage";
+import AccountLayout from "./pages/account/AccountLayout";
+import AccountOverview from "./pages/account/AccountOverview";
+import AccountMenuPage from "./pages/account/AccountMenuPage";
 
 export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -23,8 +26,18 @@ export const router = createBrowserRouter([
       { path: "/search", element: <SearchPage /> },
       { path: "/title/:id", element: <TitlePage /> },
       { path: "/title/:id/fix", element: <FixMatchPage /> },
-      { path: "/admin/libraries", element: <AdminLibrariesPage /> },
-      { path: "/admin/settings", element: <AdminSettingsPage /> },
+      {
+        path: "/account",
+        element: <AccountLayout />,
+        children: [
+          { index: true, element: <AccountOverview /> },
+          { path: "menu", element: <AccountMenuPage /> },
+          { path: "library", element: <AdminLibrariesPage /> },
+          { path: "settings", element: <AdminSettingsPage /> },
+        ],
+      },
+      { path: "/admin/libraries", element: <Navigate to="/account/library" replace /> },
+      { path: "/admin/settings", element: <Navigate to="/account/settings" replace /> },
     ],
   },
 ]);

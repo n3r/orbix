@@ -1,5 +1,12 @@
 {
   "home": "Home",
+  "tv": "TV",
+  "catalog": "Catalog",
+  "account": "Account",
+  "more": "More",
+  "myList": "My list",
+  "comingSoon": "Coming soon",
+  "noCategories": "No categories yet.",
   "search": "Search",
   "library": "Library",
   "admin": "Admin",

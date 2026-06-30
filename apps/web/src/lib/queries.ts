@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { apiJson } from "./api";
-import type { HomeRow, Library, MediaCard, Profile } from "./types";
+import { apiJson, apiFetch, ApiError } from "./api";
+import type { AuthMe, HomeRow, MediaCard, MenuConfig, MenuItem, Profile } from "./types";
 
 export interface SetupStatus { complete: boolean }
 export interface ActiveProfile {
@@ -13,9 +13,6 @@ export function useSetupStatus() {
 }
 export function useMyProfile() {
   return useQuery({ queryKey: ["me-profile"], queryFn: () => apiJson<ActiveProfile>("/me/profile") });
-}
-export function useLibraries() {
-  return useQuery({ queryKey: ["libraries"], queryFn: () => apiJson<Library[]>("/libraries") });
 }
 export function useProfiles() {
   return useQuery({ queryKey: ["profiles"], queryFn: () => apiJson<Profile[]>("/profiles") });
@@ -44,4 +41,21 @@ export function useSearch(q: string) {
     enabled: q.trim().length > 0,
     queryFn: () => apiJson<SearchResponse>(`/search?q=${encodeURIComponent(q.trim())}`),
   });
+}
+
+export function useMenu() {
+  return useQuery({ queryKey: ["menu"], queryFn: () => apiJson<{ items: MenuItem[] }>("/me/menu") });
+}
+export function useMenuConfig() {
+  return useQuery({ queryKey: ["menu-config"], queryFn: () => apiJson<MenuConfig>("/me/menu/config") });
+}
+export function useAuthMe() {
+  return useQuery({ queryKey: ["auth-me"], queryFn: () => apiJson<AuthMe>("/auth/me") });
+}
+
+/** Replace the active profile's menu; returns the resolved menu. */
+export async function saveMenu(sectionIds: string[]): Promise<{ items: MenuItem[] }> {
+  const res = await apiFetch("/me/menu", { method: "PUT", body: JSON.stringify({ sectionIds }) });
+  if (!res.ok) throw new ApiError(res.status);
+  return (await res.json()) as { items: MenuItem[] };
 }

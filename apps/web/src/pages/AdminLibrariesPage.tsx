@@ -83,11 +83,13 @@ export default function AdminLibrariesPage() {
     }
   }
 
-  // Reload local state AND invalidate the shared libraries query so the
-  // sidebar nav (RequireProfile → useLibraries) reflects the change.
+  // Reload local state AND invalidate the shared queries so dependent views
+  // refresh: ["libraries"] for any library list, ["menu"] so the top-nav
+  // catalog categories reflect added/removed sections.
   async function refresh() {
     await loadLibraries();
     void queryClient.invalidateQueries({ queryKey: ["libraries"] });
+    void queryClient.invalidateQueries({ queryKey: ["menu"] });
   }
 
   useEffect(() => {
@@ -263,9 +265,9 @@ export default function AdminLibrariesPage() {
     <main className="px-6 md:px-8 lg:px-10 py-8">
      <div className="mx-auto flex max-w-4xl flex-col gap-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-[var(--text)]">{t("libraries:title")}</h1>
+        <h2 className="text-2xl font-bold text-[var(--text)]">{t("libraries:title")}</h2>
         <Link
-          to="/admin/settings"
+          to="/account/settings"
           className="text-sm text-[var(--text-dim)] hover:text-[var(--text)]"
         >
           {t("libraries:settingsLink")}

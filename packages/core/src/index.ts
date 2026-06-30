@@ -26,3 +26,4 @@ export * from "./discovery/rows";
 export * from "./discovery/constraints";
 export * from "./discovery/rank";
 export * from "./ratings/maturity";
+export * from "./menu/resolve";

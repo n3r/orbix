@@ -126,6 +126,17 @@ export async function ensureMetadataLanguage(
 
 export function queuePlugin(env: Env) {
   return fp(async (app: FastifyInstance) => {
+    // Tests never enqueue jobs and point REDIS_URL at a bogus host. Creating real
+    // BullMQ queues/workers opens ioredis connections whose DNS failures (EAI_AGAIN
+    // under a retry storm) leak as unhandled rejections and fail the run. Decorate
+    // inert stubs and skip all Redis setup; production behaviour is unchanged.
+    if (env.NODE_ENV === "test") {
+      const stub = { add: async () => undefined, close: async () => undefined };
+      app.decorate("scanQueue", stub as unknown as Queue<ScanJobData>);
+      app.decorate("translateQueue", stub as unknown as Queue<TranslateJobData>);
+      return;
+    }
+
     const connection = { url: env.REDIS_URL };
 
     const queue = new Queue<ScanJobData>("scan", { connection });

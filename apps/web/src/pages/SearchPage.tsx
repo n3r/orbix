@@ -1,14 +1,20 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { ApiError } from "@/lib/api";
 import { useSearch } from "@/lib/queries";
 import PosterCard from "@/components/PosterCard";
+import { SearchIcon } from "@/components/shell/icons";
 
 export default function SearchPage() {
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const [submitted, setSubmitted] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
   const { data, isFetching, error } = useSearch(submitted);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -25,28 +31,24 @@ export default function SearchPage() {
   const usedEmbeddings = data?.usedEmbeddings ?? false;
 
   return (
-    <main className="flex min-h-screen flex-col gap-6 px-6 md:px-8 lg:px-10 py-8">
-      <h1 className="text-2xl font-semibold text-[var(--text)]">{t("search:title")}</h1>
-
-      <form onSubmit={handleSubmit} className="flex gap-3 max-w-2xl">
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={t("search:placeholder")}
-          className="flex-1 px-4 py-2 rounded-[var(--radius)] bg-[var(--surface)] text-[var(--text)] border border-[var(--border,transparent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
-          aria-label={t("search:queryAriaLabel")}
-        />
-        <button
-          type="submit"
-          disabled={isFetching}
-          className="px-6 py-2 rounded-[var(--radius)] bg-[var(--accent)] text-white font-medium disabled:opacity-50"
-        >
-          {isFetching ? t("search:searching") : t("search:submit")}
-        </button>
+    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 px-4 md:px-8 py-6">
+      <form onSubmit={handleSubmit} className="sticky top-14 z-10 -mx-4 bg-[var(--bg,transparent)] px-4 py-2">
+        <div className="flex items-center gap-3 rounded-full border border-[var(--surface-2)] bg-[var(--surface)] px-4 py-3 focus-within:ring-2 focus-within:ring-[var(--accent)]">
+          <SearchIcon className="h-5 w-5 text-[var(--text-dim)]" />
+          <input
+            ref={inputRef}
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t("search:placeholder")}
+            className="flex-1 bg-transparent text-[var(--text)] placeholder:text-[var(--text-dim)] focus:outline-none"
+            aria-label={t("search:queryAriaLabel")}
+          />
+          {isFetching && <span className="text-xs text-[var(--text-dim)]">{t("search:searching")}</span>}
+        </div>
       </form>
 
-      {errorMsg && <p className="text-red-400 text-sm">{errorMsg}</p>}
+      {errorMsg && <p className="text-sm text-red-400">{errorMsg}</p>}
 
       {results !== null && (
         <>
@@ -55,10 +57,8 @@ export default function SearchPage() {
               {t("search:results", { count: results.length })}
             </p>
             <span
-              className={`text-xs px-2 py-0.5 rounded-full ${
-                usedEmbeddings
-                  ? "bg-purple-900/50 text-purple-300"
-                  : "bg-[var(--surface)] text-[var(--text-dim)]"
+              className={`rounded-full px-2 py-0.5 text-xs ${
+                usedEmbeddings ? "bg-purple-900/50 text-purple-300" : "bg-[var(--surface)] text-[var(--text-dim)]"
               }`}
             >
               {usedEmbeddings ? t("search:mode.semantic") : t("search:mode.keyword")}
