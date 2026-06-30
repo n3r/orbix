@@ -72,7 +72,11 @@ export default function ProfilesPage() {
       method: "POST",
     });
     if (res.ok) {
-      navigate("/", { replace: true });
+      // Full reload (like logout) so the TanStack Query cache is dropped and the
+      // guard re-reads the new orbix_profile cookie. A client navigate would
+      // re-enter RequireProfile with stale profile-scoped cache → bounce back to
+      // /profiles and briefly show the previous profile's data.
+      window.location.assign("/");
     } else {
       const body = (await res.json()) as { error?: string };
       if (body.error === "pin_required") {
