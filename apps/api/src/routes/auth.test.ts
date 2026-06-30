@@ -14,7 +14,7 @@ describe("auth routes", () => {
     const app = await buildApp(env);
     // override prisma with an in-memory stub via app.prisma (decorated)
     (app as any).prisma.account = { findUnique: async () => null };
-    const res = await app.inject({ method: "POST", url: "/auth/login", payload: { email: "a@b.c", password: "longenough" } });
+    const res = await app.inject({ method: "POST", url: "/api/auth/login", payload: { email: "a@b.c", password: "longenough" } });
     expect(res.statusCode).toBe(401);
     await app.close();
   });

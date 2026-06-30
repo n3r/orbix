@@ -20,7 +20,7 @@ describe("GET /me/profile", () => {
       findUnique: async () => ({ id: "p1", name: "Alex", avatar: null, kind: "kids", maturityCap: 1 }),
     };
     const res = await app.inject({
-      method: "GET", url: "/me/profile",
+      method: "GET", url: "/api/me/profile",
       cookies: { orbix_session: "s1", orbix_profile: "p1" },
     });
     expect(res.statusCode).toBe(200);
@@ -33,7 +33,7 @@ describe("GET /me/profile", () => {
     (app as any).prisma.session = {
       findUnique: async () => ({ id: "s1", accountId: "a1", expiresAt: new Date(Date.now() + 3_600_000) }),
     };
-    const res = await app.inject({ method: "GET", url: "/me/profile", cookies: { orbix_session: "s1" } });
+    const res = await app.inject({ method: "GET", url: "/api/me/profile", cookies: { orbix_session: "s1" } });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ id: null, name: null, avatar: null, kind: null, maturityCap: null });
     await app.close();
