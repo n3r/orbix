@@ -14,6 +14,8 @@ export default tseslint.config(
       "**/playwright-report/**",
       // Generated Next.js declaration file — uses triple-slash references by design
       "**/next-env.d.ts",
+      // Build-time Node scripts (e.g. model download) — run by Docker/Node, not app source
+      "**/scripts/**",
     ],
   },
   // JS recommended base
