@@ -7,7 +7,6 @@ test.describe.configure({ mode: "serial" });
 
 // ── Seed constants ────────────────────────────────────────────────────────────
 const LIBRARY_ID = "seedlibrary00000000000001";
-const SECTION_ID = "seedsection0000000000001";
 const ITEM_ID = "seeditem000000000000000001";
 const ADMIN_EMAIL = "libtest@home.lan";
 const ADMIN_PASSWORD = "longenough";
@@ -33,29 +32,21 @@ async function seedDb() {
 
   // Clean any leftover rows from a previous failed run
   await prisma.mediaItem.deleteMany({ where: { id: ITEM_ID } });
-  await prisma.section.deleteMany({ where: { id: SECTION_ID } });
   await prisma.library.deleteMany({ where: { id: LIBRARY_ID } });
 
   await prisma.library.create({
     data: {
       id: LIBRARY_ID,
       name: "Seed Library",
-      sections: {
+      items: {
         create: {
-          id: SECTION_ID,
-          name: "Seed Section",
-          order: 0,
-          items: {
-            create: {
-              id: ITEM_ID,
-              title: "Seeded Movie",
-              sortTitle: "seeded movie",
-              year: 2020,
-              overview: "A seeded overview for testing.",
-              posterPath: POSTER_REL,
-              matchState: "matched",
-            },
-          },
+          id: ITEM_ID,
+          title: "Seeded Movie",
+          sortTitle: "seeded movie",
+          year: 2020,
+          overview: "A seeded overview for testing.",
+          posterPath: POSTER_REL,
+          matchState: "matched",
         },
       },
     },
@@ -73,7 +64,6 @@ async function cleanDb() {
   const { prisma } = await import("@orbix/db");
 
   await prisma.mediaItem.deleteMany({ where: { id: ITEM_ID } });
-  await prisma.section.deleteMany({ where: { id: SECTION_ID } });
   await prisma.library.deleteMany({ where: { id: LIBRARY_ID } });
   // Remove the admin account created by this spec's onboarding
   await prisma.profile.deleteMany();
@@ -143,7 +133,7 @@ test.describe("Library browse + title detail", () => {
 
   test("library grid shows seeded movie", async ({ page }) => {
     await doOnboarding(page);
-    await page.goto(`http://localhost:1060/library/${SECTION_ID}`);
+    await page.goto(`http://localhost:1060/library/${LIBRARY_ID}`);
     // Each grid item is a single card <Link>; assert on the link role (the title
     // text renders twice per card — poster overlay + caption — tripping strict mode).
     await expect(page.getByRole("link", { name: /Seeded Movie/ })).toBeVisible({ timeout: 15_000 });

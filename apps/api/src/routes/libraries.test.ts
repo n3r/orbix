@@ -14,10 +14,11 @@ const fakeRuntime = { resolve: async () => os.tmpdir(), unmount: async () => {} 
 
 // Minimal in-memory prisma fake that honours `select` so projection (password
 // exclusion) is exercised, not bypassed.
-function project<T extends Record<string, unknown>>(row: T, select?: Record<string, boolean>): Record<string, unknown> {
-  if (!select) return { ...row };
+function project<T extends object>(row: T, select?: Record<string, boolean>): Record<string, unknown> {
+  const r = row as Record<string, unknown>;
+  if (!select) return { ...r };
   const out: Record<string, unknown> = {};
-  for (const k of Object.keys(select)) if (select[k]) out[k] = (row as Record<string, unknown>)[k];
+  for (const k of Object.keys(select)) if (select[k]) out[k] = r[k];
   return out;
 }
 

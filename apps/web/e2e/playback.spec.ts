@@ -21,7 +21,6 @@ test.describe.configure({ mode: "serial" });
 
 // ── Seed constants ────────────────────────────────────────────────────────────
 const LIBRARY_ID = "playbklibrary0000000001";
-const SECTION_ID = "playbksection0000000001";
 const ITEM_ID    = "playbkitem00000000000001";
 const FILE_ID    = "playbkfile0000000000001";
 
@@ -56,7 +55,6 @@ async function seedDb() {
   await prisma.playbackState.deleteMany({ where: { mediaItemId: ITEM_ID } });
   await prisma.mediaFile.deleteMany({ where: { id: FILE_ID } });
   await prisma.mediaItem.deleteMany({ where: { id: ITEM_ID } });
-  await prisma.section.deleteMany({ where: { id: SECTION_ID } });
   await prisma.library.deleteMany({ where: { id: LIBRARY_ID } });
   // Wipe ALL accounts (not just this email): the DB enforces a single admin
   // (partial unique index on isAdmin), so a leftover admin from an earlier spec
@@ -89,32 +87,25 @@ async function seedDb() {
     data: {
       id: LIBRARY_ID,
       name: "Playback Library",
-      sections: {
+      items: {
         create: {
-          id: SECTION_ID,
-          name: "Playback Section",
-          order: 0,
-          items: {
+          id: ITEM_ID,
+          title: "Playback Movie",
+          sortTitle: "playback movie",
+          year: 2024,
+          overview: "A playback test movie.",
+          posterPath: POSTER_REL,
+          matchState: "matched",
+          files: {
             create: {
-              id: ITEM_ID,
-              title: "Playback Movie",
-              sortTitle: "playback movie",
-              year: 2024,
-              overview: "A playback test movie.",
-              posterPath: POSTER_REL,
-              matchState: "matched",
-              files: {
-                create: {
-                  id: FILE_ID,
-                  path: VIDEO_PATH,
-                  container: "mp4",
-                  videoCodec: "h264",
-                  audioCodecs: ["aac"],
-                  durationSec: 3,
-                  width: 320,
-                  height: 240,
-                },
-              },
+              id: FILE_ID,
+              path: VIDEO_PATH,
+              container: "mp4",
+              videoCodec: "h264",
+              audioCodecs: ["aac"],
+              durationSec: 3,
+              width: 320,
+              height: 240,
             },
           },
         },
@@ -134,7 +125,6 @@ async function cleanDb() {
   });
   await prisma.mediaFile.deleteMany({ where: { id: FILE_ID } });
   await prisma.mediaItem.deleteMany({ where: { id: ITEM_ID } });
-  await prisma.section.deleteMany({ where: { id: SECTION_ID } });
   await prisma.library.deleteMany({ where: { id: LIBRARY_ID } });
   await prisma.profile.deleteMany();
   await prisma.account.deleteMany({ where: { email: ADMIN_EMAIL } });

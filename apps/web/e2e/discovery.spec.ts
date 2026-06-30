@@ -24,7 +24,6 @@ test.describe.configure({ mode: "serial" });
 
 // ── Seed constants ────────────────────────────────────────────────────────────
 const LIBRARY_ID = "disclib0000000000000000001";
-const SECTION_ID = "discsect000000000000000001";
 const COMEDY_SHORT_ID = "discitem000000000000000001"; // 95 min, Comedy, 2018
 const COMEDY_LONG_ID = "discitem000000000000000002"; // 100 min, Comedy, 1980
 const DRAMA_LONG_ID = "discitem000000000000000003"; // 180 min, Drama, 1995
@@ -45,7 +44,6 @@ async function seedDb() {
   await prisma.mediaItem.deleteMany({
     where: { id: { in: [COMEDY_SHORT_ID, COMEDY_LONG_ID, DRAMA_LONG_ID] } },
   });
-  await prisma.section.deleteMany({ where: { id: SECTION_ID } });
   await prisma.library.deleteMany({ where: { id: LIBRARY_ID } });
 
   // NOTE: We intentionally do NOT create an account here.
@@ -67,48 +65,41 @@ async function seedDb() {
     }),
   ]);
 
-  // Create library → section → items with MediaItemGenre associations
+  // Create library → items with MediaItemGenre associations
   await prisma.library.create({
     data: {
       id: LIBRARY_ID,
       name: "Discovery Test Library",
-      sections: {
-        create: {
-          id: SECTION_ID,
-          name: "Discovery Test Section",
-          order: 0,
-          items: {
-            create: [
-              {
-                id: COMEDY_SHORT_ID,
-                title: "Short Comedy Film",
-                sortTitle: "short comedy film",
-                year: 2018,
-                runtimeSec: 95 * 60, // 5 700 s
-                matchState: "matched",
-                genres: { create: [{ genreId: comedyGenre.id }] },
-              },
-              {
-                id: COMEDY_LONG_ID,
-                title: "Classic Comedy Film",
-                sortTitle: "classic comedy film",
-                year: 1980,
-                runtimeSec: 100 * 60, // 6 000 s
-                matchState: "matched",
-                genres: { create: [{ genreId: comedyGenre.id }] },
-              },
-              {
-                id: DRAMA_LONG_ID,
-                title: "Epic Drama Film",
-                sortTitle: "epic drama film",
-                year: 1995,
-                runtimeSec: 180 * 60, // 10 800 s  — exceeds 2 h cap
-                matchState: "matched",
-                genres: { create: [{ genreId: dramaGenre.id }] },
-              },
-            ],
+      items: {
+        create: [
+          {
+            id: COMEDY_SHORT_ID,
+            title: "Short Comedy Film",
+            sortTitle: "short comedy film",
+            year: 2018,
+            runtimeSec: 95 * 60, // 5 700 s
+            matchState: "matched",
+            genres: { create: [{ genreId: comedyGenre.id }] },
           },
-        },
+          {
+            id: COMEDY_LONG_ID,
+            title: "Classic Comedy Film",
+            sortTitle: "classic comedy film",
+            year: 1980,
+            runtimeSec: 100 * 60, // 6 000 s
+            matchState: "matched",
+            genres: { create: [{ genreId: comedyGenre.id }] },
+          },
+          {
+            id: DRAMA_LONG_ID,
+            title: "Epic Drama Film",
+            sortTitle: "epic drama film",
+            year: 1995,
+            runtimeSec: 180 * 60, // 10 800 s  — exceeds 2 h cap
+            matchState: "matched",
+            genres: { create: [{ genreId: dramaGenre.id }] },
+          },
+        ],
       },
     },
   });
@@ -126,7 +117,6 @@ async function cleanDb() {
   await prisma.mediaItem.deleteMany({
     where: { id: { in: [COMEDY_SHORT_ID, COMEDY_LONG_ID, DRAMA_LONG_ID] } },
   });
-  await prisma.section.deleteMany({ where: { id: SECTION_ID } });
   await prisma.library.deleteMany({ where: { id: LIBRARY_ID } });
   // Only delete our own profile — do not wipe profiles from other specs.
   await prisma.profile.deleteMany({ where: { name: "Searcher" } });
