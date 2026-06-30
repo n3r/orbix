@@ -1,7 +1,5 @@
-"use client";
-
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { useLocation } from "react-router";
 import Sidebar from "./Sidebar";
 import TopBar from "./TopBar";
 import type { Library, Profile } from "@/lib/types";
@@ -18,7 +16,7 @@ export default function AppShell({
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const pathname = usePathname();
+  const { pathname } = useLocation();
 
   // Close the mobile drawer whenever the route changes.
   useEffect(() => {
