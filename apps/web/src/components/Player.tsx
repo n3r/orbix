@@ -1,5 +1,14 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { MediaPlayer, MediaProvider, Track, isHLSProvider, type MediaPlayerInstance, type MediaProviderAdapter } from "@vidstack/react";
+import {
+  MediaPlayer,
+  MediaProvider,
+  Track,
+  SeekButton,
+  isHLSProvider,
+  type MediaPlayerInstance,
+  type MediaProviderAdapter,
+} from "@vidstack/react";
+import { SeekBackward10Icon, SeekForward30Icon } from "@vidstack/react/icons";
 import { DefaultVideoLayout, defaultLayoutIcons } from "@vidstack/react/player/layouts/default";
 import "@vidstack/react/player/styles/default/theme.css";
 import "@vidstack/react/player/styles/default/layouts/video.css";
@@ -31,6 +40,30 @@ interface Props {
 }
 
 const SAVE_INTERVAL_MS = 10_000;
+
+// The default large (desktop) layout renders no on-screen seek buttons, so add a
+// Netflix/Plex-style −10s / +30s pair flanking the play button (via the large
+// layout's before/after-play-button slots). Uses the matching numbered seek
+// icons and the default layout's button CSS classes so they sit seamlessly in
+// the control bar. Keyboard seeking uses `seekStep` (see below).
+const seekBackward10 = (
+  <SeekButton
+    seconds={-10}
+    className="vds-seek-button vds-button"
+    aria-label="Seek backward 10 seconds"
+  >
+    <SeekBackward10Icon className="vds-icon" />
+  </SeekButton>
+);
+const seekForward30 = (
+  <SeekButton
+    seconds={30}
+    className="vds-seek-button vds-button"
+    aria-label="Seek forward 30 seconds"
+  >
+    <SeekForward30Icon className="vds-icon" />
+  </SeekButton>
+);
 
 export default function Player({ fileId, mediaItemId, title }: Props) {
   const [decision, setDecision] = useState<Decision | null>(null);
@@ -140,13 +173,17 @@ export default function Player({ fileId, mediaItemId, title }: Props) {
 
   if (loading) {
     return (
-      <p className="text-sm text-[var(--text-dim)] py-2">Loading player…</p>
+      <div className="grid h-full w-full place-items-center text-sm text-[var(--text-dim)]">
+        Loading player…
+      </div>
     );
   }
 
   if (error || !decision) {
     return (
-      <p className="text-sm text-red-400 py-2">{error ?? "Failed to load player"}</p>
+      <div className="grid h-full w-full place-items-center text-sm text-red-400">
+        {error ?? "Failed to load player"}
+      </div>
     );
   }
 
@@ -157,7 +194,11 @@ export default function Player({ fileId, mediaItemId, title }: Props) {
       ref={playerRef}
       title={title}
       src={{ src: decision.url, type: decision.mode === "direct" ? "video/mp4" : "application/x-mpegurl" }}
-      className="w-full aspect-video bg-black rounded-[var(--radius)] overflow-hidden"
+      className="h-full w-full bg-black"
+      style={{ "--media-brand": "var(--accent)" }}
+      autoPlay
+      playsInline
+      keyTarget="document"
       onProviderChange={onProviderChange}
       onCanPlay={handleCanPlay}
       onPause={handlePause}
@@ -173,7 +214,12 @@ export default function Player({ fileId, mediaItemId, title }: Props) {
           />
         ))}
       </MediaProvider>
-      <DefaultVideoLayout icons={defaultLayoutIcons} />
+      <DefaultVideoLayout
+        icons={defaultLayoutIcons}
+        colorScheme="dark"
+        seekStep={10}
+        slots={{ largeLayout: { beforePlayButton: seekBackward10, afterPlayButton: seekForward30 } }}
+      />
     </MediaPlayer>
   );
 }
