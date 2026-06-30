@@ -1,0 +1,77 @@
+name: Bug report
+description: Report a reproducible problem in Orbix.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include real secrets, tokens, cookies, database passwords, or private logs.
+        For vulnerabilities, use the private security process in SECURITY.md instead.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What went wrong?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: List the smallest steps that reproduce the issue.
+      placeholder: |
+        1. Start Orbix with ...
+        2. Open ...
+        3. Click ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Orbix version or commit
+      placeholder: "commit SHA, branch, or release tag"
+    validations:
+      required: true
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment type
+      options:
+        - Local Docker Compose
+        - Portainer/NAS stack
+        - Manual/custom deployment
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS/NAS, browser, Node/pnpm versions, Docker version, and relevant hardware such as GPU transcoding.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Paste only the relevant logs with secrets removed.
+      render: text
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and pull requests.
+          required: true
+        - label: I removed secrets, tokens, cookies, and private media paths.
+          required: true

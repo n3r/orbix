@@ -1,0 +1,42 @@
+name: Support question
+description: Ask for help with setup, deployment, or usage.
+title: "[Support]: "
+labels: ["support"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please read README.md and deploy/README.md first. Do not include secrets or private logs.
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What are you trying to do, and where are you stuck?
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Local development
+        - Portainer/NAS deployment
+        - Library scanning
+        - Metadata/TMDB
+        - Playback/transcoding
+        - Profiles/kids mode
+        - Discovery/search
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS/NAS, browser, Docker version, deployment type, and relevant sanitized configuration.
+  - type: textarea
+    id: attempted
+    attributes:
+      label: What you tried
+      description: Include relevant commands and sanitized logs.
+      render: text

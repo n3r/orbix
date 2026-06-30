@@ -1,6 +1,16 @@
 {
   "name": "orbix",
   "private": true,
+  "description": "Self-hosted LAN media server for household movie libraries.",
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/n3r/orbix.git"
+  },
+  "bugs": {
+    "url": "https://github.com/n3r/orbix/issues"
+  },
+  "homepage": "https://github.com/n3r/orbix#readme",
   "type": "module",
   "packageManager": "pnpm@10.22.0",
   "engines": {

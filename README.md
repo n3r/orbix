@@ -1,66 +1,115 @@
 # Orbix
 
-A self-hosted, open-source media server for your own library, built to do three things better:
+[![CI](https://github.com/n3r/orbix/actions/workflows/ci.yml/badge.svg)](https://github.com/n3r/orbix/actions/workflows/ci.yml)
 
-1. **Discovery for large libraries** — smart, auto-generated home rows *and* natural-language mood search ("something light and funny under 2 hours"), so you can find what to watch tonight without scrolling thousands of titles.
-2. **Works during an internet outage** — all metadata and artwork are cached to local disk at scan time; browsing and playback never need the internet.
-3. **A genuinely nice, fast UI** — modern, responsive, poster-forward.
+Orbix is a self-hosted, open-source media server for a household movie library. It is built for a LAN/NAS setup, with local metadata caching, browser playback, household profiles, and discovery features that keep working after scan-time enrichment.
 
-Runs on your NAS via Docker/Portainer. Web-first (responsive); no native apps required.
+## Project Status
+
+Orbix is pre-1.0 MVP software. The core movie-library workflow is implemented, but APIs, deployment details, and data migrations may still change before a stable release. Use it for testing and early self-hosted deployments, not as an internet-exposed service.
+
+## Core Promises
+
+1. **Offline after scan** - browsing and playback should not require the internet after metadata and artwork have been enriched and cached locally.
+2. **Fast discovery for large libraries** - smart home rows and natural-language mood search help find a movie without scrolling through everything.
+3. **Self-hosted household UX** - responsive web UI, profiles, server-enforced kids filtering, and NAS-friendly Docker deployment.
 
 ## Features
 
-- **Profiles** — Netflix-style household profiles (Personal / Family / Kids…) selected after login, each with its own watch history, resume positions, recommendations, and "My List". Kids profiles are **server-enforced** by maturity rating across every route.
-- **Multi-source libraries** — libraries → sections → sources (folders); add/scan/manage from the admin UI. Incremental rescans.
-- **Metadata enrichment** — TMDB metadata + locally-cached posters/backdrops (offline after scan). Manual match/poster fix UI for the inevitable mismatch. Periodic refresh job.
-- **In-browser playback** — direct play for compatible files; on-the-fly **remux/transcode to fMP4 HLS** (ffmpeg) for MKV/HEVC/etc., with seek, subtitles (text → WebVTT), and per-profile resume + Continue Watching.
-- **Discovery** — content-based smart rows + natural-language mood search using **local sentence embeddings** (bge-small via transformers.js + pgvector), fully offline; degrades gracefully if the model is absent.
-- **Self-hostable** — dev stack via `docker compose`; production via a Portainer NAS stack with a baked offline model, read-only media mount, and persistent named volumes.
+- **Profiles** - household profiles with per-profile watch history, resume positions, recommendations, and lists. Kids profiles are enforced on the server across catalog, playback, and admin routes.
+- **Libraries and scans** - libraries, sections, and read-only media sources managed from the admin UI, with incremental rescans.
+- **Metadata enrichment** - TMDB metadata, posters, and backdrops are fetched during scan/admin actions and cached locally for offline browsing.
+- **Playback** - direct play where possible, plus ffmpeg-based remux/transcode to fMP4 HLS for browser playback. HLS uses the bundled `hls.js`.
+- **Discovery** - content-based rows and natural-language search using local sentence embeddings and pgvector; it degrades when embeddings are disabled or unavailable.
+- **NAS deployment** - development stack with Docker Compose and production-oriented Portainer stack with persistent volumes and read-only media mounts.
 
-## Architecture
+## Repository Layout
 
-TypeScript monorepo (pnpm + Turborepo):
-
-```
+```text
 apps/
-  web/      Next.js (App Router) + Tailwind — UI, player, admin
-  api/      Fastify + Prisma — REST + SSE, auth, scan, stream, discovery
+  web/      Next.js App Router UI, Tailwind, player, admin screens
+  api/      Fastify API, Prisma access, auth/session cookies, REST/SSE routes, jobs
 packages/
-  core/     framework-agnostic domain logic (scanner, metadata, playback, discovery, ratings) — unit-tested
-  db/       Prisma schema + migrations (Postgres + pgvector)
-  ui/       shared design-system components
-  config/   zod-validated env schema
-deploy/     Portainer NAS production stack + guide
+  core/     framework-independent domain logic
+  db/       Prisma schema, migrations, singleton Prisma client
+  config/   zod-validated runtime environment schema
+  ui/       shared React UI components and design tokens
+deploy/     Portainer/NAS production stack and deployment guide
+docs/       design specs and phase plans
 ```
 
-- **Postgres 16 + pgvector** (catalog, profiles, history, embeddings) · **Redis** (BullMQ scan/transcode jobs) · **ffmpeg** (remux/transcode).
-- Hard domain logic (transcode strategy, HLS playlist/args, similarity, NL constraints, rating tiers) lives in `packages/core` with dependency injection so it's tested without ffmpeg, network, or a DB.
+Hard domain logic belongs in `packages/core` where it can be tested without Fastify, Next.js, a database, ffmpeg, or network access. Application code should stay thin around validation, authorization, adapters, and serialization.
 
-## Development
+## Requirements
 
-Requires Node 22, pnpm 10, Docker.
+- Node.js 22+
+- pnpm 10.22.0, pinned through `packageManager`
+- Docker with Compose
+- ffmpeg/ffprobe available in the API runtime
+- A TMDB API token for metadata enrichment
+
+## Quick Start
 
 ```bash
 pnpm install
-docker compose up -d          # postgres(+pgvector), redis, api, web
-# web: http://localhost:1060   api: http://localhost:1061
+cp .env.example .env
+docker compose up -d
+pnpm db:generate
+pnpm db:migrate
 ```
 
-Then open `http://localhost:1060`, complete the setup wizard, add a library pointing at your media, set a TMDB token in Settings, and scan.
+Development services:
+
+| Service | URL |
+| --- | --- |
+| Web | `http://localhost:1060` |
+| API | `http://localhost:1061` |
+| Postgres | `localhost:1062` |
+| Redis | `localhost:1063` |
+
+Open `http://localhost:1060`, complete the setup wizard, add a library source that points at your media, set a TMDB token in Settings, and scan.
+
+## Verification
+
+Main gates:
 
 ```bash
-pnpm typecheck && pnpm lint && pnpm test      # gates
-pnpm --filter @orbix/web test:e2e             # Playwright e2e
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm build
+pnpm --filter @orbix/web test:e2e
 ```
 
-## Deploy to a NAS
+Useful focused gates:
 
-See [`deploy/README.md`](deploy/README.md) for the Portainer guide (stack, env, read-only media mount, first-run, backups, optional hardware transcoding).
+```bash
+pnpm --filter @orbix/core test
+pnpm --filter @orbix/api test
+pnpm --filter @orbix/api lint
+pnpm --filter @orbix/web build
+pnpm --filter @orbix/web typecheck
+docker compose -f deploy/portainer-stack.yml config
+```
 
-## Attribution
+## Deploy
 
-This product uses the TMDB API but is not endorsed or certified by TMDB.
+See [deploy/README.md](deploy/README.md) for the Portainer NAS guide, production environment variables, backup notes, hardware transcoding notes, and known kids-profile limitations.
+
+## Contributing
+
+Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md) for setup, coding standards, test expectations, and the Developer Certificate of Origin sign-off requirement.
+
+Project participation is covered by the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+For bugs, feature requests, and support questions, use the GitHub issue templates. Do not include secrets, real tokens, or private media paths in public issues.
+
+## Security
+
+Orbix is intended for trusted LAN use. Do not expose it directly to the public internet without a reverse proxy, TLS, and additional hardening. Report vulnerabilities privately through the process in [SECURITY.md](SECURITY.md).
 
 ## License
 
-TBD.
+Orbix is licensed under the [GNU Affero General Public License v3.0 only](LICENSE) (`AGPL-3.0-only`). Contributions are accepted under the same license.
+
+This product uses the TMDB API but is not endorsed or certified by TMDB. See [NOTICE](NOTICE) for attribution details.

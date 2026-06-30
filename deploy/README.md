@@ -22,7 +22,7 @@ This guide walks you through deploying Orbix on a NAS (Synology, QNAP, etc.) usi
 
 **Option A — From Git:**
 1. Portainer → **Stacks** → **Add stack** → **Repository**
-2. Repository URL: `https://github.com/your-org/orbix`
+2. Repository URL: `https://github.com/n3r/orbix`
 3. Compose path: `deploy/portainer-stack.yml`
 4. Enable "Auto update" if desired (polls for changes)
 

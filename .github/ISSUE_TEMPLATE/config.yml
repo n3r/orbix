@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/n3r/orbix/security/advisories/new
+    about: Report vulnerabilities privately. Do not open public security issues.
+  - name: Deployment guide
+    url: https://github.com/n3r/orbix/blob/HEAD/deploy/README.md
+    about: Read the Portainer/NAS deployment guide before opening setup issues.
