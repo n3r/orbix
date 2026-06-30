@@ -1,0 +1,22 @@
+{
+  "rows": {
+    "continue": "Continuar assistindo",
+    "hiddenGems": "Joias escondidas",
+    "tonight": "Escolha algo para esta noite"
+  },
+  "browse": {
+    "title": "Explorar",
+    "searchPlaceholder": "Buscar títulos…",
+    "empty": "Nenhum item encontrado.",
+    "sort": {
+      "title": "Título (A–Z)",
+      "added": "Adicionados recentemente",
+      "year": "Ano"
+    }
+  },
+  "hero": {
+    "play": "Reproduzir",
+    "moreInfo": "Mais informações",
+    "showSlide": "Mostrar {{title}}"
+  }
+}

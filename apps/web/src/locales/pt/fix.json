@@ -1,0 +1,26 @@
+{
+  "title": "Corrigir correspondência",
+  "forTitle": "para “{{title}}”",
+  "noPoster": "Sem pôster",
+  "search": {
+    "heading": "Buscar no TMDB",
+    "placeholder": "Buscar título…",
+    "button": "Buscar",
+    "searching": "Buscando…",
+    "failed": "Falha na busca. Tente novamente.",
+    "noResults": "Nenhum resultado encontrado."
+  },
+  "match": {
+    "button": "Usar esta correspondência",
+    "applying": "Aplicando…",
+    "failed": "Falha ao aplicar a correspondência."
+  },
+  "poster": {
+    "heading": "Definir um pôster específico",
+    "help": "Escolha qualquer pôster dos resultados da busca acima sem alterar os outros metadados.",
+    "success": "Pôster atualizado com sucesso.",
+    "button": "Definir pôster",
+    "setting": "Definindo…",
+    "failed": "Falha ao definir o pôster."
+  }
+}

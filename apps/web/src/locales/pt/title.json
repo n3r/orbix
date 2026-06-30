@@ -1,0 +1,20 @@
+{
+  "notFound": "Título não encontrado",
+  "loadFailed": "Falha ao carregar o título",
+  "unmatchedNotice": "Metadados ainda não correspondidos — escaneie com um token do TMDB para enriquecer.",
+  "fixMatch": "Corrigir correspondência / pôster (admin)",
+  "play": "Reproduzir",
+  "playNoMedia": "Reproduzir (sem mídia)",
+  "section": {
+    "overview": "Sinopse",
+    "director": "Diretor",
+    "cast": "Elenco"
+  },
+  "rating": {
+    "unrated": "Sem classificação"
+  },
+  "runtime": {
+    "hm": "{{h}}h {{m}}min",
+    "m": "{{m}}min"
+  }
+}

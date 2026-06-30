@@ -1,0 +1,64 @@
+{
+  "title": "Einstellungen",
+  "backToLibraries": "Zurück zu den Bibliotheken",
+  "saveButton": "Einstellungen speichern",
+  "saveSuccess": "Einstellungen gespeichert.",
+  "providers": {
+    "heading": "Metadaten-Anbieter",
+    "statusLabel": "Status:",
+    "optional": "(optional)",
+    "status": {
+      "configured": "konfiguriert",
+      "notConfigured": "nicht konfiguriert",
+      "notSet": "nicht festgelegt"
+    },
+    "placeholderKeyConfigured": "Leer lassen, um den vorhandenen Schlüssel zu behalten",
+    "placeholderKeyEmpty": "Schlüssel einfügen zum Konfigurieren",
+    "tmdb": {
+      "label": "TMDB-API-Token",
+      "placeholderConfigured": "Leer lassen, um das vorhandene Token zu behalten",
+      "placeholderEmpty": "Token einfügen zum Konfigurieren"
+    },
+    "omdb": {
+      "label": "OMDb-API-Schlüssel"
+    },
+    "fanart": {
+      "label": "Fanart.tv-API-Schlüssel"
+    }
+  },
+  "transcode": {
+    "heading": "Transkodierung",
+    "encoderLabel": "Video-Encoder",
+    "encoderHelp": "Wähle den Hardware- oder Software-Encoder, der beim Transkodieren verwendet wird. Software (libx264) funktioniert immer; Hardware-Encoder erfordern den entsprechenden GPU-Treiber bzw. VAAPI-/NVENC-Unterstützung auf dem Server.",
+    "encoders": {
+      "software": "Software (libx264)",
+      "vaapi": "VA-API (h264_vaapi)",
+      "qsv": "Intel QSV (h264_qsv)",
+      "nvenc": "NVIDIA NVENC (h264_nvenc)"
+    }
+  },
+  "library": {
+    "heading": "Bibliothek",
+    "cadenceLabel": "Intervall der Metadaten-Aktualisierung (Tage)",
+    "cadenceHelp": "Wie viele Tage zwischen automatischen Metadaten-Aktualisierungen liegen. Setze den Wert höher, um API-Aufrufe zu reduzieren."
+  },
+  "maintenance": {
+    "heading": "Wartung",
+    "help": "Metadaten und Artwork für jeden Titel jetzt erneut von TMDB abrufen. Verwende dies nach dem Hinzufügen oder Ändern deines TMDB-Tokens. Titel, die du manuell korrigiert hast, behalten ihr gewähltes Poster. Bei großen Bibliotheken kann dies eine Weile dauern.",
+    "rebuildButton": "Metadaten neu aufbauen",
+    "rebuilding": "Wird neu aufgebaut…",
+    "failed": "Neuaufbau fehlgeschlagen – prüfe die Serverprotokolle.",
+    "noToken": "Füge oben ein TMDB-API-Token hinzu und klicke auf „Einstellungen speichern“, bevor du neu aufbaust.",
+    "networkError": "Netzwerkfehler beim Neuaufbau.",
+    "rebuiltCount_one": "{{count}} Titel neu aufgebaut",
+    "rebuiltCount_other": "{{count}} Titel neu aufgebaut",
+    "unmatchedCount_one": "{{count}} ohne TMDB-Übereinstimmung",
+    "unmatchedCount_other": "{{count}} ohne TMDB-Übereinstimmungen",
+    "skippedCount_one": "{{count}} mit Fehler",
+    "skippedCount_other": "{{count}} mit Fehlern"
+  },
+  "errors": {
+    "loadFailed": "Einstellungen konnten nicht geladen werden",
+    "saveFailed": "Einstellungen konnten nicht gespeichert werden"
+  }
+}

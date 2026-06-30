@@ -1,0 +1,20 @@
+{
+  "notFound": "Titre introuvable",
+  "loadFailed": "Échec du chargement du titre",
+  "unmatchedNotice": "Métadonnées pas encore associées — lancez une analyse avec un jeton TMDB pour enrichir.",
+  "fixMatch": "Corriger la correspondance / l'affiche (admin)",
+  "play": "Lire",
+  "playNoMedia": "Lire (aucun média)",
+  "section": {
+    "overview": "Synopsis",
+    "director": "Réalisateur",
+    "cast": "Distribution"
+  },
+  "rating": {
+    "unrated": "Non classé"
+  },
+  "runtime": {
+    "hm": "{{h}} h {{m}} min",
+    "m": "{{m}} min"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "app": { "name": "Orbix" },
+  "language": "Sprache",
+  "actions": {
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "delete": "Löschen",
+    "edit": "Bearbeiten",
+    "close": "Schließen",
+    "back": "Zurück",
+    "retry": "Erneut versuchen",
+    "remove": "Entfernen",
+    "add": "Hinzufügen",
+    "confirm": "Bestätigen"
+  },
+  "status": {
+    "loading": "Wird geladen…",
+    "saving": "Wird gespeichert…",
+    "empty": "Hier ist noch nichts."
+  }
+}

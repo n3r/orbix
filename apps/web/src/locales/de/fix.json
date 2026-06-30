@@ -1,0 +1,26 @@
+{
+  "title": "Zuordnung korrigieren",
+  "forTitle": "für „{{title}}“",
+  "noPoster": "Kein Poster",
+  "search": {
+    "heading": "TMDB durchsuchen",
+    "placeholder": "Titel suchen…",
+    "button": "Suchen",
+    "searching": "Wird gesucht…",
+    "failed": "Suche fehlgeschlagen. Bitte versuche es erneut.",
+    "noResults": "Keine Ergebnisse gefunden."
+  },
+  "match": {
+    "button": "Diese Übereinstimmung verwenden",
+    "applying": "Wird angewendet…",
+    "failed": "Übereinstimmung konnte nicht angewendet werden."
+  },
+  "poster": {
+    "heading": "Bestimmtes Poster festlegen",
+    "help": "Wähle ein beliebiges Poster aus den obigen Suchergebnissen, ohne andere Metadaten zu ändern.",
+    "success": "Poster erfolgreich aktualisiert.",
+    "button": "Poster festlegen",
+    "setting": "Wird festgelegt…",
+    "failed": "Poster konnte nicht festgelegt werden."
+  }
+}

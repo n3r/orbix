@@ -1,0 +1,17 @@
+{
+  "title": "Rechercher",
+  "placeholder": "par ex. comédie de moins de 2 heures, quelque chose de drôle et léger",
+  "queryAriaLabel": "Requête de recherche",
+  "submit": "Rechercher",
+  "searching": "Recherche…",
+  "results_one": "{{count}} résultat",
+  "results_other": "{{count}} résultats",
+  "mode": {
+    "semantic": "sémantique",
+    "keyword": "mot-clé"
+  },
+  "empty": "Aucun résultat trouvé.",
+  "errors": {
+    "failed": "Échec de la recherche. Veuillez réessayer."
+  }
+}

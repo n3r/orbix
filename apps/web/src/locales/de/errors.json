@@ -1,0 +1,19 @@
+{
+  "unknown": "Etwas ist schiefgelaufen. Bitte versuche es erneut.",
+  "network": "Netzwerkfehler. Bitte versuche es erneut.",
+  "invalid_credentials": "Ungültige E-Mail-Adresse oder ungültiges Passwort.",
+  "unauthenticated": "Bitte melde dich an, um fortzufahren.",
+  "unauthorized": "Du hast keine Berechtigung, das zu tun.",
+  "invalid": "Diese Angaben sind nicht gültig.",
+  "invalid_profile": "Diese Profilangaben sind nicht gültig.",
+  "not_found": "Nicht gefunden.",
+  "pin_required": "Für dieses Profil ist eine PIN erforderlich.",
+  "setup_complete": "Die Einrichtung ist bereits abgeschlossen.",
+  "no_sources": "Füge einen Bibliotheksordner hinzu, bevor du scannst.",
+  "tmdb_not_configured": "Hinterlege zuerst dein TMDB-Token in den Einstellungen.",
+  "tmdbId_required": "Eine TMDB-Übereinstimmung ist erforderlich.",
+  "tmdbPosterPath_required": "Ein Poster ist erforderlich.",
+  "not_allowed_for_kids": "Dieser Bereich ist in einem Kinderprofil nicht verfügbar.",
+  "blocked_by_rating": "Dieser Titel ist durch die Altersfreigabe des Profils gesperrt.",
+  "invalid_sort": "Diese Sortieroption ist nicht gültig."
+}
