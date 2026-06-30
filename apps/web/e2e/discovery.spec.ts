@@ -214,7 +214,7 @@ test.describe("NL search — constraint path", () => {
     const input = page.getByPlaceholder(/e\.g\./i);
     await expect(input).toBeVisible({ timeout: 10_000 });
     await input.fill("comedy under 2 hours");
-    await page.getByRole("button", { name: /^search$/i }).click();
+    await input.press("Enter"); // full-page search submits on Enter (no submit button)
 
     // Both comedies must appear in results. Each result is a single card <Link>;
     // assert on the link role (the title text itself renders twice per card —
