@@ -217,8 +217,12 @@ test.describe("Playback wiring", () => {
     // The decision API request MUST fire (proves Player mounted + useEffect ran)
     await decisionReq;
 
-    // The Player renders a div with our aspect-video class once the decision resolves
-    await expect(page.locator(".aspect-video").first()).toBeVisible({ timeout: 20_000 });
+    // Clicking Play mounts the full-page PlayerOverlay (a portal). Its close
+    // affordance always renders once mounted — independent of video decode,
+    // which headless Chromium can't do for H.264 — so it's the stable signal
+    // that the Player UI is up. (The inline aspect-video block was removed when
+    // the player became a full-screen overlay.)
+    await expect(page.getByRole("button", { name: /close player/i })).toBeVisible({ timeout: 20_000 });
   });
 
   // ── Test 2: progress / continue-watching / resume round-trip ─────────────
