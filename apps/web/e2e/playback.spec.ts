@@ -58,7 +58,10 @@ async function seedDb() {
   await prisma.mediaItem.deleteMany({ where: { id: ITEM_ID } });
   await prisma.section.deleteMany({ where: { id: SECTION_ID } });
   await prisma.library.deleteMany({ where: { id: LIBRARY_ID } });
-  await prisma.account.deleteMany({ where: { email: ADMIN_EMAIL } });
+  // Wipe ALL accounts (not just this email): the DB enforces a single admin
+  // (partial unique index on isAdmin), so a leftover admin from an earlier spec
+  // (e.g. onboarding) would make the create() below fail with P2002.
+  await prisma.account.deleteMany();
 
   // Create the admin account directly (bypassing the setup API race condition).
   // This ensures the playback spec can always log in regardless of whether the

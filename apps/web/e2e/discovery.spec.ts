@@ -158,7 +158,10 @@ async function doOnboarding(page: Page) {
     process.env.DATABASE_URL ??= "postgresql://orbix:orbix@localhost:1062/orbix";
     const { prisma } = await import("@orbix/db");
     const { hashPassword } = await import("@orbix/core");
-    await prisma.account.deleteMany({ where: { email: ADMIN_EMAIL } });
+    // Wipe ALL accounts (not just this email): the DB enforces a single admin
+    // (partial unique index on isAdmin), so a leftover admin from another spec
+    // would make this create() fail with P2002.
+    await prisma.account.deleteMany();
     await prisma.account.create({
       data: { email: ADMIN_EMAIL, passwordHash: await hashPassword(ADMIN_PASSWORD), isAdmin: true },
     });
