@@ -236,7 +236,8 @@ export default function AdminLibrariesPage() {
   }
 
   return (
-    <main className="p-8 max-w-4xl mx-auto flex flex-col gap-8">
+    <main className="px-6 md:px-8 lg:px-10 py-8">
+     <div className="mx-auto flex max-w-4xl flex-col gap-8">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-[var(--text)]">Libraries</h1>
         <a
@@ -377,6 +378,7 @@ export default function AdminLibrariesPage() {
           </div>
         </Card>
       ))}
+     </div>
     </main>
   );
 }

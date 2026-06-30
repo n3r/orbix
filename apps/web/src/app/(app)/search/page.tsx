@@ -1,25 +1,18 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import Link from "next/link";
 import { apiFetch } from "@/lib/api";
-
-interface SearchItem {
-  id: string;
-  title: string;
-  year: number | null;
-  posterPath: string | null;
-  matchState: string;
-}
+import PosterCard from "@/components/PosterCard";
+import type { MediaCard } from "@/lib/types";
 
 interface SearchResponse {
-  items: SearchItem[];
+  items: MediaCard[];
   usedEmbeddings: boolean;
 }
 
 export default function SearchPage() {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<SearchItem[] | null>(null);
+  const [results, setResults] = useState<MediaCard[] | null>(null);
   const [usedEmbeddings, setUsedEmbeddings] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,16 +45,8 @@ export default function SearchPage() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col gap-6 px-8 py-8">
-      <div className="flex items-center gap-6">
-        <Link
-          href="/"
-          className="text-sm text-[var(--text-dim)] hover:text-[var(--text)] transition-colors"
-        >
-          ← Home
-        </Link>
-        <h1 className="text-2xl font-semibold text-[var(--text)]">Search</h1>
-      </div>
+    <main className="flex min-h-screen flex-col gap-6 px-6 md:px-8 lg:px-10 py-8">
+      <h1 className="text-2xl font-semibold text-[var(--text)]">Search</h1>
 
       <form onSubmit={handleSubmit} className="flex gap-3 max-w-2xl">
         <input
@@ -103,29 +88,9 @@ export default function SearchPage() {
           {results.length === 0 ? (
             <p className="text-[var(--text-dim)]">No results found.</p>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+            <div className="grid grid-cols-3 gap-4 sm:grid-cols-4 md:grid-cols-5 md:gap-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8">
               {results.map((item) => (
-                <Link
-                  key={item.id}
-                  href={`/title/${item.id}`}
-                  className="flex flex-col gap-2 group"
-                >
-                  {item.posterPath ? (
-                    <img
-                      src={`/api/images/${item.posterPath}`}
-                      alt={item.title}
-                      className="w-full aspect-[2/3] object-cover rounded-[var(--radius)] group-hover:opacity-80 transition-opacity"
-                    />
-                  ) : (
-                    <div className="w-full aspect-[2/3] bg-[var(--surface)] rounded-[var(--radius)] flex items-center justify-center">
-                      <span className="text-[var(--text-dim)] text-xs">No image</span>
-                    </div>
-                  )}
-                  <p className="text-sm text-[var(--text)] truncate">{item.title}</p>
-                  {item.year !== null && (
-                    <p className="text-xs text-[var(--text-dim)] -mt-1">{item.year}</p>
-                  )}
-                </Link>
+                <PosterCard key={item.id} item={item} />
               ))}
             </div>
           )}

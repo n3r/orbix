@@ -39,6 +39,10 @@ export default function AdminSettingsPage() {
   const [fanartKey, setFanartKey] = useState("");
   const [refreshCadenceDays, setRefreshCadenceDays] = useState(90);
 
+  // Rebuild-metadata action (independent of the settings form)
+  const [rebuilding, setRebuilding] = useState(false);
+  const [rebuildMsg, setRebuildMsg] = useState<string | null>(null);
+
   useEffect(() => {
     void loadSettings();
   }, []);
@@ -99,6 +103,35 @@ export default function AdminSettingsPage() {
     }
   }
 
+  async function handleRebuild() {
+    setRebuilding(true);
+    setRebuildMsg(null);
+    try {
+      const res = await apiFetch("/maintenance/rebuild", { method: "POST" });
+      if (!res.ok) {
+        setRebuildMsg("Rebuild failed — check the server logs.");
+        return;
+      }
+      const data = (await res.json()) as
+        | { reason: "no_token" }
+        | { rebuilt: number; unmatched: number; skipped: number };
+      if ("reason" in data) {
+        setRebuildMsg("Add a TMDB API token above and click Save Settings before rebuilding.");
+      } else {
+        setRebuildMsg(
+          `Rebuilt ${data.rebuilt} title${data.rebuilt === 1 ? "" : "s"}` +
+            (data.unmatched ? `, ${data.unmatched} with no TMDB match` : "") +
+            (data.skipped ? `, ${data.skipped} errored` : "") +
+            ".",
+        );
+      }
+    } catch {
+      setRebuildMsg("Network error during rebuild.");
+    } finally {
+      setRebuilding(false);
+    }
+  }
+
   if (loading) {
     return (
       <main className="p-8">
@@ -108,7 +141,8 @@ export default function AdminSettingsPage() {
   }
 
   return (
-    <main className="p-8 max-w-2xl mx-auto flex flex-col gap-8">
+    <main className="px-6 md:px-8 lg:px-10 py-8">
+     <div className="mx-auto flex max-w-2xl flex-col gap-8">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-[var(--text)]">Settings</h1>
         <a
@@ -242,10 +276,21 @@ export default function AdminSettingsPage() {
         </Button>
       </form>
 
-      {/* TMDB attribution — required by TMDB API terms */}
-      <p className="text-xs text-[var(--text-dim)] text-center">
-        This product uses the TMDB API but is not endorsed or certified by TMDB.
-      </p>
+      {/* Maintenance — re-enrich the whole library on demand */}
+      <Card>
+        <h2 className="mb-4 text-lg font-semibold text-[var(--text)]">Maintenance</h2>
+        <p className="mb-3 text-xs text-[var(--text-dim)]">
+          Re-fetch metadata and artwork for every title from TMDB now. Use this
+          after adding or changing your TMDB token. Titles you fixed manually keep
+          their chosen poster. Large libraries may take a while.
+        </p>
+        <Button type="button" variant="ghost" onClick={handleRebuild} disabled={rebuilding}>
+          {rebuilding ? "Rebuilding…" : "Rebuild metadata"}
+        </Button>
+        {rebuildMsg && <p className="mt-3 text-sm text-[var(--text-dim)]">{rebuildMsg}</p>}
+      </Card>
+
+     </div>
     </main>
   );
 }

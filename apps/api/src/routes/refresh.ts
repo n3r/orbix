@@ -20,6 +20,7 @@ import { requireNonKids } from "../lib/catalog-filter";
 import { TmdbClient, getSetting } from "@orbix/core";
 import type { Env } from "@orbix/config";
 import { refreshMetadata } from "../jobs/refresh-metadata.js";
+import { rebuildMetadata } from "../jobs/rebuild-metadata.js";
 
 export function refreshRoute(env: Env) {
   return async function (app: FastifyInstance) {
@@ -46,6 +47,33 @@ export function refreshRoute(env: Env) {
         const client = new TmdbClient(token);
         const result = await refreshMetadata(app.prisma, client, {
           cadenceDays,
+          metadataDir: env.METADATA_DIR,
+        });
+
+        return reply.send(result);
+      },
+    );
+
+    // ── POST /maintenance/rebuild ────────────────────────────────────────────
+    // Force-re-enrich every item now (ignores the staleness cadence and the
+    // tmdbId requirement), so directly-seeded / never-matched items get real
+    // TMDB metadata + artwork without visiting each title's Fix-match page.
+
+    app.post(
+      "/maintenance/rebuild",
+      { preHandler: [requireAuth(app), requireNonKids(app)] },
+      async (_req, reply) => {
+        const token = await getSetting<string>("tmdbToken", {
+          fallback: "",
+          read: (k) => app.prisma.setting.findUnique({ where: { key: k } }),
+        });
+
+        if (!token) {
+          return reply.send({ reason: "no_token" });
+        }
+
+        const client = new TmdbClient(token);
+        const result = await rebuildMetadata(app.prisma, client, {
           metadataDir: env.METADATA_DIR,
         });
 
