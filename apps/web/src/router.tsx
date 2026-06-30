@@ -19,7 +19,7 @@ export const router = createBrowserRouter([
     element: <RequireProfile />,
     children: [
       { path: "/", element: <HomePage /> },
-      { path: "/library/:sectionId", element: <LibraryPage /> },
+      { path: "/library/:libraryId", element: <LibraryPage /> },
       { path: "/search", element: <SearchPage /> },
       { path: "/title/:id", element: <TitlePage /> },
       { path: "/title/:id/fix", element: <FixMatchPage /> },

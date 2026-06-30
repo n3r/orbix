@@ -4,27 +4,26 @@
 
 export interface Source {
   id: string;
-  sectionId: string;
-  path: string;
-  enabled: boolean;
-  lastScanAt: string | null;
-}
-
-export interface Section {
-  id: string;
-  name: string;
   libraryId: string;
-  kind: string;
-  order: number;
-  sources?: Source[];
+  kind: "local" | "smb";
+  path: string | null;
+  smbHost?: string | null;
+  smbShare?: string | null;
+  smbSubpath?: string | null;
+  smbUsername?: string | null;
+  smbDomain?: string | null;
+  enabled: boolean;
+  status: string;
+  statusMessage: string | null;
+  lastScanAt: string | null;
 }
 
 export interface Library {
   id: string;
   name: string;
-  type: string;
+  order: number;
   createdAt: string;
-  sections: Section[];
+  sources: Source[];
 }
 
 export interface Profile {

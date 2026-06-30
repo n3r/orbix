@@ -74,7 +74,6 @@ export default function Sidebar({
   onNavigate,
 }: SidebarProps) {
   const { pathname } = useLocation();
-  const multiLib = libraries.length > 1;
 
   async function handleLogout() {
     try {
@@ -117,23 +116,14 @@ export default function Sidebar({
             Library
           </p>
           {libraries.map((lib) => (
-            <div key={lib.id} className="flex flex-col gap-1">
-              {multiLib && (
-                <p className="flex items-center gap-2 px-3 pt-2 text-xs text-[var(--text-dim)]">
-                  <LibraryIcon /> {lib.name}
-                </p>
-              )}
-              {lib.sections.map((section) => (
-                <NavLink
-                  key={section.id}
-                  href={`/library/${section.id}`}
-                  active={pathname === `/library/${section.id}`}
-                  onNavigate={onNavigate}
-                >
-                  <FilmIcon /> {section.name}
-                </NavLink>
-              ))}
-            </div>
+            <NavLink
+              key={lib.id}
+              href={`/library/${lib.id}`}
+              active={pathname === `/library/${lib.id}`}
+              onNavigate={onNavigate}
+            >
+              <FilmIcon /> {lib.name}
+            </NavLink>
           ))}
         </>
       )}

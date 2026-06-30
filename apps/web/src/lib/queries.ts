@@ -25,14 +25,14 @@ export function useHomeRows() {
   return useQuery({ queryKey: ["home-rows"], queryFn: () => apiJson<{ rows: HomeRow[] }>("/home/rows") });
 }
 
-export function useSectionItems(sectionId: string | undefined, sort: string, q: string) {
+export function useLibraryItems(libraryId: string | undefined, sort: string, q: string) {
   return useQuery({
-    queryKey: ["section-items", sectionId, sort, q],
-    enabled: !!sectionId,
+    queryKey: ["library-items", libraryId, sort, q],
+    enabled: !!libraryId,
     queryFn: () => {
       const qs = new URLSearchParams({ sort });
       if (q) qs.set("q", q);
-      return apiJson<MediaCard[]>(`/sections/${sectionId}/items?${qs}`);
+      return apiJson<MediaCard[]>(`/libraries/${libraryId}/items?${qs}`);
     },
   });
 }
