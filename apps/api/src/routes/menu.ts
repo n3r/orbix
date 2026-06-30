@@ -48,6 +48,15 @@ export default async function menu(app: FastifyInstance) {
       return reply.code(400).send({ error: "invalid" });
     }
     const sectionIds = ids as string[];
+    // An empty menu is not representable (zero entries means "show all"), so an
+    // empty save would silently re-enable every section — reject it instead.
+    if (sectionIds.length === 0) {
+      return reply.code(400).send({ error: "empty" });
+    }
+    // Duplicate ids would violate the @@unique([profileId, sectionId]) on insert.
+    if (new Set(sectionIds).size !== sectionIds.length) {
+      return reply.code(400).send({ error: "duplicate" });
+    }
     const existing = await app.prisma.section.findMany({ select: { id: true } });
     const valid = new Set(existing.map((s) => s.id));
     if (!sectionIds.every((id) => valid.has(id))) {

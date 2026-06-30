@@ -41,4 +41,13 @@ describe("ProfileMenuEditor", () => {
     fireEvent.click(screen.getByRole("button", { name: /save/i }));
     await waitFor(() => expect(saveMock).toHaveBeenCalledWith(["s1", "s3"]));
   });
+
+  it("disables Save when no category is enabled (cannot save an empty menu)", () => {
+    setup();
+    fireEvent.click(screen.getByRole("checkbox", { name: /Movies/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Shows/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Docs/ }));
+    expect((screen.getByRole("button", { name: /save/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/at least one category/i)).toBeTruthy();
+  });
 });

@@ -34,11 +34,16 @@ export default function ProfileMenuEditor() {
   };
   const move = (index: number, dir: -1 | 1) => { setOrder(moveItem(order, index, dir)); setSaved(false); };
 
+  const noneEnabled = enabled.size === 0;
+
   async function onSave() {
+    const sectionIds = order!.filter((id) => enabled!.has(id));
+    // An empty menu is not representable (it would re-enable everything), so the
+    // button is disabled in this state; guard here too for safety.
+    if (sectionIds.length === 0) return;
     setSaving(true);
     setSaved(false);
     try {
-      const sectionIds = order!.filter((id) => enabled!.has(id));
       await saveMenu(sectionIds);
       await qc.invalidateQueries({ queryKey: ["menu"] });
       setSaved(true);
@@ -80,8 +85,9 @@ export default function ProfileMenuEditor() {
         })}
       </ul>
       <div className="flex items-center gap-3">
-        <Button onClick={onSave} disabled={saving}>{saving ? "Saving…" : "Save menu"}</Button>
-        {saved && <span className="text-sm text-[var(--text-dim)]">Saved.</span>}
+        <Button onClick={onSave} disabled={saving || noneEnabled}>{saving ? "Saving…" : "Save menu"}</Button>
+        {noneEnabled && <span className="text-sm text-[var(--text-dim)]">Select at least one category.</span>}
+        {saved && !noneEnabled && <span className="text-sm text-[var(--text-dim)]">Saved.</span>}
       </div>
     </div>
   );

@@ -63,6 +63,25 @@ describe("PUT /me/menu", () => {
     await app.close();
   });
 
+  it("rejects an empty sectionIds array with 400 (would silently re-enable all)", async () => {
+    const app = await buildApp(env);
+    authed(app as any);
+    const res = await app.inject({ method: "PUT", url: "/api/me/menu", cookies, payload: { sectionIds: [] } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: "empty" });
+    await app.close();
+  });
+
+  it("rejects duplicate sectionIds with 400", async () => {
+    const app = await buildApp(env);
+    authed(app as any);
+    (app as any).prisma.section = { findMany: async () => [{ id: "s1" }] };
+    const res = await app.inject({ method: "PUT", url: "/api/me/menu", cookies, payload: { sectionIds: ["s1", "s1"] } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: "duplicate" });
+    await app.close();
+  });
+
   it("replaces entries and returns the resolved menu", async () => {
     const app = await buildApp(env);
     authed(app as any);

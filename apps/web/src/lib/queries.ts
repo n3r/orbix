@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiJson, apiFetch, ApiError } from "./api";
-import type { AuthMe, HomeRow, Library, MediaCard, MenuConfig, MenuItem, Profile } from "./types";
+import type { AuthMe, HomeRow, MediaCard, MenuConfig, MenuItem, Profile } from "./types";
 
 export interface SetupStatus { complete: boolean }
 export interface ActiveProfile {
@@ -13,9 +13,6 @@ export function useSetupStatus() {
 }
 export function useMyProfile() {
   return useQuery({ queryKey: ["me-profile"], queryFn: () => apiJson<ActiveProfile>("/me/profile") });
-}
-export function useLibraries() {
-  return useQuery({ queryKey: ["libraries"], queryFn: () => apiJson<Library[]>("/libraries") });
 }
 export function useProfiles() {
   return useQuery({ queryKey: ["profiles"], queryFn: () => apiJson<Profile[]>("/profiles") });

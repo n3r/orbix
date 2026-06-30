@@ -248,9 +248,9 @@ export default function AdminLibrariesPage() {
     <main className="px-6 md:px-8 lg:px-10 py-8">
      <div className="mx-auto flex max-w-4xl flex-col gap-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-[var(--text)]">Libraries</h1>
+        <h2 className="text-2xl font-bold text-[var(--text)]">Libraries</h2>
         <Link
-          to="/admin/settings"
+          to="/account/settings"
           className="text-sm text-[var(--text-dim)] hover:text-[var(--text)]"
         >
           Settings
