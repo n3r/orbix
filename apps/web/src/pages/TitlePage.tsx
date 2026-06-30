@@ -1,4 +1,4 @@
-import { useState, lazy, Suspense } from "react";
+import { useState, lazy, Suspense, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router";
 import { apiJson, ApiError } from "@/lib/api";
@@ -6,12 +6,21 @@ import { useMyProfile } from "@/lib/queries";
 import type { TitleDetail } from "@/lib/types";
 import TitleHero from "@/components/TitleHero";
 import SimilarRail from "@/components/SimilarRail";
+import SeasonEpisodeList, { type PlayEpisode } from "@/components/SeasonEpisodeList";
 
 const Player = lazy(() => import("@/components/Player"));
 
+interface PlayTarget {
+  fileId: string;
+  episodeId?: string;
+  title: string;
+}
+
 export default function TitlePage() {
   const { id } = useParams();
-  const [playing, setPlaying] = useState(false);
+  const [playTarget, setPlayTarget] = useState<PlayTarget | null>(null);
+  // Bumped by the hero Play button so the episode list plays the first episode.
+  const [heroPlayToken, setHeroPlayToken] = useState(0);
 
   const itemQuery = useQuery({
     queryKey: ["item", id],
@@ -21,6 +30,10 @@ export default function TitlePage() {
   });
   const profileQuery = useMyProfile();
   const isKidsProfile = profileQuery.data?.kind === "kids";
+
+  const onPlayEpisode = useCallback((ep: PlayEpisode) => {
+    setPlayTarget({ fileId: ep.fileId, episodeId: ep.episodeId, title: ep.title });
+  }, []);
 
   const notFound = itemQuery.error instanceof ApiError && itemQuery.error.status === 404;
 
@@ -49,22 +62,50 @@ export default function TitlePage() {
     );
   }
 
+  const isSeries = item.kind === "series";
   const firstFileId = item.files?.[0]?.id ?? null;
+  const canPlay = isSeries ? (item.seasons?.length ?? 0) > 0 : !!firstFileId;
+
+  const handleHeroPlay = () => {
+    if (isSeries) {
+      setHeroPlayToken((t) => t + 1);
+    } else if (firstFileId) {
+      setPlayTarget({ fileId: firstFileId, episodeId: undefined, title: item.title });
+    }
+  };
 
   return (
     <main className="flex w-full flex-col">
-      <TitleHero item={item} canPlay={!!firstFileId} playLabel="Play" onPlay={() => setPlaying(true)} />
+      <TitleHero item={item} canPlay={canPlay} playLabel="Play" onPlay={handleHeroPlay} />
 
-      <div className="flex w-full flex-col gap-10 px-6 py-8 md:px-12 lg:px-16">
-        {/* Player */}
-        {playing && firstFileId && (
+      {/* Player */}
+      {playTarget && id && (
+        <div className="w-full px-6 py-6 md:px-12 lg:px-16">
           <Suspense
             fallback={<p className="py-2 text-sm text-[var(--text-dim)]">Loading player…</p>}
           >
-            <Player fileId={firstFileId} mediaItemId={item.id} title={item.title} />
+            <Player
+              key={playTarget.episodeId ?? playTarget.fileId}
+              fileId={playTarget.fileId}
+              mediaItemId={id}
+              episodeId={playTarget.episodeId}
+              title={playTarget.title}
+            />
           </Suspense>
-        )}
+        </div>
+      )}
 
+      {/* Seasons & Episodes (series only) */}
+      {isSeries && id && item.seasons && item.seasons.length > 0 && (
+        <SeasonEpisodeList
+          seriesId={id}
+          seasons={item.seasons}
+          onPlayEpisode={onPlayEpisode}
+          playFirstToken={heroPlayToken}
+        />
+      )}
+
+      <div className="flex w-full flex-col gap-10 px-6 py-8 md:px-12 lg:px-16">
         {/* Unmatched notice */}
         {item.matchState !== "matched" && item.matchState !== "manual" && (
           <p className="text-sm text-yellow-400">
