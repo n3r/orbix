@@ -211,4 +211,45 @@ describe("enrichItem", () => {
 
     expect(saveCalls[0].rating).toBeUndefined();
   });
+
+  it("Test 7: translateClients → saveMetadata receives per-language translations", async () => {
+    const client = makeFakeClient();
+    const { cacheImage } = makeCacheImageSpy();
+    const { saveMetadata, calls: saveCalls } = makeSaveMetadataSpy();
+
+    const esClient = {
+      async movie(_id: number): Promise<TmdbMovie> {
+        return { ...fakeMovie, title: "Matrix", overview: "Un hacker..." };
+      },
+    };
+
+    await enrichItem(
+      { id: "item-7", title: "The Matrix", year: 1999 },
+      { client, cacheImage, saveMetadata, translateClients: new Map([["es", esClient]]) },
+    );
+
+    expect(saveCalls[0].translations).toEqual([
+      { language: "es", title: "Matrix", overview: "Un hacker..." },
+    ]);
+  });
+
+  it("Test 8: a failing translate client is skipped, enrichment still succeeds", async () => {
+    const client = makeFakeClient();
+    const { cacheImage } = makeCacheImageSpy();
+    const { saveMetadata, calls: saveCalls } = makeSaveMetadataSpy();
+
+    const badClient = {
+      async movie(_id: number): Promise<TmdbMovie> {
+        throw new Error("tmdb down");
+      },
+    };
+
+    const result = await enrichItem(
+      { id: "item-8", title: "The Matrix", year: 1999 },
+      { client, cacheImage, saveMetadata, translateClients: new Map([["de", badClient]]) },
+    );
+
+    expect(result.matched).toBe(true);
+    expect(saveCalls[0].translations).toEqual([]);
+  });
 });

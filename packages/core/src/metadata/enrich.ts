@@ -17,6 +17,12 @@ export interface TmdbLike {
 // I/O shapes
 // ---------------------------------------------------------------------------
 
+export interface MetadataTranslation {
+  language: string;
+  title: string;
+  overview?: string;
+}
+
 export interface SaveMetadataInput {
   itemId: string;
   tmdbId: number;
@@ -32,7 +38,12 @@ export interface SaveMetadataInput {
   director?: { tmdbId: number; name: string };
   keywords: { tmdbId: number; name: string }[];
   rating?: string;
+  /** Per-language localized title/overview for the active content languages. */
+  translations?: MetadataTranslation[];
 }
+
+/** Minimal client surface needed to fetch a localized movie record. */
+export type TranslateClient = Pick<TmdbLike, "movie">;
 
 export interface EnrichResult {
   matched: boolean;
@@ -49,6 +60,8 @@ export async function enrichItem(
     client: TmdbLike;
     cacheImage: (tmdbPath: string, kind: ImageKind) => Promise<string>;
     saveMetadata: (input: SaveMetadataInput) => Promise<void>;
+    /** Per-language clients used to fetch localized title/overview. */
+    translateClients?: Map<string, TranslateClient>;
   },
 ): Promise<EnrichResult> {
   // Step 1: resolve tmdbId
@@ -93,6 +106,24 @@ export async function enrichItem(
     ? { tmdbId: directorRaw.tmdbId, name: directorRaw.name }
     : undefined;
 
+  // Step 4b: fetch localized title/overview for each active content language.
+  // A per-language failure must NOT fail enrichment — skip that language.
+  const translations: MetadataTranslation[] = [];
+  if (deps.translateClients) {
+    for (const [language, client] of deps.translateClients) {
+      try {
+        const localized = await client.movie(tmdbId);
+        translations.push({
+          language,
+          title: localized.title,
+          ...(localized.overview != null ? { overview: localized.overview } : {}),
+        });
+      } catch {
+        // localized fetch failed — fall back to base for this language
+      }
+    }
+  }
+
   // Step 5: persist
   await deps.saveMetadata({
     itemId: item.id,
@@ -109,6 +140,7 @@ export async function enrichItem(
     director,
     keywords: keywords.map((k) => ({ tmdbId: k.tmdbId, name: k.name })),
     rating,
+    translations,
   });
 
   return { matched: true, tmdbId };
