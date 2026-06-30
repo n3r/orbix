@@ -49,12 +49,13 @@ services:
       retries: 12
       start_period: 30s
 
+  # Dev-only: Vite dev server (HMR). In production the API container serves the
+  # built SPA same-origin — there is no web service in deploy/portainer-stack.yml.
   web:
     build: { context: ., dockerfile: apps/web/Dockerfile.dev }
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:1061
+      # Vite proxies browser /api/* to the API service over the container network.
       API_INTERNAL_URL: http://api:1061
-      WEB_PORT: "1060"
       NODE_ENV: development
     ports: ["1060:1060"]
     volumes:

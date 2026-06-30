@@ -9,9 +9,9 @@
 #   4. Deploy. Access the web UI at http://YOUR-NAS-IP:8080
 #
 # Ports published on the host:
-#   8080  → Orbix web UI (set WEB_ORIGIN=http://YOUR-NAS-IP:8080)
-#   8081  → Orbix API (optional direct access / debugging; API is also
-#           proxied through the web on /api/*)
+#   8080  → Orbix (set WEB_ORIGIN=http://YOUR-NAS-IP:8080). The API container
+#           serves BOTH the web UI (static SPA at /) and the API (/api/*) on
+#           the same origin — there is no separate web container.
 #   Postgres and Redis are internal-only (not published).
 #
 # Build context:
@@ -50,7 +50,9 @@ services:
       timeout: 3s
       retries: 10
 
-  # ── Orbix API ─────────────────────────────────────────────────────
+  # ── Orbix (API + web UI, single container) ────────────────────────
+  # The API container builds the Vite SPA at image-build time and serves it
+  # via @fastify/static at /, alongside the API at /api/* (same origin).
   api:
     build:
       context: ..
@@ -61,18 +63,19 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
       API_PORT: "1061"
-      WEB_PORT: ${WEB_PORT:-8080}
       WEB_ORIGIN: ${WEB_ORIGIN}
       SESSION_SECRET: ${SESSION_SECRET}
       METADATA_DIR: /data/metadata
       TRANSCODE_DIR: /data/transcode
+      # WEB_DIST (path to the built SPA) is baked into the image as an ENV.
       # Model is baked into the image at /app/data/models.
       # To use an external volume instead, set MODELS_DIR=/data/models
       # and uncomment the orbix-models volume under volumes: below.
       MODELS_DIR: /app/data/models
       EMBEDDINGS_ENABLED: ${EMBEDDINGS_ENABLED:-true}
     ports:
-      - "${API_PORT_HOST:-8081}:1061"
+      # Single user-facing port → serves both the UI and /api on the same origin.
+      - "${WEB_PORT:-8080}:1061"
     volumes:
       - orbix-metadata:/data/metadata
       - orbix-transcode:/data/transcode
@@ -98,28 +101,7 @@ services:
     #   - video
     #   - render
 
-  # ── Orbix Web ─────────────────────────────────────────────────────
-  web:
-    build:
-      context: ..
-      dockerfile: apps/web/Dockerfile
-    restart: unless-stopped
-    environment:
-      NODE_ENV: production
-      WEB_PORT: ${WEB_PORT:-8080}
-      # API_INTERNAL_URL: the container-network address of the API service.
-      # The Next.js rewrite proxies browser /api/* requests through here.
-      API_INTERNAL_URL: http://api:1061
-    ports:
-      - "${WEB_PORT:-8080}:${WEB_PORT:-8080}"
-    depends_on:
-      api: { condition: service_healthy }
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:'+(process.env.WEB_PORT||8080)).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 40s
+  # (No separate web service — the API container serves the SPA same-origin.)
 
 volumes:
   orbix-db:

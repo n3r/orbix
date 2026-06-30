@@ -23,8 +23,8 @@ TypeScript monorepo (pnpm + Turborepo):
 
 ```
 apps/
-  web/      Next.js (App Router) + Tailwind — UI, player, admin
-  api/      Fastify + Prisma — REST + SSE, auth, scan, stream, discovery
+  web/      Vite + React (SPA, React Router + TanStack Query) + Tailwind — UI, player, admin
+  api/      Fastify + Prisma — REST + SSE, auth, scan, stream, discovery; serves the built SPA in prod
 packages/
   core/     framework-agnostic domain logic (scanner, metadata, playback, discovery, ratings) — unit-tested
   db/       Prisma schema + migrations (Postgres + pgvector)
