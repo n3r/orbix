@@ -44,11 +44,14 @@ export default async function playstateRoute(app: FastifyInstance) {
         return reply.code(403).send({ error: "blocked_by_rating" });
       }
 
+      // Optional per-episode keying. Movies use "" (the column default).
+      const episodeId = typeof body.episodeId === "string" ? body.episodeId : "";
+
       const finished = isFinished(positionSecInt, durationSecInt);
 
       await app.prisma.playbackState.upsert({
-        where: { profileId_mediaItemId: { profileId, mediaItemId } },
-        create: { profileId, mediaItemId, positionSec: positionSecInt, durationSec: durationSecInt, finished },
+        where: { profileId_mediaItemId_episodeId: { profileId, mediaItemId, episodeId } },
+        create: { profileId, mediaItemId, episodeId, positionSec: positionSecInt, durationSec: durationSecInt, finished },
         update: { positionSec: positionSecInt, durationSec: durationSecInt, finished },
       });
 
@@ -70,7 +73,7 @@ export default async function playstateRoute(app: FastifyInstance) {
   );
 
   // GET /items/:id/progress — read current position for the active profile
-  app.get<{ Params: { id: string } }>(
+  app.get<{ Params: { id: string }; Querystring: { episodeId?: string } }>(
     "/items/:id/progress",
     { preHandler: requireAuth(app) },
     async (req, reply) => {
@@ -78,6 +81,7 @@ export default async function playstateRoute(app: FastifyInstance) {
       if (!profileId) return reply.code(400).send({ error: "no_profile" });
 
       const mediaItemId = req.params.id;
+      const episodeId = req.query.episodeId ?? "";
 
       // Kids-safety gate: a kids profile must not be able to read back the
       // watch-position of a blocked title (same check as PUT).
@@ -93,7 +97,7 @@ export default async function playstateRoute(app: FastifyInstance) {
       }
 
       const state = await app.prisma.playbackState.findUnique({
-        where: { profileId_mediaItemId: { profileId, mediaItemId } },
+        where: { profileId_mediaItemId_episodeId: { profileId, mediaItemId, episodeId } },
         select: { positionSec: true, durationSec: true, finished: true },
       });
 
@@ -121,7 +125,15 @@ export default async function playstateRoute(app: FastifyInstance) {
         },
       });
 
-      const inProgress = continueWatching(states);
+      // continueWatching returns in-progress states newest-first. A series can
+      // have several in-progress episodes, so collapse to one card per series
+      // (keep the most recent), which is what the rail shows.
+      const seenSeries = new Set<string>();
+      const inProgress = continueWatching(states).filter((s) => {
+        if (seenSeries.has(s.mediaItemId)) return false;
+        seenSeries.add(s.mediaItemId);
+        return true;
+      });
       if (inProgress.length === 0) return [];
 
       const inProgressIds = inProgress.map((s) => s.mediaItemId);
