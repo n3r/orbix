@@ -5,11 +5,11 @@ import { requireAuth } from "../lib/auth";
 import { activeProfile } from "../lib/catalog-filter";
 
 export default async function profiles(app: FastifyInstance) {
-  // GET /me/profile — returns {kind} for the active profile cookie (for UI gating)
+  // GET /me/profile — returns the active profile (for UI gating + the client route guard)
   app.get("/me/profile", { preHandler: requireAuth(app) }, async (req, reply) => {
     const profile = await activeProfile(app, req);
-    if (!profile) return reply.send({ kind: null });
-    return reply.send({ kind: profile.kind });
+    if (!profile) return reply.send({ id: null, name: null, avatar: null, kind: null, maturityCap: null });
+    return reply.send(profile);
   });
 
   // GET /profiles — omit pinHash from the select to never leak it to clients
