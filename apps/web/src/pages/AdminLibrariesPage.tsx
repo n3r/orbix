@@ -80,11 +80,13 @@ export default function AdminLibrariesPage() {
     }
   }
 
-  // Reload local state AND invalidate the shared libraries query so the
-  // sidebar nav (RequireProfile → useLibraries) reflects the change.
+  // Reload local state AND invalidate the shared queries so dependent views
+  // refresh: ["libraries"] for any library list, ["menu"] so the top-nav
+  // catalog categories reflect added/removed sections.
   async function refresh() {
     await loadLibraries();
     void queryClient.invalidateQueries({ queryKey: ["libraries"] });
+    void queryClient.invalidateQueries({ queryKey: ["menu"] });
   }
 
   useEffect(() => {

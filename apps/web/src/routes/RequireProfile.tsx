@@ -1,13 +1,12 @@
 import { Navigate, Outlet } from "react-router";
 import { ApiError } from "@/lib/api";
-import { useSetupStatus, useMyProfile, useLibraries } from "@/lib/queries";
+import { useSetupStatus, useMyProfile } from "@/lib/queries";
 import { decideRedirect } from "./decideRedirect";
 import AppShell from "@/components/shell/AppShell";
 
 export default function RequireProfile() {
   const setup = useSetupStatus();
   const me = useMyProfile();
-  const libs = useLibraries();
 
   if (setup.isLoading || me.isLoading) {
     return <div className="p-8 text-[var(--text-dim)]">Loading…</div>;
@@ -32,7 +31,7 @@ export default function RequireProfile() {
     : null;
 
   return (
-    <AppShell libraries={libs.data ?? []} profile={profile} isKids={me.data?.kind === "kids"}>
+    <AppShell profile={profile}>
       <Outlet />
     </AppShell>
   );
