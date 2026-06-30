@@ -1,8 +1,7 @@
 import { useState, lazy, Suspense, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useParams } from "react-router";
+import { useParams } from "react-router";
 import { apiJson, ApiError } from "@/lib/api";
-import { useMyProfile } from "@/lib/queries";
 import type { TitleDetail } from "@/lib/types";
 import TitleHero from "@/components/TitleHero";
 import SimilarRail from "@/components/SimilarRail";
@@ -28,8 +27,6 @@ export default function TitlePage() {
     queryFn: () => apiJson<TitleDetail>(`/items/${id}`),
     retry: false,
   });
-  const profileQuery = useMyProfile();
-  const isKidsProfile = profileQuery.data?.kind === "kids";
 
   const onPlayEpisode = useCallback((ep: PlayEpisode) => {
     setPlayTarget({ fileId: ep.fileId, episodeId: ep.episodeId, title: ep.title });
@@ -108,16 +105,6 @@ export default function TitlePage() {
           <p className="text-sm text-yellow-400">
             Metadata not matched yet — scan with a TMDB token to enrich.
           </p>
-        )}
-
-        {/* Admin: Fix match — hidden for kids profiles (server also enforces 403) */}
-        {!isKidsProfile && (
-          <Link
-            to={`/title/${id}/fix`}
-            className="w-fit text-xs text-[var(--text-dim)] underline underline-offset-2 hover:text-[var(--accent)]"
-          >
-            Fix match / poster (admin)
-          </Link>
         )}
 
         {/* Cast */}

@@ -55,9 +55,6 @@ export default function AppShell({
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar className="md:hidden" onMenu={() => setOpen(true)} />
         <main className="min-w-0 flex-1">{children}</main>
-        <footer className="py-4 px-6 md:px-8 text-center text-xs text-[var(--text-dim)]">
-          This product uses the TMDB API but is not endorsed or certified by TMDB.
-        </footer>
       </div>
     </div>
   );
