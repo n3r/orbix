@@ -247,10 +247,13 @@ test.describe("Playback wiring", () => {
     ).toBe(true);
 
     // Reload home page — ContinueWatching row must show "Continue Watching" heading
-    // and the seeded movie title
+    // and a card linking to the seeded movie. Use the link role to disambiguate from the
+    // "Because you watched Playback Movie" smart-row heading (which is an <h2>, not a link).
     await page.reload();
     await expect(page.getByText("Continue Watching")).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("Playback Movie")).toBeVisible({ timeout: 15_000 });
+    await expect(
+      page.getByRole("link", { name: /Playback Movie/i }).first(),
+    ).toBeVisible({ timeout: 15_000 });
 
     // Navigate to title page — GET /api/items/:id/progress must return positionSec: 60
     // (This is what the Player would use for resume on next load)
