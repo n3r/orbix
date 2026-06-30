@@ -5,7 +5,7 @@ import { Button } from "@orbix/ui";
 import { apiJson, ApiError } from "@/lib/api";
 import { useMyProfile } from "@/lib/queries";
 
-const Player = lazy(() => import("@/components/Player"));
+const PlayerOverlay = lazy(() => import("@/components/PlayerOverlay"));
 
 interface CastMember {
   name: string;
@@ -166,15 +166,14 @@ export default function TitlePage() {
           </div>
         </div>
 
-        {/* Player */}
+        {/* Full-page player overlay (portaled to <body>) */}
         {playing && item.files?.[0]?.id && (
-          <Suspense
-            fallback={<p className="text-sm text-[var(--text-dim)] py-2">Loading player…</p>}
-          >
-            <Player
+          <Suspense fallback={null}>
+            <PlayerOverlay
               fileId={item.files[0].id}
               mediaItemId={item.id}
               title={item.title}
+              onClose={() => setPlaying(false)}
             />
           </Suspense>
         )}
