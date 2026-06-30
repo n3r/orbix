@@ -6,6 +6,7 @@ import { queryClient } from "./lib/queryClient";
 import { router } from "./router";
 import "@orbix/ui/src/tokens.css";
 import "./index.css";
+import "./lib/i18n";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
