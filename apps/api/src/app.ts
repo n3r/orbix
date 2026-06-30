@@ -19,6 +19,7 @@ import subtitlesRoute from "./routes/subtitles";
 import playstateRoute from "./routes/playstate";
 import discoveryRoute from "./routes/discovery";
 import similarRoute from "./routes/similar";
+import seriesRoute from "./routes/series";
 import { fixRoute } from "./routes/fix";
 import { refreshRoute } from "./routes/refresh";
 import { staticWebPlugin } from "./plugins/static-web";
@@ -49,6 +50,7 @@ export async function buildApp(env: Env): Promise<FastifyInstance> {
   await app.register(playstateRoute, { prefix: "/api" });
   await app.register(discoveryRoute, { prefix: "/api" });
   await app.register(similarRoute, { prefix: "/api" });
+  await app.register(seriesRoute, { prefix: "/api" });
   await app.register(fixRoute(env), { prefix: "/api" });
   await app.register(refreshRoute(env), { prefix: "/api" });
 

@@ -13,6 +13,7 @@ import {
   probeFile,
   ffprobeRunner,
   enrichItem,
+  enrichSeries,
   cacheImage,
   cacheImageFromUrl,
   fetchOmdbRatings,
@@ -23,6 +24,7 @@ import {
   type MediaFileTechnical,
   type ImageKind,
   type SaveMetadataInput,
+  type SaveSeriesInput,
 } from "@orbix/core";
 
 const execFileAsync = promisify(execFile);
@@ -125,7 +127,14 @@ export function queuePlugin(env: Env) {
       const upsertItemAndFile = async (input: {
         sectionId: string;
         file: { path: string; mtime: Date; size: number };
-        parsed: { title: string; year?: number; tmdbId?: number; imdbId?: string };
+        parsed: {
+          title: string;
+          year?: number;
+          tmdbId?: number;
+          imdbId?: string;
+          seasonNumber?: number;
+          episodeNumber?: number;
+        };
         tech: MediaFileTechnical;
       }): Promise<{ itemId: string; created: boolean }> => {
         // probe returns MediaFileTechnical & { probedOk: boolean } at runtime
@@ -136,32 +145,91 @@ export function queuePlugin(env: Env) {
           select: { id: true, mediaItemId: true },
         });
 
+        const fileData = {
+          mtime: input.file.mtime,
+          size: BigInt(input.file.size),
+          container: input.tech.container,
+          videoCodec: input.tech.videoCodec,
+          audioCodecs: input.tech.audioCodecs,
+          width: input.tech.width,
+          height: input.tech.height,
+          durationSec: input.tech.durationSec,
+          bitrate: input.tech.bitrate,
+          // Prisma accepts Json as unknown[]
+          subtitleTracks: input.tech.subtitleTracks as unknown as Prisma.InputJsonValue,
+          audioTracks: input.tech.audioTracks as unknown as Prisma.InputJsonValue,
+          probedOk,
+        };
+
         if (existing) {
-          await prisma.mediaFile.update({
-            where: { id: existing.id },
-            data: {
-              mtime: input.file.mtime,
-              size: BigInt(input.file.size),
-              container: input.tech.container,
-              videoCodec: input.tech.videoCodec,
-              audioCodecs: input.tech.audioCodecs,
-              width: input.tech.width,
-              height: input.tech.height,
-              durationSec: input.tech.durationSec,
-              bitrate: input.tech.bitrate,
-              // Prisma accepts Json as unknown[]
-              subtitleTracks: input.tech.subtitleTracks as unknown as Prisma.InputJsonValue,
-              audioTracks: input.tech.audioTracks as unknown as Prisma.InputJsonValue,
-              probedOk,
-            },
-          });
+          await prisma.mediaFile.update({ where: { id: existing.id }, data: fileData });
           return { itemId: existing.mediaItemId, created: false };
         }
 
-        // Find or create the parent MediaItem
+        const isEpisode =
+          input.parsed.seasonNumber != null && input.parsed.episodeNumber != null;
+
+        // ── TV episode: series → season → episode → file ──────────────────
+        if (isEpisode) {
+          const seasonNumber = input.parsed.seasonNumber!;
+          const episodeNumber = input.parsed.episodeNumber!;
+
+          let series = await prisma.mediaItem.findFirst({
+            where: {
+              sectionId: input.sectionId,
+              kind: "series",
+              sortTitle: input.parsed.title.toLowerCase(),
+              year: input.parsed.year ?? null,
+            },
+            select: { id: true },
+          });
+          if (!series) {
+            series = await prisma.mediaItem.create({
+              data: {
+                sectionId: input.sectionId,
+                kind: "series",
+                title: input.parsed.title,
+                sortTitle: input.parsed.title.toLowerCase(),
+                year: input.parsed.year ?? null,
+                tmdbId: input.parsed.tmdbId ?? null,
+                imdbId: input.parsed.imdbId ?? null,
+                matchState: "unmatched",
+              },
+              select: { id: true },
+            });
+          }
+
+          const season = await prisma.season.upsert({
+            where: { seriesId_seasonNumber: { seriesId: series.id, seasonNumber } },
+            create: { seriesId: series.id, seasonNumber },
+            update: {},
+            select: { id: true },
+          });
+
+          const episode = await prisma.episode.upsert({
+            where: { seasonId_episodeNumber: { seasonId: season.id, episodeNumber } },
+            create: { seasonId: season.id, seriesId: series.id, episodeNumber },
+            update: {},
+            select: { id: true },
+          });
+
+          await prisma.mediaFile.create({
+            data: {
+              mediaItemId: series.id,
+              episodeId: episode.id,
+              path: input.file.path,
+              ...fileData,
+            },
+          });
+
+          return { itemId: series.id, created: true };
+        }
+
+        // ── Movie: find or create the parent MediaItem ────────────────────
         let item = await prisma.mediaItem.findFirst({
           where: {
             sectionId: input.sectionId,
+            kind: "movie",
             sortTitle: input.parsed.title.toLowerCase(),
             year: input.parsed.year ?? null,
           },
@@ -172,6 +240,7 @@ export function queuePlugin(env: Env) {
           item = await prisma.mediaItem.create({
             data: {
               sectionId: input.sectionId,
+              kind: "movie",
               title: input.parsed.title,
               sortTitle: input.parsed.title.toLowerCase(),
               year: input.parsed.year ?? null,
@@ -187,18 +256,7 @@ export function queuePlugin(env: Env) {
           data: {
             mediaItemId: item.id,
             path: input.file.path,
-            mtime: input.file.mtime,
-            size: BigInt(input.file.size),
-            container: input.tech.container,
-            videoCodec: input.tech.videoCodec,
-            audioCodecs: input.tech.audioCodecs,
-            width: input.tech.width,
-            height: input.tech.height,
-            durationSec: input.tech.durationSec,
-            bitrate: input.tech.bitrate,
-            subtitleTracks: input.tech.subtitleTracks as unknown as Prisma.InputJsonValue,
-            audioTracks: input.tech.audioTracks as unknown as Prisma.InputJsonValue,
-            probedOk,
+            ...fileData,
           },
         });
 
@@ -290,6 +348,16 @@ export function queuePlugin(env: Env) {
             if (url) return cacheImageFromUrl(url, "logo", imageIo);
           }
           const tmdbLogo = await client.movieLogoPath(id.tmdbId);
+          if (tmdbLogo) return boundCacheImage(tmdbLogo, "logo");
+          return undefined;
+        };
+
+        // TV logo: fanart.tv's TV endpoint needs a TheTVDB id we don't have, so
+        // use TMDB's own logo art for series.
+        const resolveLogoTv = async (id: {
+          tmdbId: number;
+        }): Promise<string | undefined> => {
+          const tmdbLogo = await client.tvLogoPath(id.tmdbId);
           if (tmdbLogo) return boundCacheImage(tmdbLogo, "logo");
           return undefined;
         };
@@ -397,6 +465,87 @@ export function queuePlugin(env: Env) {
           });
         };
 
+        const saveSeries = async (input: SaveSeriesInput): Promise<void> => {
+          // Series scalars + genres atomically; seasons/episodes are idempotent
+          // upserts done after, so a long show doesn't hold one big transaction.
+          await prisma.$transaction(async (tx) => {
+            const data: Prisma.MediaItemUpdateInput = {
+              title: input.title,
+              sortTitle: input.title.toLowerCase(),
+              kind: "series",
+              year: input.year ?? null,
+              overview: input.overview ?? null,
+              tagline: input.tagline ?? null,
+              status: input.status ?? null,
+              posterPath: input.posterPath ?? null,
+              imdbId: input.imdbId ?? null,
+              tmdbId: input.tmdbId,
+              tmdbScore: input.tmdbScore ?? null,
+              matchState: "matched",
+              rating: input.rating ?? null,
+            };
+            if (input.backdropPath !== undefined) {
+              data.backdropPath = input.backdropPath;
+              data.backdropSource = "tmdb";
+            }
+            if (input.logoPath !== undefined) data.logoPath = input.logoPath;
+            if (input.imdbRating !== undefined) data.imdbRating = input.imdbRating;
+            if (input.imdbVotes !== undefined) data.imdbVotes = input.imdbVotes;
+            if (input.rtRating !== undefined) data.rtRating = input.rtRating;
+            if (input.metacritic !== undefined) data.metacritic = input.metacritic;
+
+            await tx.mediaItem.update({ where: { id: input.itemId }, data });
+
+            await tx.mediaItemGenre.deleteMany({ where: { mediaItemId: input.itemId } });
+            for (const g of input.genres) {
+              const genre = await tx.genre.upsert({
+                where: { name: g.name },
+                create: { name: g.name, tmdbId: g.tmdbId },
+                update: {},
+              });
+              await tx.mediaItemGenre.create({
+                data: { mediaItemId: input.itemId, genreId: genre.id },
+              });
+            }
+          });
+
+          for (const s of input.seasons) {
+            const seasonData = {
+              name: s.name ?? null,
+              overview: s.overview ?? null,
+              posterPath: s.posterPath ?? null,
+              airYear: s.airYear ?? null,
+              tmdbSeasonId: s.tmdbSeasonId ?? null,
+            };
+            const season = await prisma.season.upsert({
+              where: {
+                seriesId_seasonNumber: { seriesId: input.itemId, seasonNumber: s.seasonNumber },
+              },
+              create: { seriesId: input.itemId, seasonNumber: s.seasonNumber, ...seasonData },
+              update: seasonData,
+              select: { id: true },
+            });
+
+            for (const e of s.episodes) {
+              const epData = {
+                title: e.title ?? null,
+                overview: e.overview ?? null,
+                stillPath: e.stillPath ?? null,
+                runtimeSec: e.runtimeSec ?? null,
+                airDate: e.airDate ? new Date(e.airDate) : null,
+                tmdbEpisodeId: e.tmdbEpisodeId ?? null,
+              };
+              await prisma.episode.upsert({
+                where: {
+                  seasonId_episodeNumber: { seasonId: season.id, episodeNumber: e.episodeNumber },
+                },
+                create: { seasonId: season.id, seriesId: input.itemId, episodeNumber: e.episodeNumber, ...epData },
+                update: epData,
+              });
+            }
+          }
+        };
+
         // Build enrichment set: touched items UNION any still-unmatched in this section
         const enrichIds = new Set<string>(allItemIds);
         const unmatchedItems = await prisma.mediaItem.findMany({
@@ -417,7 +566,7 @@ export function queuePlugin(env: Env) {
           const itemId = enrichIdsArr[i]!;
           const item = await prisma.mediaItem.findUnique({
             where: { id: itemId },
-            select: { id: true, title: true, year: true, tmdbId: true, matchState: true },
+            select: { id: true, kind: true, title: true, year: true, tmdbId: true, matchState: true },
           });
           if (!item) continue;
 
@@ -425,18 +574,38 @@ export function queuePlugin(env: Env) {
           if (item.matchState === "manual") continue;
 
           try {
-            const result = await enrichItem(
-              {
-                id: item.id,
-                title: item.title,
-                year: item.year ?? undefined,
-                tmdbId: item.tmdbId ?? undefined,
-              },
-              { client, cacheImage: boundCacheImage, saveMetadata, resolveLogo, fetchRatings },
-            );
+            const base = {
+              id: item.id,
+              title: item.title,
+              year: item.year ?? undefined,
+              tmdbId: item.tmdbId ?? undefined,
+            };
+            let result;
+            if (item.kind === "series") {
+              const localSeasons = await prisma.season.findMany({
+                where: { seriesId: item.id },
+                select: { seasonNumber: true },
+              });
+              result = await enrichSeries(base, {
+                client,
+                cacheImage: boundCacheImage,
+                saveSeries,
+                resolveLogo: resolveLogoTv,
+                fetchRatings,
+                localSeasonNumbers: localSeasons.map((s) => s.seasonNumber),
+              });
+            } else {
+              result = await enrichItem(base, {
+                client,
+                cacheImage: boundCacheImage,
+                saveMetadata,
+                resolveLogo,
+                fetchRatings,
+              });
+            }
             if (result.matched) matched++;
           } catch (err) {
-            app.log.warn({ err, itemId }, "enrichItem failed — continuing with remaining items");
+            app.log.warn({ err, itemId }, "enrich failed — continuing with remaining items");
           }
 
           scanEvents.emit(jobId, {

@@ -103,15 +103,53 @@ model MediaItem {
   genres       MediaItemGenre[]
   keywords     MediaItemKeyword[]
   credits      Credit[]
+  seasons      Season[]
+  episodes     Episode[]
 
   @@index([sectionId, sortTitle])
   @@index([tmdbId])
+}
+
+model Season {
+  id           String    @id @default(cuid())
+  seriesId     String
+  series       MediaItem @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  seasonNumber Int
+  name         String?
+  overview     String?
+  posterPath   String?
+  airYear      Int?
+  tmdbSeasonId Int?
+  episodes     Episode[]
+
+  @@unique([seriesId, seasonNumber])
+}
+
+model Episode {
+  id            String      @id @default(cuid())
+  seasonId      String
+  season        Season      @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  seriesId      String
+  series        MediaItem   @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  episodeNumber Int
+  title         String?
+  overview      String?
+  stillPath     String?
+  runtimeSec    Int?
+  airDate       DateTime?
+  tmdbEpisodeId Int?
+  files         MediaFile[]
+
+  @@unique([seasonId, episodeNumber])
+  @@index([seriesId])
 }
 
 model MediaFile {
   id             String    @id @default(cuid())
   mediaItemId    String
   mediaItem      MediaItem @relation(fields: [mediaItemId], references: [id], onDelete: Cascade)
+  episodeId      String?
+  episode        Episode?  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
   path           String    @unique
   container      String?
   videoCodec     String?
@@ -127,6 +165,7 @@ model MediaFile {
   probedOk       Boolean   @default(true)
 
   @@index([mediaItemId])
+  @@index([episodeId])
 }
 
 model Genre {
@@ -191,12 +230,13 @@ model PlaybackState {
   id          String   @id @default(cuid())
   profileId   String
   mediaItemId String
+  episodeId   String   @default("")
   positionSec Int      @default(0)
   durationSec Int      @default(0)
   finished    Boolean  @default(false)
   updatedAt   DateTime @updatedAt
 
-  @@unique([profileId, mediaItemId])
+  @@unique([profileId, mediaItemId, episodeId])
   @@index([profileId, updatedAt])
 }
 

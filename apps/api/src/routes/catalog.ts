@@ -82,6 +82,15 @@ export default async function catalogRoute(app: FastifyInstance) {
             genres: {
               select: { genre: { select: { name: true } } },
             },
+            seasons: {
+              select: {
+                seasonNumber: true,
+                name: true,
+                posterPath: true,
+                _count: { select: { episodes: true } },
+              },
+              orderBy: { seasonNumber: "asc" },
+            },
             credits: {
               select: {
                 role: true,
@@ -146,6 +155,16 @@ export default async function catalogRoute(app: FastifyInstance) {
         metacritic: item.metacritic,
         matchState: item.matchState,
         genres: item.genres.map((g) => g.genre.name),
+        ...(item.kind === "series"
+          ? {
+              seasons: item.seasons.map((s) => ({
+                seasonNumber: s.seasonNumber,
+                name: s.name,
+                episodeCount: s._count.episodes,
+                posterPath: s.posterPath,
+              })),
+            }
+          : {}),
         cast,
         director,
         // CRITICAL: BigInt size must be serialized as string to avoid JSON.stringify error

@@ -10,6 +10,7 @@ export * from "./scanner/scan";
 export * from "./metadata/tmdb";
 export * from "./metadata/images";
 export * from "./metadata/enrich";
+export * from "./metadata/enrich-series";
 export * from "./metadata/omdb";
 export * from "./metadata/fanart";
 export * from "./metadata/frame-fallback";
