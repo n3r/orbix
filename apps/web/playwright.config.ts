@@ -41,12 +41,13 @@ export default defineConfig({
       },
     },
     {
+      // `dev` now runs Vite (port 1060) and proxies /api → the API server.
       command: "pnpm --filter @orbix/web dev",
       url: "http://localhost:1060",
       reuseExistingServer: true,
       timeout: 120_000,
       env: {
-        NEXT_PUBLIC_API_URL: "http://localhost:1061",
+        API_INTERNAL_URL: "http://localhost:1061",
       },
     },
   ],
