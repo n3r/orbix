@@ -1,5 +1,5 @@
 import { certsAtOrBelow, allowsRating } from "@orbix/core";
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import type { Prisma } from "@orbix/db";
 
 // Note: all helpers below assume canonical-case ratings as written by the TMDB
@@ -54,6 +54,25 @@ export function profileAllowsItem(
   if (!profile || profile.kind !== "kids") return true;
   // Fail-safe: null cap on a kids profile → most restrictive (G-only, cap index 0).
   return allowsRating(profile.maturityCap ?? 0, item.rating);
+}
+
+/**
+ * preHandler factory that blocks kids profiles from admin/management routes.
+ * A kids session is an authenticated session where the orbix_profile cookie
+ * points to a profile with kind="kids".  Standard profiles and no-profile
+ * sessions (treated as unrestricted) pass through.
+ *
+ * Always combine with requireAuth so unauthenticated requests are rejected
+ * before the profile lookup:
+ *   { preHandler: [requireAuth(app), requireNonKids(app)] }
+ */
+export function requireNonKids(app: FastifyInstance) {
+  return async (req: FastifyRequest, reply: FastifyReply) => {
+    const profile = await activeProfile(app, req);
+    if (profile?.kind === "kids") {
+      return reply.code(403).send({ error: "not_allowed_for_kids" });
+    }
+  };
 }
 
 /**

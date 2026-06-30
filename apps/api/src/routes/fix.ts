@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import fs from "node:fs";
 import path from "node:path";
 import { requireAuth } from "../lib/auth";
+import { requireNonKids } from "../lib/catalog-filter";
 import {
   TmdbClient,
   enrichItem,
@@ -134,7 +135,7 @@ export function fixRoute(env: Env) {
       Querystring: { q?: string };
     }>(
       "/items/:id/match-candidates",
-      { preHandler: requireAuth(app) },
+      { preHandler: [requireAuth(app), requireNonKids(app)] },
       async (req, reply) => {
         const token = await getToken();
         if (!token) return reply.code(503).send({ error: "tmdb_not_configured" });
@@ -159,7 +160,7 @@ export function fixRoute(env: Env) {
       Body: { tmdbId: number };
     }>(
       "/items/:id/match",
-      { preHandler: requireAuth(app) },
+      { preHandler: [requireAuth(app), requireNonKids(app)] },
       async (req, reply) => {
         const token = await getToken();
         if (!token) return reply.code(503).send({ error: "tmdb_not_configured" });
@@ -224,7 +225,7 @@ export function fixRoute(env: Env) {
       Body: { tmdbPosterPath: string };
     }>(
       "/items/:id/poster",
-      { preHandler: requireAuth(app) },
+      { preHandler: [requireAuth(app), requireNonKids(app)] },
       async (req, reply) => {
         const token = await getToken();
         if (!token) return reply.code(503).send({ error: "tmdb_not_configured" });

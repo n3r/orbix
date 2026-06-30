@@ -2,8 +2,16 @@ import type { FastifyInstance } from "fastify";
 import { validateProfileInput, hashPin, verifyPin, ProfileValidationError } from "@orbix/core";
 import { Prisma } from "@orbix/db";
 import { requireAuth } from "../lib/auth";
+import { activeProfile } from "../lib/catalog-filter";
 
 export default async function profiles(app: FastifyInstance) {
+  // GET /me/profile — returns {kind} for the active profile cookie (for UI gating)
+  app.get("/me/profile", { preHandler: requireAuth(app) }, async (req, reply) => {
+    const profile = await activeProfile(app, req);
+    if (!profile) return reply.send({ kind: null });
+    return reply.send({ kind: profile.kind });
+  });
+
   // GET /profiles — omit pinHash from the select to never leak it to clients
   app.get("/profiles", { preHandler: requireAuth(app) }, async () =>
     app.prisma.profile.findMany({

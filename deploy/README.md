@@ -157,6 +157,25 @@ To use an external volume for the model instead (e.g. to share it between image 
 
 ---
 
+## Parental Controls (Kids Profiles)
+
+Orbix supports **kids profiles** with a maturity cap (G / PG / PG-13). The library filter and all admin/management routes are **server-enforced**:
+
+- Content routes return only titles at or below the cap; unrated titles are blocked.
+- Admin routes (`/items/*/match-candidates`, `/items/*/match`, `/items/*/poster`, `/maintenance/refresh`, `/maintenance/cache`, `/settings`, library create/patch/delete, section scan) return **403 Not Allowed for Kids** when a kids profile is active.
+- Switching **out** of a kids profile to a standard profile is PIN-gated at `/profiles/:id/select`.
+
+**Known limitation — cookie-based profile selection:**
+Profile selection is stored in the `orbix_profile` HTTP-only cookie. A determined child with full access to the device's browser (dev-tools, cookie editor, etc.) could clear that cookie, reverting to an unrestricted session. The server treats a missing profile cookie as unrestricted (no filter). Binding the profile choice to the server-side session is planned for a future release.
+
+**Recommended mitigations (MVP):**
+1. **Set a PIN on all standard/admin profiles.** A child cannot switch to a standard profile without the PIN, even if they clear the cookie (the next page load will redirect to `/profiles` and require a PIN to select an unrestricted profile).
+2. **Do not give children a logged-in browser session on the host device.** Use a separate device or browser profile without saved session cookies.
+
+The web root (`/`) already redirects to `/profiles` when no profile cookie is present (Phase 3 behaviour), so clearing the cookie does not silently bypass the profile selector — the user is forced to pick a profile again, which means entering the PIN for any standard profile.
+
+---
+
 ## Troubleshooting
 
 **`orbix-api-1` won't start — "Invalid environment"**

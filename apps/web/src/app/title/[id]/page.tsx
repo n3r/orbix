@@ -60,6 +60,7 @@ export default function TitlePage({ params }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [playing, setPlaying] = useState(false);
+  const [isKidsProfile, setIsKidsProfile] = useState(false);
 
   useEffect(() => {
     params.then((p) => setId(p.id));
@@ -71,7 +72,10 @@ export default function TitlePage({ params }: Props) {
       setLoading(true);
       setError(null);
       try {
-        const res = await apiFetch(`/items/${id}`);
+        const [res, profileRes] = await Promise.all([
+          apiFetch(`/items/${id}`),
+          apiFetch("/me/profile").catch(() => null),
+        ]);
         if (res.status === 404) {
           setNotFound(true);
           return;
@@ -82,6 +86,10 @@ export default function TitlePage({ params }: Props) {
         }
         const data = (await res.json()) as ItemDetail;
         setItem(data);
+        if (profileRes?.ok) {
+          const { kind } = (await profileRes.json()) as { kind: string | null };
+          setIsKidsProfile(kind === "kids");
+        }
       } catch {
         setError("Network error");
       } finally {
@@ -155,8 +163,8 @@ export default function TitlePage({ params }: Props) {
               </p>
             )}
 
-            {/* Admin: Fix match action */}
-            {id && (
+            {/* Admin: Fix match action — hidden for kids profiles (server also enforces 403) */}
+            {id && !isKidsProfile && (
               <div className="mt-1">
                 <Link
                   href={`/title/${id}/fix`}

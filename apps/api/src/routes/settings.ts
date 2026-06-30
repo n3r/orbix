@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { getSetting, setSetting } from "@orbix/core";
 import { requireAuth } from "../lib/auth";
+import { requireNonKids } from "../lib/catalog-filter";
 
 const VALID_ENCODERS = ["software", "vaapi", "qsv", "nvenc"] as const;
 type EncoderValue = (typeof VALID_ENCODERS)[number];
@@ -25,7 +26,7 @@ interface SettingsBody {
 }
 
 export default async function settings(app: FastifyInstance) {
-  app.get("/settings", { preHandler: requireAuth(app) }, async () => {
+  app.get("/settings", { preHandler: [requireAuth(app), requireNonKids(app)] }, async () => {
     const r = read(app);
     const [token, encoder, omdbKey, fanartKey, refreshCadenceDays] = await Promise.all([
       getSetting<string>("tmdbToken", { fallback: "", read: r }),
@@ -45,7 +46,7 @@ export default async function settings(app: FastifyInstance) {
 
   app.put<{ Body: SettingsBody }>(
     "/settings",
-    { preHandler: requireAuth(app) },
+    { preHandler: [requireAuth(app), requireNonKids(app)] },
     async (req, reply) => {
       const body = req.body ?? {};
       const w = write(app);
