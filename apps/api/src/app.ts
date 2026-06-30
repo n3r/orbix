@@ -9,6 +9,7 @@ import health from "./routes/health";
 import setup from "./routes/setup";
 import auth from "./routes/auth";
 import profilesRoute from "./routes/profiles";
+import menuRoute from "./routes/menu";
 import settingsRoute from "./routes/settings";
 import librariesRoute from "./routes/libraries";
 import { imagesRoute } from "./routes/images";
@@ -40,6 +41,7 @@ export async function buildApp(env: Env): Promise<FastifyInstance> {
   await app.register(setup, { prefix: "/api" });
   await app.register(auth, { prefix: "/api" });
   await app.register(profilesRoute, { prefix: "/api" });
+  await app.register(menuRoute, { prefix: "/api" });
   await app.register(settingsRoute, { prefix: "/api" });
   await app.register(librariesRoute, { prefix: "/api" });
   await app.register(imagesRoute(env), { prefix: "/api" });
