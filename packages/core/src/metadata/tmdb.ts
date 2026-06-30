@@ -212,10 +212,17 @@ export function pickLogoPath(
 export class TmdbClient {
   private readonly token: string;
   private readonly fetchImpl: typeof fetch;
+  private readonly language?: string;
 
-  constructor(token: string, fetchImpl?: typeof fetch) {
+  /**
+   * @param language Optional TMDB language tag (e.g. "es-ES"). When set, it is
+   *   appended as `&language=<tag>` to localized requests (movie, search,
+   *   genreList). Omit for TMDB's default (English) responses.
+   */
+  constructor(token: string, fetchImpl?: typeof fetch, language?: string) {
     this.token = token;
     this.fetchImpl = fetchImpl ?? globalThis.fetch;
+    this.language = language;
   }
 
   private headers(): Record<string, string> {
@@ -223,6 +230,12 @@ export class TmdbClient {
       Authorization: `Bearer ${this.token}`,
       accept: "application/json",
     };
+  }
+
+  /** Append the configured language tag to a URL, if any. */
+  private withLang(url: string): string {
+    if (!this.language) return url;
+    return url + (url.includes("?") ? "&" : "?") + `language=${this.language}`;
   }
 
   private async get<T>(path: string): Promise<T> {
@@ -237,7 +250,7 @@ export class TmdbClient {
     let url = `${BASE}/search/movie?query=${encodeURIComponent(title)}`;
     if (year != null) url += `&year=${year}`;
 
-    const data = await this.get<{ results: RawSearchResult[] }>(url);
+    const data = await this.get<{ results: RawSearchResult[] }>(this.withLang(url));
     const first = data.results[0];
     if (!first) return null;
 
@@ -255,7 +268,7 @@ export class TmdbClient {
     let url = `${BASE}/search/movie?query=${encodeURIComponent(query)}`;
     if (year != null) url += `&year=${year}`;
 
-    const data = await this.get<{ results: RawSearchResult[] }>(url);
+    const data = await this.get<{ results: RawSearchResult[] }>(this.withLang(url));
     return data.results.slice(0, 8).map((r) => ({
       tmdbId: r.id,
       title: r.title,
@@ -265,7 +278,7 @@ export class TmdbClient {
   }
 
   async movie(id: number): Promise<TmdbMovie> {
-    const raw = await this.get<RawMovie>(`${BASE}/movie/${id}`);
+    const raw = await this.get<RawMovie>(this.withLang(`${BASE}/movie/${id}`));
 
     return {
       tmdbId: raw.id,
@@ -383,6 +396,17 @@ export class TmdbClient {
   async keywords(id: number): Promise<TmdbKeyword[]> {
     const raw = await this.get<RawKeywords>(`${BASE}/movie/${id}/keywords`);
     return raw.keywords.map((k) => ({ tmdbId: k.id, name: k.name }));
+  }
+
+  /**
+   * The localized genre list for the configured language. TMDB returns a fixed
+   * set of genres per language; used to populate GenreTranslation rows.
+   */
+  async genreList(kind: "movie" | "tv"): Promise<TmdbGenreRef[]> {
+    const raw = await this.get<{ genres: { id: number; name: string }[] }>(
+      this.withLang(`${BASE}/genre/${kind}/list`),
+    );
+    return raw.genres.map((g) => ({ tmdbId: g.id, name: g.name }));
   }
 
   async releaseCertification(id: number): Promise<string | undefined> {

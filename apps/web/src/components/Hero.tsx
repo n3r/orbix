@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
+import { useTranslation } from "react-i18next";
 import { Button, cn } from "@orbix/ui";
 
 export interface HeroItem {
@@ -14,6 +15,7 @@ export interface HeroItem {
 const ROTATE_MS = 7000;
 
 export default function Hero({ items }: { items: HeroItem[] }) {
+  const { t } = useTranslation();
   const [index, setIndex] = useState(0);
 
   // Cycle through featured titles. Single item → no timer.
@@ -63,10 +65,10 @@ export default function Hero({ items }: { items: HeroItem[] }) {
           )}
           <div className="mt-1 flex items-center gap-3">
             <Link to={`/title/${active.id}`}>
-              <Button>▶ Play</Button>
+              <Button>▶ {t("catalog:hero.play")}</Button>
             </Link>
             <Link to={`/title/${active.id}`}>
-              <Button variant="ghost">More info</Button>
+              <Button variant="ghost">{t("catalog:hero.moreInfo")}</Button>
             </Link>
           </div>
 
@@ -77,7 +79,7 @@ export default function Hero({ items }: { items: HeroItem[] }) {
                 <button
                   key={it.id}
                   type="button"
-                  aria-label={`Show ${it.title}`}
+                  aria-label={t("catalog:hero.showSlide", { title: it.title })}
                   onClick={() => setIndex(i)}
                   className={cn(
                     "h-1.5 rounded-full transition-all",

@@ -1,0 +1,19 @@
+{
+  "title": "Поиск",
+  "placeholder": "напр. комедия до 2 часов, что-нибудь смешное и лёгкое",
+  "queryAriaLabel": "Поисковый запрос",
+  "submit": "Найти",
+  "searching": "Поиск…",
+  "results_one": "{{count}} результат",
+  "results_few": "{{count}} результата",
+  "results_many": "{{count}} результатов",
+  "results_other": "{{count}} результата",
+  "mode": {
+    "semantic": "семантический",
+    "keyword": "по ключевым словам"
+  },
+  "empty": "Ничего не найдено.",
+  "errors": {
+    "failed": "Поиск не удался. Попробуйте ещё раз."
+  }
+}

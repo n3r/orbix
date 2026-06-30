@@ -1,0 +1,32 @@
+{
+  "notFound": "Title not found",
+  "loadFailed": "Failed to load title",
+  "unmatchedNotice": "Metadata not matched yet — scan with a TMDB token to enrich.",
+  "fixMatch": "Fix match / poster (admin)",
+  "play": "Play",
+  "playNoMedia": "Play (no media)",
+  "section": {
+    "overview": "Overview",
+    "director": "Director",
+    "cast": "Cast",
+    "genres": "Genres"
+  },
+  "rating": {
+    "unrated": "Unrated"
+  },
+  "runtime": {
+    "hm": "{{h}}h {{m}}m",
+    "m": "{{m}}m"
+  },
+  "seasonCount_one": "{{count}} season",
+  "seasonCount_other": "{{count}} seasons",
+  "episodeCount_one": "{{count}} episode",
+  "episodeCount_other": "{{count}} episodes",
+  "noMedia": "No media",
+  "specials": "Specials",
+  "seasonNumber": "Season {{number}}",
+  "episodeNumber": "Episode {{number}}",
+  "episodesHeading": "Episodes",
+  "notInLibrary": "Not in library",
+  "noEpisodes": "No episodes found for this season."
+}

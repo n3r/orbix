@@ -74,12 +74,20 @@ export default async function discoveryRoute(app: FastifyInstance) {
       const profileId = req.cookies["orbix_profile"];
       if (!profileId) return reply.code(400).send({ error: "no_profile" });
 
+      const profile = await activeProfile(app, req);
+      const ratingFilter = kidsRatingWhere(profile);
+      const lang = profile?.language ?? "en";
+      // Coalesce a loaded item's title to the active language, else base.
+      const locTitle = (it: { title: string; translations: { title: string | null }[] }) =>
+        it.translations[0]?.title?.trim() ? it.translations[0].title! : it.title;
+
       // Shared select shape for MediaItem feature loading (used twice: catalog + must-include union)
       const itemSelect = {
         id: true,
         title: true,
         year: true,
         posterPath: true,
+        translations: { where: { language: lang }, select: { title: true } },
         genres: {
           select: { genre: { select: { name: true } } },
         },
@@ -101,10 +109,7 @@ export default async function discoveryRoute(app: FastifyInstance) {
       // Catalog: deterministic order (newest first), cap raised to 2000 to handle
       // large libraries (similarity computation is O(catalog) per anchor — fine).
       // For kids profiles, apply the maturity rating filter so blocked titles never
-      // enter the rows.
-      const profile = await activeProfile(app, req);
-      const ratingFilter = kidsRatingWhere(profile);
-
+      // enter the rows (profile + ratingFilter resolved above).
       const [rawItems, allStates, playedEvents, histEvents] = await Promise.all([
         app.prisma.mediaItem.findMany({
           take: 2000,
@@ -200,7 +205,7 @@ export default async function discoveryRoute(app: FastifyInstance) {
         if (seen.has(ev.mediaItemId)) continue;
         seen.add(ev.mediaItemId);
         const item = itemById.get(ev.mediaItemId);
-        if (item) history.push({ mediaItemId: ev.mediaItemId, title: item.title });
+        if (item) history.push({ mediaItemId: ev.mediaItemId, title: locTitle(item) });
       }
 
       // ── 6. Build smart rows ──────────────────────────────────────────────────
@@ -223,7 +228,7 @@ export default async function discoveryRoute(app: FastifyInstance) {
               if (!item) return null;
               return {
                 id: item.id,
-                title: item.title,
+                title: locTitle(item),
                 year: item.year,
                 posterPath: item.posterPath,
               };
@@ -363,6 +368,21 @@ export default async function discoveryRoute(app: FastifyInstance) {
       } else {
         // No residual text after constraint extraction — sort by recency/title
         items = rankByKeyword(candidates, "");
+      }
+
+      // Localize the (≤20) result titles to the active profile language.
+      // Ranking above runs on the base (en) text — a deliberate scope bound.
+      const lang = profile?.language ?? "en";
+      if (lang !== "en" && items.length > 0) {
+        const trs = await app.prisma.mediaItemTranslation.findMany({
+          where: { language: lang, mediaItemId: { in: items.map((i) => i.id) } },
+          select: { mediaItemId: true, title: true },
+        });
+        const trMap = new Map(trs.map((t) => [t.mediaItemId, t.title]));
+        items = items.map((i) => {
+          const tr = trMap.get(i.id);
+          return tr && tr.trim() ? { ...i, title: tr } : i;
+        });
       }
 
       return reply.send({ items, usedEmbeddings });

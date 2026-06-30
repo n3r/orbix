@@ -1,0 +1,18 @@
+{
+  "title": "Who's watching?",
+  "addProfile": "Add Profile",
+  "form": {
+    "title": "New Profile",
+    "nameLabel": "Name",
+    "namePlaceholder": "Profile name"
+  },
+  "language": {
+    "label": "Language",
+    "help": "The language Orbix uses for this profile."
+  },
+  "errors": {
+    "loadFailed": "Failed to load profiles.",
+    "selectFailed": "Failed to select profile.",
+    "pinNotSupported": "This profile requires a PIN. PIN entry is not yet supported."
+  }
+}

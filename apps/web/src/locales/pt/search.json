@@ -1,0 +1,17 @@
+{
+  "title": "Buscar",
+  "placeholder": "ex.: comédia com menos de 2 horas, algo divertido e leve",
+  "queryAriaLabel": "Consulta de busca",
+  "submit": "Buscar",
+  "searching": "Buscando…",
+  "results_one": "{{count}} resultado",
+  "results_other": "{{count}} resultados",
+  "mode": {
+    "semantic": "semântica",
+    "keyword": "palavra-chave"
+  },
+  "empty": "Nenhum resultado encontrado.",
+  "errors": {
+    "failed": "Falha na busca. Tente novamente."
+  }
+}

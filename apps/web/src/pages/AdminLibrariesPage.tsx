@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router";
+import { useTranslation } from "react-i18next";
 import { Button, Card, Input } from "@orbix/ui";
 import { apiFetch } from "@/lib/api";
+import { errorMessage } from "@/lib/i18n/tError";
 import { queryClient } from "@/lib/queryClient";
 
 interface Source {
@@ -34,6 +36,7 @@ interface ScanState {
 }
 
 export default function AdminLibrariesPage() {
+  const { t } = useTranslation();
   const [libraries, setLibraries] = useState<Library[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -68,13 +71,13 @@ export default function AdminLibrariesPage() {
     try {
       const res = await apiFetch("/libraries");
       if (!res.ok) {
-        setError("Failed to load libraries");
+        setError(t("libraries:errors.loadFailed"));
         return;
       }
       const data = (await res.json()) as Library[];
       setLibraries(data);
     } catch {
-      setError("Network error");
+      setError(t("errors:network"));
     } finally {
       setLoading(false);
     }
@@ -105,10 +108,10 @@ export default function AdminLibrariesPage() {
         await refresh();
       } else {
         const body = (await res.json()) as { error?: string };
-        setLibError(body.error ?? "Failed to create library");
+        setLibError(body.error ? errorMessage(body.error, t) : t("libraries:errors.createFailed"));
       }
     } catch {
-      setLibError("Network error");
+      setLibError(t("errors:network"));
     } finally {
       setLibSaving(false);
     }
@@ -161,11 +164,11 @@ export default function AdminLibrariesPage() {
         const body = (await res.json()) as { error?: string };
         setSourceErrors((s) => ({
           ...s,
-          [sectionId]: body.error ?? "Failed to add source",
+          [sectionId]: body.error ? errorMessage(body.error, t) : t("libraries:errors.addSourceFailed"),
         }));
       }
     } catch {
-      setSourceErrors((s) => ({ ...s, [sectionId]: "Network error" }));
+      setSourceErrors((s) => ({ ...s, [sectionId]: t("errors:network") }));
     } finally {
       setSourceSaving((s) => ({ ...s, [sectionId]: false }));
     }
@@ -178,14 +181,18 @@ export default function AdminLibrariesPage() {
 
   async function handleScan(sectionId: string) {
     setScanLoading((s) => ({ ...s, [sectionId]: true }));
-    setScanStates((s) => ({ ...s, [sectionId]: { phase: "starting" } }));
+    setScanStates((s) => ({ ...s, [sectionId]: { phase: t("libraries:scan.starting") } }));
     try {
       const res = await apiFetch(`/sections/${sectionId}/scan`, { method: "POST" });
       if (!res.ok) {
         const body = (await res.json()) as { error?: string };
         setScanStates((s) => ({
           ...s,
-          [sectionId]: { phase: "error: " + (body.error ?? "unknown") },
+          [sectionId]: {
+            phase: t("libraries:scan.failed", {
+              message: body.error ? errorMessage(body.error, t) : t("errors:unknown"),
+            }),
+          },
         }));
         setScanLoading((s) => ({ ...s, [sectionId]: false }));
         return;
@@ -210,7 +217,7 @@ export default function AdminLibrariesPage() {
       };
 
       es.onerror = () => {
-        setScanStates((s) => ({ ...s, [sectionId]: { phase: "stream error" } }));
+        setScanStates((s) => ({ ...s, [sectionId]: { phase: t("libraries:scan.streamError") } }));
         es.close();
         esRef.current.delete(sectionId);
         setScanLoading((s) => ({ ...s, [sectionId]: false }));
@@ -223,13 +230,23 @@ export default function AdminLibrariesPage() {
 
   function formatScanState(state: ScanState): string {
     if (state.phase === "done") {
-      return `Done — added: ${state.added ?? 0}, updated: ${state.updated ?? 0}, matched: ${state.matched ?? 0}`;
+      return t("libraries:scan.done", {
+        count: state.added ?? 0,
+        updated: state.updated ?? 0,
+        matched: state.matched ?? 0,
+      });
     }
     if (state.phase === "error") {
-      return `Scan failed: ${state.message ?? "unknown error"}`;
+      return t("libraries:scan.failed", {
+        message: state.message ?? t("libraries:scan.unknownError"),
+      });
     }
     if (state.processed !== undefined && state.total !== undefined) {
-      return `${state.phase}: ${state.processed}/${state.total}`;
+      return t("libraries:scan.progress", {
+        phase: state.phase,
+        processed: state.processed,
+        total: state.total,
+      });
     }
     return state.phase;
   }
@@ -237,7 +254,7 @@ export default function AdminLibrariesPage() {
   if (loading) {
     return (
       <main className="p-8">
-        <p className="text-[var(--text-dim)]">Loading…</p>
+        <p className="text-[var(--text-dim)]">{t("common:status.loading")}</p>
       </main>
     );
   }
@@ -246,12 +263,12 @@ export default function AdminLibrariesPage() {
     <main className="px-6 md:px-8 lg:px-10 py-8">
      <div className="mx-auto flex max-w-4xl flex-col gap-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-[var(--text)]">Libraries</h1>
+        <h1 className="text-3xl font-bold text-[var(--text)]">{t("libraries:title")}</h1>
         <Link
           to="/admin/settings"
           className="text-sm text-[var(--text-dim)] hover:text-[var(--text)]"
         >
-          Settings
+          {t("libraries:settingsLink")}
         </Link>
       </div>
 
@@ -259,16 +276,16 @@ export default function AdminLibrariesPage() {
 
       {/* Create Library Form */}
       <Card>
-        <h2 className="mb-4 text-lg font-semibold text-[var(--text)]">Add Library</h2>
+        <h2 className="mb-4 text-lg font-semibold text-[var(--text)]">{t("libraries:add.heading")}</h2>
         <form onSubmit={handleCreateLibrary} className="flex gap-2">
           <Input
             value={newLibName}
             onChange={(e) => setNewLibName(e.target.value)}
-            placeholder="Library name"
+            placeholder={t("libraries:add.namePlaceholder")}
             required
           />
           <Button type="submit" disabled={libSaving}>
-            {libSaving ? "Adding…" : "Add"}
+            {libSaving ? t("libraries:adding") : t("common:actions.add")}
           </Button>
         </form>
         {libError && <p className="mt-2 text-sm text-red-400">{libError}</p>}
@@ -283,7 +300,7 @@ export default function AdminLibrariesPage() {
               variant="ghost"
               onClick={() => handleDeleteLibrary(lib.id)}
             >
-              Delete Library
+              {t("libraries:deleteLibrary")}
             </Button>
           </div>
 
@@ -298,13 +315,13 @@ export default function AdminLibrariesPage() {
                       onClick={() => handleScan(section.id)}
                       disabled={scanLoading[section.id]}
                     >
-                      {scanLoading[section.id] ? "Scanning…" : "Scan"}
+                      {scanLoading[section.id] ? t("libraries:scan.scanning") : t("libraries:scan.button")}
                     </Button>
                     <Button
                       variant="ghost"
                       onClick={() => handleDeleteSection(section.id)}
                     >
-                      Delete
+                      {t("common:actions.delete")}
                     </Button>
                   </div>
                 </div>
@@ -329,7 +346,7 @@ export default function AdminLibrariesPage() {
                           variant="ghost"
                           onClick={() => handleDeleteSource(src.id)}
                         >
-                          Remove
+                          {t("common:actions.remove")}
                         </Button>
                       </li>
                     ))}
@@ -346,14 +363,14 @@ export default function AdminLibrariesPage() {
                     onChange={(e) =>
                       setSourceForms((s) => ({ ...s, [section.id]: e.target.value }))
                     }
-                    placeholder="/path/to/media/folder"
+                    placeholder={t("libraries:source.pathPlaceholder")}
                     required
                   />
                   <Button
                     type="submit"
                     disabled={sourceSaving[section.id]}
                   >
-                    {sourceSaving[section.id] ? "Adding…" : "Add Source"}
+                    {sourceSaving[section.id] ? t("libraries:adding") : t("libraries:source.addButton")}
                   </Button>
                 </form>
                 {sourceErrors[section.id] && (
@@ -372,14 +389,14 @@ export default function AdminLibrariesPage() {
                 onChange={(e) =>
                   setSectionForms((s) => ({ ...s, [lib.id]: e.target.value }))
                 }
-                placeholder="Section name (e.g. Movies)"
+                placeholder={t("libraries:section.namePlaceholder")}
                 required
               />
               <Button
                 type="submit"
                 disabled={sectionSaving[lib.id]}
               >
-                {sectionSaving[lib.id] ? "Adding…" : "Add Section"}
+                {sectionSaving[lib.id] ? t("libraries:adding") : t("libraries:section.addButton")}
               </Button>
             </form>
           </div>

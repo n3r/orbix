@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router";
+import { useTranslation } from "react-i18next";
 import { Button, Card, Input } from "@orbix/ui";
 import { apiFetch } from "@/lib/api";
+import { errorMessage } from "@/lib/i18n/tError";
 
 type EncoderValue = "software" | "vaapi" | "qsv" | "nvenc";
 
@@ -13,14 +15,10 @@ interface SettingsResponse {
   refreshCadenceDays: number;
 }
 
-const ENCODER_LABELS: Record<EncoderValue, string> = {
-  software: "Software (libx264)",
-  vaapi: "VA-API (h264_vaapi)",
-  qsv: "Intel QSV (h264_qsv)",
-  nvenc: "NVIDIA NVENC (h264_nvenc)",
-};
+const ENCODER_VALUES: EncoderValue[] = ["software", "vaapi", "qsv", "nvenc"];
 
 export default function AdminSettingsPage() {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,7 +48,7 @@ export default function AdminSettingsPage() {
     try {
       const res = await apiFetch("/settings");
       if (!res.ok) {
-        setError("Failed to load settings");
+        setError(t("settings:errors.loadFailed"));
         return;
       }
       const data = (await res.json()) as SettingsResponse;
@@ -60,7 +58,7 @@ export default function AdminSettingsPage() {
       setEncoder(data.encoder ?? "software");
       setRefreshCadenceDays(data.refreshCadenceDays ?? 90);
     } catch {
-      setError("Network error");
+      setError(t("errors:network"));
     } finally {
       setLoading(false);
     }
@@ -85,7 +83,7 @@ export default function AdminSettingsPage() {
 
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
-        setError(data.error ?? "Failed to save settings");
+        setError(data.error ? errorMessage(data.error, t) : t("settings:errors.saveFailed"));
         return;
       }
 
@@ -96,7 +94,7 @@ export default function AdminSettingsPage() {
       setSuccess(true);
       await loadSettings();
     } catch {
-      setError("Network error");
+      setError(t("errors:network"));
     } finally {
       setSaving(false);
     }
@@ -108,24 +106,24 @@ export default function AdminSettingsPage() {
     try {
       const res = await apiFetch("/maintenance/rebuild", { method: "POST" });
       if (!res.ok) {
-        setRebuildMsg("Rebuild failed — check the server logs.");
+        setRebuildMsg(t("settings:maintenance.failed"));
         return;
       }
       const data = (await res.json()) as
         | { reason: "no_token" }
         | { rebuilt: number; unmatched: number; skipped: number };
       if ("reason" in data) {
-        setRebuildMsg("Add a TMDB API token above and click Save Settings before rebuilding.");
+        setRebuildMsg(t("settings:maintenance.noToken"));
       } else {
-        setRebuildMsg(
-          `Rebuilt ${data.rebuilt} title${data.rebuilt === 1 ? "" : "s"}` +
-            (data.unmatched ? `, ${data.unmatched} with no TMDB match` : "") +
-            (data.skipped ? `, ${data.skipped} errored` : "") +
-            ".",
-        );
+        const parts = [t("settings:maintenance.rebuiltCount", { count: data.rebuilt })];
+        if (data.unmatched)
+          parts.push(t("settings:maintenance.unmatchedCount", { count: data.unmatched }));
+        if (data.skipped)
+          parts.push(t("settings:maintenance.skippedCount", { count: data.skipped }));
+        setRebuildMsg(parts.join(", ") + ".");
       }
     } catch {
-      setRebuildMsg("Network error during rebuild.");
+      setRebuildMsg(t("settings:maintenance.networkError"));
     } finally {
       setRebuilding(false);
     }
@@ -134,7 +132,7 @@ export default function AdminSettingsPage() {
   if (loading) {
     return (
       <main className="p-8">
-        <p className="text-[var(--text-dim)]">Loading...</p>
+        <p className="text-[var(--text-dim)]">{t("common:status.loading")}</p>
       </main>
     );
   }
@@ -143,37 +141,37 @@ export default function AdminSettingsPage() {
     <main className="px-6 md:px-8 lg:px-10 py-8">
      <div className="mx-auto flex max-w-2xl flex-col gap-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-[var(--text)]">Settings</h1>
+        <h1 className="text-3xl font-bold text-[var(--text)]">{t("settings:title")}</h1>
         <Link
           to="/admin/libraries"
           className="text-sm text-[var(--text-dim)] hover:text-[var(--text)]"
         >
-          Back to Libraries
+          {t("settings:backToLibraries")}
         </Link>
       </div>
 
       <form onSubmit={handleSave} className="flex flex-col gap-6">
         {/* Metadata providers */}
         <Card>
-          <h2 className="mb-4 text-lg font-semibold text-[var(--text)]">Metadata Providers</h2>
+          <h2 className="mb-4 text-lg font-semibold text-[var(--text)]">{t("settings:providers.heading")}</h2>
 
           <div className="flex flex-col gap-4">
             {/* TMDB */}
             <div>
               <label className="block mb-1 text-sm font-medium text-[var(--text)]">
-                TMDB API Token
+                {t("settings:providers.tmdb.label")}
               </label>
               <p className="mb-2 text-xs text-[var(--text-dim)]">
-                Status:{" "}
+                {t("settings:providers.statusLabel")}{" "}
                 <span className={tmdbConfigured ? "text-green-400" : "text-yellow-400"}>
-                  {tmdbConfigured ? "configured" : "not configured"}
+                  {tmdbConfigured ? t("settings:providers.status.configured") : t("settings:providers.status.notConfigured")}
                 </span>
               </p>
               <Input
                 type="password"
                 value={tmdbToken}
                 onChange={(e) => setTmdbToken(e.target.value)}
-                placeholder={tmdbConfigured ? "Leave blank to keep existing token" : "Paste token to configure"}
+                placeholder={tmdbConfigured ? t("settings:providers.tmdb.placeholderConfigured") : t("settings:providers.tmdb.placeholderEmpty")}
                 autoComplete="off"
               />
             </div>
@@ -181,20 +179,20 @@ export default function AdminSettingsPage() {
             {/* OMDb */}
             <div>
               <label className="block mb-1 text-sm font-medium text-[var(--text)]">
-                OMDb API Key{" "}
-                <span className="text-[var(--text-dim)] font-normal">(optional)</span>
+                {t("settings:providers.omdb.label")}{" "}
+                <span className="text-[var(--text-dim)] font-normal">{t("settings:providers.optional")}</span>
               </label>
               <p className="mb-2 text-xs text-[var(--text-dim)]">
-                Status:{" "}
+                {t("settings:providers.statusLabel")}{" "}
                 <span className={omdbConfigured ? "text-green-400" : "text-[var(--text-dim)]"}>
-                  {omdbConfigured ? "configured" : "not set"}
+                  {omdbConfigured ? t("settings:providers.status.configured") : t("settings:providers.status.notSet")}
                 </span>
               </p>
               <Input
                 type="password"
                 value={omdbKey}
                 onChange={(e) => setOmdbKey(e.target.value)}
-                placeholder={omdbConfigured ? "Leave blank to keep existing key" : "Paste key to configure"}
+                placeholder={omdbConfigured ? t("settings:providers.placeholderKeyConfigured") : t("settings:providers.placeholderKeyEmpty")}
                 autoComplete="off"
               />
             </div>
@@ -202,20 +200,20 @@ export default function AdminSettingsPage() {
             {/* Fanart.tv */}
             <div>
               <label className="block mb-1 text-sm font-medium text-[var(--text)]">
-                Fanart.tv API Key{" "}
-                <span className="text-[var(--text-dim)] font-normal">(optional)</span>
+                {t("settings:providers.fanart.label")}{" "}
+                <span className="text-[var(--text-dim)] font-normal">{t("settings:providers.optional")}</span>
               </label>
               <p className="mb-2 text-xs text-[var(--text-dim)]">
-                Status:{" "}
+                {t("settings:providers.statusLabel")}{" "}
                 <span className={fanartConfigured ? "text-green-400" : "text-[var(--text-dim)]"}>
-                  {fanartConfigured ? "configured" : "not set"}
+                  {fanartConfigured ? t("settings:providers.status.configured") : t("settings:providers.status.notSet")}
                 </span>
               </p>
               <Input
                 type="password"
                 value={fanartKey}
                 onChange={(e) => setFanartKey(e.target.value)}
-                placeholder={fanartConfigured ? "Leave blank to keep existing key" : "Paste key to configure"}
+                placeholder={fanartConfigured ? t("settings:providers.placeholderKeyConfigured") : t("settings:providers.placeholderKeyEmpty")}
                 autoComplete="off"
               />
             </div>
@@ -224,23 +222,23 @@ export default function AdminSettingsPage() {
 
         {/* Transcode settings */}
         <Card>
-          <h2 className="mb-4 text-lg font-semibold text-[var(--text)]">Transcoding</h2>
+          <h2 className="mb-4 text-lg font-semibold text-[var(--text)]">{t("settings:transcode.heading")}</h2>
 
           <div>
             <label className="block mb-1 text-sm font-medium text-[var(--text)]">
-              Video Encoder
+              {t("settings:transcode.encoderLabel")}
             </label>
             <p className="mb-2 text-xs text-[var(--text-dim)]">
-              Choose the hardware or software encoder used when transcoding. Software (libx264) always works; hardware encoders require the corresponding GPU driver/VAAPI/NVENC support on the server.
+              {t("settings:transcode.encoderHelp")}
             </p>
             <select
               value={encoder}
               onChange={(e) => setEncoder(e.target.value as EncoderValue)}
               className="w-full rounded border border-[var(--border,#333)] bg-[var(--surface,#1a1a1a)] px-3 py-2 text-sm text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent,#6366f1)]"
             >
-              {(Object.entries(ENCODER_LABELS) as [EncoderValue, string][]).map(([val, label]) => (
+              {ENCODER_VALUES.map((val) => (
                 <option key={val} value={val}>
-                  {label}
+                  {t(`settings:transcode.encoders.${val}`)}
                 </option>
               ))}
             </select>
@@ -249,14 +247,14 @@ export default function AdminSettingsPage() {
 
         {/* Library refresh */}
         <Card>
-          <h2 className="mb-4 text-lg font-semibold text-[var(--text)]">Library</h2>
+          <h2 className="mb-4 text-lg font-semibold text-[var(--text)]">{t("settings:library.heading")}</h2>
 
           <div>
             <label className="block mb-1 text-sm font-medium text-[var(--text)]">
-              Metadata Refresh Cadence (days)
+              {t("settings:library.cadenceLabel")}
             </label>
             <p className="mb-2 text-xs text-[var(--text-dim)]">
-              How many days between automatic metadata refreshes. Set higher to reduce API calls.
+              {t("settings:library.cadenceHelp")}
             </p>
             <Input
               type="number"
@@ -268,23 +266,21 @@ export default function AdminSettingsPage() {
         </Card>
 
         {error && <p className="text-sm text-red-400">{error}</p>}
-        {success && <p className="text-sm text-green-400">Settings saved.</p>}
+        {success && <p className="text-sm text-green-400">{t("settings:saveSuccess")}</p>}
 
         <Button type="submit" disabled={saving}>
-          {saving ? "Saving..." : "Save Settings"}
+          {saving ? t("common:status.saving") : t("settings:saveButton")}
         </Button>
       </form>
 
       {/* Maintenance — re-enrich the whole library on demand */}
       <Card>
-        <h2 className="mb-4 text-lg font-semibold text-[var(--text)]">Maintenance</h2>
+        <h2 className="mb-4 text-lg font-semibold text-[var(--text)]">{t("settings:maintenance.heading")}</h2>
         <p className="mb-3 text-xs text-[var(--text-dim)]">
-          Re-fetch metadata and artwork for every title from TMDB now. Use this
-          after adding or changing your TMDB token. Titles you fixed manually keep
-          their chosen poster. Large libraries may take a while.
+          {t("settings:maintenance.help")}
         </p>
         <Button type="button" variant="ghost" onClick={handleRebuild} disabled={rebuilding}>
-          {rebuilding ? "Rebuilding…" : "Rebuild metadata"}
+          {rebuilding ? t("settings:maintenance.rebuilding") : t("settings:maintenance.rebuildButton")}
         </Button>
         {rebuildMsg && <p className="mt-3 text-sm text-[var(--text-dim)]">{rebuildMsg}</p>}
       </Card>

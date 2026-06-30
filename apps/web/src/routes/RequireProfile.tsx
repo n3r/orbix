@@ -3,11 +3,15 @@ import { ApiError } from "@/lib/api";
 import { useSetupStatus, useMyProfile, useLibraries } from "@/lib/queries";
 import { decideRedirect } from "./decideRedirect";
 import AppShell from "@/components/shell/AppShell";
+import { useSyncProfileLanguage } from "@/lib/i18n/useActiveLanguage";
 
 export default function RequireProfile() {
   const setup = useSetupStatus();
   const me = useMyProfile();
   const libs = useLibraries();
+
+  // Apply the active profile's language to the UI as soon as it's known.
+  useSyncProfileLanguage(me.data?.language);
 
   if (setup.isLoading || me.isLoading) {
     return <div className="p-8 text-[var(--text-dim)]">Loading…</div>;

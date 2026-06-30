@@ -5,7 +5,7 @@ import type { HomeRow, Library, MediaCard, Profile } from "./types";
 export interface SetupStatus { complete: boolean }
 export interface ActiveProfile {
   id: string | null; name: string | null; avatar: string | null;
-  kind: string | null; maturityCap: number | null;
+  kind: string | null; maturityCap: number | null; language?: string | null;
 }
 
 export function useSetupStatus() {

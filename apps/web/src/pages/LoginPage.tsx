@@ -1,10 +1,13 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
+import { useTranslation } from "react-i18next";
 import { Button, Input, Card } from "@orbix/ui";
 import { apiFetch } from "@/lib/api";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -22,23 +25,26 @@ export default function LoginPage() {
       if (res.ok) {
         navigate("/profiles", { replace: true });
       } else {
-        setError("Invalid email or password.");
+        setError(t("errors:invalid_credentials"));
       }
     } catch {
-      setError("Network error. Please try again.");
+      setError(t("errors:network"));
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-8">
+    <main className="relative flex min-h-screen items-center justify-center p-8">
+      <div className="absolute right-4 top-4">
+        <LanguageSwitcher />
+      </div>
       <Card className="w-full max-w-sm">
-        <h1 className="mb-6 text-2xl font-bold text-[var(--text)]">Sign in to Orbix</h1>
+        <h1 className="mb-6 text-2xl font-bold text-[var(--text)]">{t("auth:login.title")}</h1>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
             <label htmlFor="email" className="text-sm font-medium text-[var(--text-dim)]">
-              Email
+              {t("auth:fields.email")}
             </label>
             <Input
               id="email"
@@ -47,12 +53,12 @@ export default function LoginPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
+              placeholder={t("auth:fields.emailPlaceholder")}
             />
           </div>
           <div className="flex flex-col gap-1">
             <label htmlFor="password" className="text-sm font-medium text-[var(--text-dim)]">
-              Password
+              {t("auth:fields.password")}
             </label>
             <Input
               id="password"
@@ -61,12 +67,12 @@ export default function LoginPage() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Your password"
+              placeholder={t("auth:login.passwordPlaceholder")}
             />
           </div>
           {error && <p className="text-sm text-red-400">{error}</p>}
           <Button type="submit" disabled={loading}>
-            {loading ? "Signing in…" : "Sign In"}
+            {loading ? t("auth:login.submitting") : t("auth:login.submit")}
           </Button>
         </form>
       </Card>

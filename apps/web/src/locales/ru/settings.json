@@ -1,0 +1,70 @@
+{
+  "title": "Настройки",
+  "backToLibraries": "Назад к библиотекам",
+  "saveButton": "Сохранить настройки",
+  "saveSuccess": "Настройки сохранены.",
+  "providers": {
+    "heading": "Поставщики метаданных",
+    "statusLabel": "Статус:",
+    "optional": "(необязательно)",
+    "status": {
+      "configured": "настроено",
+      "notConfigured": "не настроено",
+      "notSet": "не задано"
+    },
+    "placeholderKeyConfigured": "Оставьте пустым, чтобы сохранить существующий ключ",
+    "placeholderKeyEmpty": "Вставьте ключ для настройки",
+    "tmdb": {
+      "label": "Токен API TMDB",
+      "placeholderConfigured": "Оставьте пустым, чтобы сохранить существующий токен",
+      "placeholderEmpty": "Вставьте токен для настройки"
+    },
+    "omdb": {
+      "label": "Ключ API OMDb"
+    },
+    "fanart": {
+      "label": "Ключ API Fanart.tv"
+    }
+  },
+  "transcode": {
+    "heading": "Транскодирование",
+    "encoderLabel": "Видеокодировщик",
+    "encoderHelp": "Выберите аппаратный или программный кодировщик, используемый при транскодировании. Software (libx264) работает всегда; аппаратные кодировщики требуют соответствующей поддержки драйвера GPU/VAAPI/NVENC на сервере.",
+    "encoders": {
+      "software": "Software (libx264)",
+      "vaapi": "VA-API (h264_vaapi)",
+      "qsv": "Intel QSV (h264_qsv)",
+      "nvenc": "NVIDIA NVENC (h264_nvenc)"
+    }
+  },
+  "library": {
+    "heading": "Библиотека",
+    "cadenceLabel": "Периодичность обновления метаданных (дни)",
+    "cadenceHelp": "Сколько дней проходит между автоматическими обновлениями метаданных. Установите больше, чтобы уменьшить количество обращений к API."
+  },
+  "maintenance": {
+    "heading": "Обслуживание",
+    "help": "Повторно загрузить метаданные и обложки для каждого тайтла из TMDB прямо сейчас. Используйте это после добавления или изменения токена TMDB. Тайтлы, исправленные вручную, сохраняют выбранный постер. Для больших библиотек это может занять некоторое время.",
+    "rebuildButton": "Перестроить метаданные",
+    "rebuilding": "Перестроение…",
+    "failed": "Не удалось перестроить — проверьте журналы сервера.",
+    "noToken": "Добавьте токен API TMDB выше и нажмите «Сохранить настройки» перед перестроением.",
+    "networkError": "Ошибка сети во время перестроения.",
+    "rebuiltCount_one": "Перестроен {{count}} тайтл",
+    "rebuiltCount_few": "Перестроено {{count}} тайтла",
+    "rebuiltCount_many": "Перестроено {{count}} тайтлов",
+    "rebuiltCount_other": "Перестроено {{count}} тайтла",
+    "unmatchedCount_one": "{{count}} без совпадения в TMDB",
+    "unmatchedCount_few": "{{count}} без совпадений в TMDB",
+    "unmatchedCount_many": "{{count}} без совпадений в TMDB",
+    "unmatchedCount_other": "{{count}} без совпадений в TMDB",
+    "skippedCount_one": "{{count}} с ошибкой",
+    "skippedCount_few": "{{count}} с ошибками",
+    "skippedCount_many": "{{count}} с ошибками",
+    "skippedCount_other": "{{count}} с ошибками"
+  },
+  "errors": {
+    "loadFailed": "Не удалось загрузить настройки",
+    "saveFailed": "Не удалось сохранить настройки"
+  }
+}

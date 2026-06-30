@@ -1,0 +1,26 @@
+{
+  "title": "Corriger la correspondance",
+  "forTitle": "pour « {{title}} »",
+  "noPoster": "Aucune affiche",
+  "search": {
+    "heading": "Rechercher sur TMDB",
+    "placeholder": "Rechercher un titre…",
+    "button": "Rechercher",
+    "searching": "Recherche…",
+    "failed": "Échec de la recherche. Veuillez réessayer.",
+    "noResults": "Aucun résultat trouvé."
+  },
+  "match": {
+    "button": "Utiliser cette correspondance",
+    "applying": "Application…",
+    "failed": "Échec de l'application de la correspondance."
+  },
+  "poster": {
+    "heading": "Définir une affiche spécifique",
+    "help": "Choisissez n'importe quelle affiche parmi les résultats de recherche ci-dessus sans modifier les autres métadonnées.",
+    "success": "Affiche mise à jour avec succès.",
+    "button": "Définir l'affiche",
+    "setting": "Définition…",
+    "failed": "Échec de la définition de l'affiche."
+  }
+}

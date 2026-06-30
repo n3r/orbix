@@ -304,6 +304,63 @@ describe("TmdbClient.releaseCertification", () => {
 });
 
 // ---------------------------------------------------------------------------
+// genreList
+// ---------------------------------------------------------------------------
+
+describe("TmdbClient.genreList", () => {
+  it("maps the genre list", async () => {
+    const { fake, calls } = makeFetch({
+      genres: [
+        { id: 28, name: "Action" },
+        { id: 18, name: "Drama" },
+      ],
+    });
+    const client = new TmdbClient("tok", fake);
+    const genres = await client.genreList("movie");
+    expect(calls[0].url).toContain("/genre/movie/list");
+    expect(genres).toEqual([
+      { tmdbId: 28, name: "Action" },
+      { tmdbId: 18, name: "Drama" },
+    ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// language tag
+// ---------------------------------------------------------------------------
+
+describe("TmdbClient language param", () => {
+  it("appends the language tag to movie requests", async () => {
+    const { fake, calls } = makeFetch({ id: 1, title: "X", genres: [] });
+    const client = new TmdbClient("tok", fake, "es-ES");
+    await client.movie(1);
+    expect(calls[0].url).toContain("language=es-ES");
+  });
+
+  it("appends the language tag to search (joining with &)", async () => {
+    const { fake, calls } = makeFetch({ results: [] });
+    const client = new TmdbClient("tok", fake, "de-DE");
+    await client.searchMovie("X");
+    expect(calls[0].url).toContain("language=de-DE");
+    expect(calls[0].url).toContain("query=X&");
+  });
+
+  it("appends the language tag to genreList (joining with ?)", async () => {
+    const { fake, calls } = makeFetch({ genres: [] });
+    const client = new TmdbClient("tok", fake, "ru-RU");
+    await client.genreList("tv");
+    expect(calls[0].url).toContain("/genre/tv/list?language=ru-RU");
+  });
+
+  it("omits the language param when no language is configured", async () => {
+    const { fake, calls } = makeFetch({ id: 1, title: "X", genres: [] });
+    const client = new TmdbClient("tok", fake);
+    await client.movie(1);
+    expect(calls[0].url).not.toContain("language=");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Error handling
 // ---------------------------------------------------------------------------
 

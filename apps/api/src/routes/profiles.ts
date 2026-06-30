@@ -3,6 +3,7 @@ import { validateProfileInput, hashPin, verifyPin, ProfileValidationError } from
 import { Prisma } from "@orbix/db";
 import { requireAuth } from "../lib/auth";
 import { activeProfile } from "../lib/catalog-filter";
+import { ensureMetadataLanguage } from "../plugins/queue";
 
 export default async function profiles(app: FastifyInstance) {
   // GET /me/profile — returns the active profile (for UI gating + the client route guard)
@@ -15,7 +16,7 @@ export default async function profiles(app: FastifyInstance) {
   // GET /profiles — omit pinHash from the select to never leak it to clients
   app.get("/profiles", { preHandler: requireAuth(app) }, async () =>
     app.prisma.profile.findMany({
-      select: { id: true, name: true, avatar: true, kind: true, maturityCap: true },
+      select: { id: true, name: true, avatar: true, kind: true, maturityCap: true, language: true },
     }));
 
   app.post<{ Body: unknown }>("/profiles", { preHandler: requireAuth(app) }, async (req, reply) => {
@@ -23,9 +24,11 @@ export default async function profiles(app: FastifyInstance) {
       const v = validateProfileInput(req.body);
       const pinHash = v.pin ? await hashPin(v.pin) : null;
       const p = await app.prisma.profile.create({
-        data: { name: v.name, kind: v.kind, maturityCap: v.maturityCap ?? null, pinHash },
-        select: { id: true, name: true, kind: true },
+        data: { name: v.name, kind: v.kind, maturityCap: v.maturityCap ?? null, language: v.language, pinHash },
+        select: { id: true, name: true, kind: true, language: true },
       });
+      // A new profile may introduce a not-yet-cached content language.
+      await ensureMetadataLanguage(app, v.language);
       return p;
     } catch (e) {
       if (e instanceof ProfileValidationError) return reply.code(400).send({ error: "invalid_profile" });
@@ -42,6 +45,7 @@ export default async function profiles(app: FastifyInstance) {
         name: body.name ?? existing.name,
         kind: body.kind ?? existing.kind,
         maturityCap: body.maturityCap ?? existing.maturityCap ?? undefined,
+        language: body.language ?? existing.language,
         ...(body.pin !== undefined ? { pin: body.pin } : {}),
       });
       const pinHash = body.pin !== undefined
@@ -51,13 +55,18 @@ export default async function profiles(app: FastifyInstance) {
         name: merged.name,
         kind: merged.kind,
         maturityCap: merged.maturityCap ?? null,
+        language: merged.language,
       };
       if (pinHash !== undefined) data.pinHash = pinHash;
       const p = await app.prisma.profile.update({
         where: { id: req.params.id },
         data,
-        select: { id: true, name: true, kind: true },
+        select: { id: true, name: true, kind: true, language: true },
       });
+      // Switching a profile to a new language may require caching its metadata.
+      if (merged.language !== existing.language) {
+        await ensureMetadataLanguage(app, merged.language);
+      }
       return p;
     } catch (e) {
       if (e instanceof ProfileValidationError) return reply.code(400).send({ error: "invalid_profile" });

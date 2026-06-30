@@ -1,0 +1,17 @@
+{
+  "title": "Suche",
+  "placeholder": "z. B. Komödie unter 2 Stunden, etwas Lustiges und Unbeschwertes",
+  "queryAriaLabel": "Suchanfrage",
+  "submit": "Suchen",
+  "searching": "Wird gesucht…",
+  "results_one": "{{count}} Ergebnis",
+  "results_other": "{{count}} Ergebnisse",
+  "mode": {
+    "semantic": "semantisch",
+    "keyword": "Stichwort"
+  },
+  "empty": "Keine Ergebnisse gefunden.",
+  "errors": {
+    "failed": "Suche fehlgeschlagen. Bitte versuche es erneut."
+  }
+}

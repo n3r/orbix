@@ -1,0 +1,64 @@
+{
+  "title": "Paramètres",
+  "backToLibraries": "Retour aux bibliothèques",
+  "saveButton": "Enregistrer les paramètres",
+  "saveSuccess": "Paramètres enregistrés.",
+  "providers": {
+    "heading": "Fournisseurs de métadonnées",
+    "statusLabel": "Statut :",
+    "optional": "(facultatif)",
+    "status": {
+      "configured": "configuré",
+      "notConfigured": "non configuré",
+      "notSet": "non défini"
+    },
+    "placeholderKeyConfigured": "Laisser vide pour conserver la clé existante",
+    "placeholderKeyEmpty": "Collez la clé pour configurer",
+    "tmdb": {
+      "label": "Jeton API TMDB",
+      "placeholderConfigured": "Laisser vide pour conserver le jeton existant",
+      "placeholderEmpty": "Collez le jeton pour configurer"
+    },
+    "omdb": {
+      "label": "Clé API OMDb"
+    },
+    "fanart": {
+      "label": "Clé API Fanart.tv"
+    }
+  },
+  "transcode": {
+    "heading": "Transcodage",
+    "encoderLabel": "Encodeur vidéo",
+    "encoderHelp": "Choisissez l'encodeur matériel ou logiciel utilisé lors du transcodage. Software (libx264) fonctionne toujours ; les encodeurs matériels nécessitent la prise en charge du pilote GPU/VAAPI/NVENC correspondant sur le serveur.",
+    "encoders": {
+      "software": "Software (libx264)",
+      "vaapi": "VA-API (h264_vaapi)",
+      "qsv": "Intel QSV (h264_qsv)",
+      "nvenc": "NVIDIA NVENC (h264_nvenc)"
+    }
+  },
+  "library": {
+    "heading": "Bibliothèque",
+    "cadenceLabel": "Fréquence d'actualisation des métadonnées (jours)",
+    "cadenceHelp": "Nombre de jours entre les actualisations automatiques des métadonnées. Augmentez cette valeur pour réduire les appels à l'API."
+  },
+  "maintenance": {
+    "heading": "Maintenance",
+    "help": "Récupérer à nouveau les métadonnées et les illustrations de chaque titre depuis TMDB maintenant. Utilisez cette option après avoir ajouté ou modifié votre jeton TMDB. Les titres que vous avez corrigés manuellement conservent l'affiche choisie. Les grandes bibliothèques peuvent prendre un certain temps.",
+    "rebuildButton": "Reconstruire les métadonnées",
+    "rebuilding": "Reconstruction…",
+    "failed": "Échec de la reconstruction — consultez les journaux du serveur.",
+    "noToken": "Ajoutez un jeton API TMDB ci-dessus et cliquez sur Enregistrer les paramètres avant de reconstruire.",
+    "networkError": "Erreur réseau pendant la reconstruction.",
+    "rebuiltCount_one": "{{count}} titre reconstruit",
+    "rebuiltCount_other": "{{count}} titres reconstruits",
+    "unmatchedCount_one": "{{count}} sans correspondance TMDB",
+    "unmatchedCount_other": "{{count}} sans correspondance TMDB",
+    "skippedCount_one": "{{count}} en erreur",
+    "skippedCount_other": "{{count}} en erreur"
+  },
+  "errors": {
+    "loadFailed": "Échec du chargement des paramètres",
+    "saveFailed": "Échec de l'enregistrement des paramètres"
+  }
+}

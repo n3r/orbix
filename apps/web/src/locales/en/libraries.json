@@ -1,0 +1,34 @@
+{
+  "title": "Libraries",
+  "settingsLink": "Settings",
+  "adding": "Adding…",
+  "deleteLibrary": "Delete Library",
+  "add": {
+    "heading": "Add Library",
+    "namePlaceholder": "Library name"
+  },
+  "section": {
+    "addButton": "Add Section",
+    "namePlaceholder": "Section name (e.g. Movies)"
+  },
+  "source": {
+    "addButton": "Add Source",
+    "pathPlaceholder": "/path/to/media/folder"
+  },
+  "scan": {
+    "button": "Scan",
+    "scanning": "Scanning…",
+    "starting": "Starting…",
+    "streamError": "Connection to the scan was lost.",
+    "unknownError": "unknown error",
+    "done_one": "Done — {{count}} title added, {{updated}} updated, {{matched}} matched",
+    "done_other": "Done — {{count}} titles added, {{updated}} updated, {{matched}} matched",
+    "failed": "Scan failed: {{message}}",
+    "progress": "{{phase}}: {{processed}}/{{total}}"
+  },
+  "errors": {
+    "loadFailed": "Failed to load libraries",
+    "createFailed": "Failed to create library",
+    "addSourceFailed": "Failed to add source"
+  }
+}

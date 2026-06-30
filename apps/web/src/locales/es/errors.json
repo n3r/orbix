@@ -1,0 +1,19 @@
+{
+  "unknown": "Algo salió mal. Inténtalo de nuevo.",
+  "network": "Error de red. Inténtalo de nuevo.",
+  "invalid_credentials": "Correo o contraseña no válidos.",
+  "unauthenticated": "Inicia sesión para continuar.",
+  "unauthorized": "No tienes permiso para hacer eso.",
+  "invalid": "Esos datos no son válidos.",
+  "invalid_profile": "Esos datos de perfil no son válidos.",
+  "not_found": "No encontrado.",
+  "pin_required": "Ese perfil necesita un PIN.",
+  "setup_complete": "La configuración ya está completa.",
+  "no_sources": "Añade una carpeta de biblioteca antes de escanear.",
+  "tmdb_not_configured": "Primero configura tu token de TMDB en Ajustes.",
+  "tmdbId_required": "Se requiere una coincidencia de TMDB.",
+  "tmdbPosterPath_required": "Se requiere un póster.",
+  "not_allowed_for_kids": "Esta sección no está disponible en un perfil infantil.",
+  "blocked_by_rating": "Este título está bloqueado por la clasificación de madurez del perfil.",
+  "invalid_sort": "Esa opción de orden no es válida."
+}

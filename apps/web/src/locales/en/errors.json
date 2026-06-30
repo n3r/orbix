@@ -1,0 +1,19 @@
+{
+  "unknown": "Something went wrong. Please try again.",
+  "network": "Network error. Please try again.",
+  "invalid_credentials": "Invalid email or password.",
+  "unauthenticated": "Please sign in to continue.",
+  "unauthorized": "You don't have permission to do that.",
+  "invalid": "Those details aren't valid.",
+  "invalid_profile": "Those profile details aren't valid.",
+  "not_found": "Not found.",
+  "pin_required": "That profile needs a PIN.",
+  "setup_complete": "Setup is already complete.",
+  "no_sources": "Add a library folder before scanning.",
+  "tmdb_not_configured": "Set your TMDB token in Settings first.",
+  "tmdbId_required": "A TMDB match is required.",
+  "tmdbPosterPath_required": "A poster is required.",
+  "not_allowed_for_kids": "This area isn't available on a kids profile.",
+  "blocked_by_rating": "This title is blocked by the profile's maturity setting.",
+  "invalid_sort": "That sort option isn't valid."
+}
