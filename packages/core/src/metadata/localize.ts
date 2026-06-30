@@ -44,6 +44,22 @@ export function localizeItem<T extends { title: string; overview?: string | null
 }
 
 /**
+ * Like localizeItem, but for records keyed on `name` (e.g. a TV season) rather
+ * than `title`. Non-empty translation values win; otherwise the base stands.
+ */
+export function localizeName<T extends { name: string | null; overview?: string | null }>(
+  base: T,
+  tr?: { name?: string | null; overview?: string | null } | null,
+): T {
+  if (!tr) return base;
+  return {
+    ...base,
+    name: pick(tr.name, base.name),
+    overview: pick(tr.overview, base.overview),
+  };
+}
+
+/**
  * Replaces each genre name with its translation (looked up by TMDB id) when
  * present, else keeps the base name.
  */

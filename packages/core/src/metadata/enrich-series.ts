@@ -1,7 +1,10 @@
 import type { TmdbSearchResult, TmdbTv, TmdbEpisode } from "./tmdb";
 import type { ImageKind } from "./images";
 import type { ExternalRatings } from "./omdb";
-import type { EnrichResult } from "./enrich";
+import type { EnrichResult, MetadataTranslation } from "./enrich";
+
+/** Minimal client surface needed to fetch localized series/season/episode text. */
+export type TranslateSeriesClient = Pick<TmdbTvLike, "tv" | "tvSeason">;
 
 // ---------------------------------------------------------------------------
 // Structural interface — the real TmdbClient satisfies this.
@@ -26,6 +29,7 @@ export interface SaveSeriesEpisode {
   runtimeSec?: number;
   airDate?: string;
   tmdbEpisodeId?: number;
+  translations?: { language: string; title?: string; overview?: string }[];
 }
 
 export interface SaveSeriesSeason {
@@ -36,6 +40,7 @@ export interface SaveSeriesSeason {
   airYear?: number;
   tmdbSeasonId?: number;
   episodes: SaveSeriesEpisode[];
+  translations?: { language: string; name?: string; overview?: string }[];
 }
 
 export interface SaveSeriesInput {
@@ -58,6 +63,8 @@ export interface SaveSeriesInput {
   rating?: string;
   genres: { tmdbId: number; name: string }[];
   seasons: SaveSeriesSeason[];
+  /** Per-language localized series title/overview. */
+  translations?: MetadataTranslation[];
 }
 
 // ---------------------------------------------------------------------------
@@ -79,6 +86,8 @@ export async function enrichSeries(
     resolveLogo?: (input: { tmdbId: number; imdbId?: string }) => Promise<string | undefined>;
     fetchRatings?: (imdbId: string) => Promise<ExternalRatings | undefined>;
     localSeasonNumbers?: number[];
+    /** Per-language clients used to fetch localized series/season/episode text. */
+    translateClients?: Map<string, TranslateSeriesClient>;
   },
 ): Promise<EnrichResult> {
   const tmdbId = item.tmdbId ?? (await deps.client.searchTv(item.title, item.year))?.tmdbId;
@@ -154,6 +163,56 @@ export async function enrichSeries(
     });
   }
 
+  // Localized series/season/episode text for each active content language.
+  // A per-language failure must NOT fail enrichment — skip that language.
+  const seriesTranslations: MetadataTranslation[] = [];
+  if (deps.translateClients) {
+    for (const [language, client] of deps.translateClients) {
+      try {
+        const ltv = await client.tv(tmdbId);
+        seriesTranslations.push({
+          language,
+          title: ltv.title,
+          ...(ltv.overview != null ? { overview: ltv.overview } : {}),
+        });
+
+        // Season names/overviews, matched by seasonNumber to the saved seasons.
+        const localizedSeasonByNumber = new Map(ltv.seasons.map((ls) => [ls.seasonNumber, ls]));
+        for (const season of seasons) {
+          const ls = localizedSeasonByNumber.get(season.seasonNumber);
+          if (!ls || (ls.name == null && ls.overview == null)) continue;
+          (season.translations ??= []).push({
+            language,
+            ...(ls.name != null ? { name: ls.name } : {}),
+            ...(ls.overview != null ? { overview: ls.overview } : {}),
+          });
+        }
+
+        // Episode titles/overviews, matched by episodeNumber within each season.
+        for (const season of seasons) {
+          let localizedEpisodes: TmdbEpisode[] = [];
+          try {
+            localizedEpisodes = await client.tvSeason(tmdbId, season.seasonNumber);
+          } catch {
+            localizedEpisodes = [];
+          }
+          const byNumber = new Map(localizedEpisodes.map((le) => [le.episodeNumber, le]));
+          for (const ep of season.episodes) {
+            const le = byNumber.get(ep.episodeNumber);
+            if (!le || (le.title == null && le.overview == null)) continue;
+            (ep.translations ??= []).push({
+              language,
+              ...(le.title != null ? { title: le.title } : {}),
+              ...(le.overview != null ? { overview: le.overview } : {}),
+            });
+          }
+        }
+      } catch {
+        // localized fetch failed for this language — fall back to base.
+      }
+    }
+  }
+
   await deps.saveSeries({
     itemId: item.id,
     tmdbId,
@@ -174,6 +233,7 @@ export async function enrichSeries(
     rating,
     genres: tv.genres,
     seasons,
+    translations: seriesTranslations,
   });
 
   return { matched: true, tmdbId };

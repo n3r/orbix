@@ -325,7 +325,7 @@ export class TmdbClient {
   }
 
   async tv(id: number): Promise<TmdbTv> {
-    const raw = await this.get<RawTv>(`${BASE}/tv/${id}?append_to_response=external_ids`);
+    const raw = await this.get<RawTv>(this.withLang(`${BASE}/tv/${id}?append_to_response=external_ids`));
     return {
       tmdbId: raw.id,
       title: raw.name,
@@ -351,7 +351,7 @@ export class TmdbClient {
   }
 
   async tvSeason(id: number, seasonNumber: number): Promise<TmdbEpisode[]> {
-    const raw = await this.get<RawTvSeason>(`${BASE}/tv/${id}/season/${seasonNumber}`);
+    const raw = await this.get<RawTvSeason>(this.withLang(`${BASE}/tv/${id}/season/${seasonNumber}`));
     return (raw.episodes ?? []).map((e) => ({
       episodeNumber: e.episode_number,
       ...(e.name ? { title: e.name } : {}),
