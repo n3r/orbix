@@ -58,14 +58,16 @@ export default function TopNav({ profile }: { profile: Profile | null }) {
           : "bg-gradient-to-b from-black/60 to-transparent",
       )}
     >
-      <nav className="mx-auto flex h-14 items-center gap-6 px-4 md:px-8">
+      <nav className="mx-auto grid h-14 grid-cols-[1fr_auto_1fr] items-center gap-4 px-4 md:px-8">
         {/* Left: logo */}
-        <Link to="/" className="text-xl font-bold tracking-tight text-[var(--text)]">
+        <Link to="/" className="justify-self-start text-xl font-bold tracking-tight text-[var(--text)]">
           {t("common:app.name")}
         </Link>
 
-        {/* Center: Home · TV · categories (desktop only — mobile uses BottomNav) */}
-        <div className="hidden md:flex items-center gap-4">
+        {/* Center: Home · TV · categories (desktop only — mobile uses BottomNav).
+            The auto middle column sits between two equal 1fr columns, so it stays
+            centered in the bar regardless of the logo / right-actions widths. */}
+        <div className="hidden md:flex items-center gap-4 justify-self-center">
           <Link
             to="/"
             aria-current={pathname === "/" ? "page" : undefined}
@@ -81,7 +83,7 @@ export default function TopNav({ profile }: { profile: Profile | null }) {
         </div>
 
         {/* Right: heart · search · avatar */}
-        <div className="ml-auto flex items-center gap-4">
+        <div className="flex items-center gap-4 justify-self-end">
           <Placeholder label={t("nav:myList")} comingSoon={t("nav:comingSoon")}><HeartIcon /></Placeholder>
           <Link to="/search" aria-label={t("nav:search")} className="text-[var(--text-dim)] hover:text-[var(--text)] transition-colors">
             <SearchIcon />
