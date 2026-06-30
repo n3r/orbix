@@ -62,6 +62,7 @@ export default async function catalogRoute(app: FastifyInstance) {
           where: { id: req.params.id },
           select: {
             id: true,
+            kind: true,
             title: true,
             year: true,
             overview: true,
@@ -119,6 +120,7 @@ export default async function catalogRoute(app: FastifyInstance) {
 
       return {
         id: item.id,
+        kind: item.kind,
         title: item.title,
         year: item.year,
         overview: item.overview,
