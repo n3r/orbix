@@ -179,6 +179,23 @@ episode id. Keeps the existing Prisma `upsert` (no nullable-unique pitfalls).
 - Gates per change: `pnpm typecheck && pnpm lint && pnpm test`; `pnpm build` before
   merge.
 
+## Status — implemented
+
+All four phases are implemented on `feat/movie-tv-page-rework` (commits per phase).
+Gates: typecheck, lint (0 errors), tests (core 272 / api 41 / web 14 / config 3),
+and build all green. Both migrations apply cleanly to a real pg16 and
+`prisma migrate diff` reports **no drift**. Not yet visually smoked against a
+populated library — a rescan is required to backfill logos, ratings, and episodes.
+
+Known follow-ups (intentionally deferred):
+- Series cast/crew (TMDB `aggregate_credits`) — series detail `cast` is currently
+  empty since `enrichSeries` doesn't fetch credits.
+- fanart.tv TV logos need a TheTVDB id we don't store; series logos use TMDB only.
+- Pure absolute-numbered anime with no season/episode markers still parses as a
+  movie (covered: SxxExx, NxNN, `Season NN/`, and `Season NN/ - NN`).
+- Smart per-episode "next up" resume on the hero (currently plays the first owned
+  episode of the default season).
+
 ## Out of scope
 
 - Home-page `Hero.tsx` carousel (separate component; may share sub-components later).
