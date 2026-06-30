@@ -126,15 +126,18 @@ export async function ensureMetadataLanguage(
 
 export function queuePlugin(env: Env) {
   return fp(async (app: FastifyInstance) => {
-    // In tests the queue is never exercised (no jobs are enqueued), but a bogus
-    // REDIS_URL would make BullMQ eagerly open ioredis connections and leak
-    // unhandled DNS-failure rejections (EAI_AGAIN), failing the run. lazyConnect
-    // keeps queues offline until first use, and autorun:false keeps the workers
-    // from starting their blocking poll. Production behaviour is unchanged.
-    const isTest = env.NODE_ENV === "test";
-    const connection = isTest
-      ? { url: env.REDIS_URL, lazyConnect: true, maxRetriesPerRequest: null }
-      : { url: env.REDIS_URL };
+    // Tests never enqueue jobs and point REDIS_URL at a bogus host. Creating real
+    // BullMQ queues/workers opens ioredis connections whose DNS failures (EAI_AGAIN
+    // under a retry storm) leak as unhandled rejections and fail the run. Decorate
+    // inert stubs and skip all Redis setup; production behaviour is unchanged.
+    if (env.NODE_ENV === "test") {
+      const stub = { add: async () => undefined, close: async () => undefined };
+      app.decorate("scanQueue", stub as unknown as Queue<ScanJobData>);
+      app.decorate("translateQueue", stub as unknown as Queue<TranslateJobData>);
+      return;
+    }
+
+    const connection = { url: env.REDIS_URL };
 
     const queue = new Queue<ScanJobData>("scan", { connection });
 
@@ -764,7 +767,7 @@ export function queuePlugin(env: Env) {
 
     // ── Worker ─────────────────────────────────────────────────────────────
 
-    const worker = new Worker<ScanJobData, void>("scan", processor, { connection, autorun: !isTest });
+    const worker = new Worker<ScanJobData, void>("scan", processor, { connection });
     worker.on("error", (err) => app.log.error({ err }, "scan worker error"));
 
     app.decorate("scanQueue", queue);
@@ -840,7 +843,7 @@ export function queuePlugin(env: Env) {
     const translateWorker = new Worker<TranslateJobData, void>(
       "translate-metadata",
       translateProcessor,
-      { connection, autorun: !isTest },
+      { connection },
     );
     translateWorker.on("error", (err) => app.log.error({ err }, "translate worker error"));
 
