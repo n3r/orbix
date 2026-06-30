@@ -16,7 +16,6 @@
     "@tanstack/react-query": "~5.101.2",
     "@vidstack/react": "^1.0.0",
     "hls.js": "^1.6.16",
-    "next": "^15.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router": "~8.1.0"
@@ -25,7 +24,6 @@
     "@orbix/core": "workspace:*",
     "@orbix/db": "workspace:*",
     "@playwright/test": "^1.48.0",
-    "@tailwindcss/postcss": "^4.0.0",
     "@tailwindcss/vite": "~4.3.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

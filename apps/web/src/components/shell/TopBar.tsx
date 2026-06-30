@@ -1,5 +1,3 @@
-"use client";
-
 import { cn } from "@orbix/ui";
 
 /** Slim top bar shown only on mobile — hosts the drawer hamburger. */
