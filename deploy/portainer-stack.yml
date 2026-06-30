@@ -85,7 +85,7 @@ services:
     volumes:
       - orbix-metadata:/data/metadata
       - orbix-transcode:/data/transcode
-      - orbix-mounts:/data/mounts:rshared
+      - orbix-mounts:/data/mounts
       - ${ORBIX_MEDIA_PATH:-/tmp/orbixmedia}:/media:ro
       # Uncomment to use an external models volume (opt-in, overrides baked model):
       # - orbix-models:/data/models
