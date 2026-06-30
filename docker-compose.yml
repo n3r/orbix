@@ -29,6 +29,9 @@ services:
   api:
     build: { context: ., dockerfile: apps/api/Dockerfile.dev }
     restart: unless-stopped
+    # SMB/CIFS external sources are mounted inside the container (cifs-utils).
+    cap_add: ["SYS_ADMIN"]
+    security_opt: ["apparmor:unconfined"]
     environment:
       DATABASE_URL: postgresql://orbix:orbix@postgres:5432/orbix
       REDIS_URL: redis://redis:6379
@@ -36,6 +39,7 @@ services:
       WEB_PORT: "1060"
       WEB_ORIGIN: http://localhost:1060
       SESSION_SECRET: dev-session-secret-change-me-32chars
+      MOUNTS_DIR: /data/mounts
       NODE_ENV: development
     ports: ["1061:1061"]
     volumes:
@@ -44,6 +48,7 @@ services:
       - ./packages/core/src:/app/packages/core/src
       - ./packages/db/src:/app/packages/db/src
       - ./packages/db/prisma:/app/packages/db/prisma
+      - ./data/mounts:/data/mounts:rshared
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
