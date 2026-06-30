@@ -1,6 +1,5 @@
-"use client";
-
 import { useState, useEffect } from "react";
+import { Link } from "react-router";
 import { Button, Card, Input } from "@orbix/ui";
 import { apiFetch } from "@/lib/api";
 
@@ -145,12 +144,12 @@ export default function AdminSettingsPage() {
      <div className="mx-auto flex max-w-2xl flex-col gap-8">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-[var(--text)]">Settings</h1>
-        <a
-          href="/admin/libraries"
+        <Link
+          to="/admin/libraries"
           className="text-sm text-[var(--text-dim)] hover:text-[var(--text)]"
         >
           Back to Libraries
-        </a>
+        </Link>
       </div>
 
       <form onSubmit={handleSave} className="flex flex-col gap-6">

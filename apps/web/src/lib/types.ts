@@ -43,3 +43,10 @@ export interface MediaCard {
   posterPath: string | null;
   matchState?: string;
 }
+
+/** One labelled row on the home screen (smart rows, continue watching, etc.). */
+export interface HomeRow {
+  key: string;
+  title: string;
+  items: MediaCard[];
+}

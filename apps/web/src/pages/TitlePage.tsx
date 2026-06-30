@@ -1,12 +1,11 @@
-"use client";
-
-import { useState, useEffect } from "react";
-import dynamic from "next/dynamic";
-import Link from "next/link";
+import { useState, lazy, Suspense } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Link, useParams } from "react-router";
 import { Button } from "@orbix/ui";
-import { apiFetch } from "@/lib/api";
+import { apiJson, ApiError } from "@/lib/api";
+import { useMyProfile } from "@/lib/queries";
 
-const Player = dynamic(() => import("@/components/Player"), { ssr: false });
+const Player = lazy(() => import("@/components/Player"));
 
 interface CastMember {
   name: string;
@@ -41,10 +40,6 @@ interface ItemDetail {
   files: MediaFile[];
 }
 
-interface Props {
-  params: Promise<{ id: string }>;
-}
-
 function formatRuntime(seconds: number | null): string | null {
   if (seconds == null) return null;
   const h = Math.floor(seconds / 3600);
@@ -53,52 +48,22 @@ function formatRuntime(seconds: number | null): string | null {
   return `${h}h ${m}m`;
 }
 
-export default function TitlePage({ params }: Props) {
-  const [id, setId] = useState<string | null>(null);
-  const [item, setItem] = useState<ItemDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [notFound, setNotFound] = useState(false);
+export default function TitlePage() {
+  const { id } = useParams();
   const [playing, setPlaying] = useState(false);
-  const [isKidsProfile, setIsKidsProfile] = useState(false);
 
-  useEffect(() => {
-    params.then((p) => setId(p.id));
-  }, [params]);
+  const itemQuery = useQuery({
+    queryKey: ["item", id],
+    enabled: !!id,
+    queryFn: () => apiJson<ItemDetail>(`/items/${id}`),
+    retry: false,
+  });
+  const profileQuery = useMyProfile();
+  const isKidsProfile = profileQuery.data?.kind === "kids";
 
-  useEffect(() => {
-    if (!id) return;
-    void (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const [res, profileRes] = await Promise.all([
-          apiFetch(`/items/${id}`),
-          apiFetch("/me/profile").catch(() => null),
-        ]);
-        if (res.status === 404) {
-          setNotFound(true);
-          return;
-        }
-        if (!res.ok) {
-          setError("Failed to load title");
-          return;
-        }
-        const data = (await res.json()) as ItemDetail;
-        setItem(data);
-        if (profileRes?.ok) {
-          const { kind } = (await profileRes.json()) as { kind: string | null };
-          setIsKidsProfile(kind === "kids");
-        }
-      } catch {
-        setError("Network error");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [id]);
+  const notFound = itemQuery.error instanceof ApiError && itemQuery.error.status === 404;
 
-  if (loading) {
+  if (itemQuery.isLoading) {
     return (
       <main className="p-8">
         <p className="text-[var(--text-dim)]">Loading…</p>
@@ -114,10 +79,11 @@ export default function TitlePage({ params }: Props) {
     );
   }
 
-  if (error || !item) {
+  const item = itemQuery.data;
+  if (!item) {
     return (
       <main className="p-8">
-        <p className="text-sm text-red-400">{error ?? "Unknown error"}</p>
+        <p className="text-sm text-red-400">Failed to load title</p>
       </main>
     );
   }
@@ -164,10 +130,10 @@ export default function TitlePage({ params }: Props) {
             )}
 
             {/* Admin: Fix match action — hidden for kids profiles (server also enforces 403) */}
-            {id && !isKidsProfile && (
+            {!isKidsProfile && (
               <div className="mt-1">
                 <Link
-                  href={`/title/${id}/fix`}
+                  to={`/title/${id}/fix`}
                   className="text-xs text-[var(--text-dim)] hover:text-[var(--accent)] underline underline-offset-2"
                 >
                   Fix match / poster (admin)
@@ -202,11 +168,15 @@ export default function TitlePage({ params }: Props) {
 
         {/* Player */}
         {playing && item.files?.[0]?.id && (
-          <Player
-            fileId={item.files[0].id}
-            mediaItemId={item.id}
-            title={item.title}
-          />
+          <Suspense
+            fallback={<p className="text-sm text-[var(--text-dim)] py-2">Loading player…</p>}
+          >
+            <Player
+              fileId={item.files[0].id}
+              mediaItemId={item.id}
+              title={item.title}
+            />
+          </Suspense>
         )}
 
         {/* Overview */}

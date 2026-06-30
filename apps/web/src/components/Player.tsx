@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useRef, useState, useCallback } from "react";
 import { MediaPlayer, MediaProvider, Track, isHLSProvider, type MediaPlayerInstance, type MediaProviderAdapter } from "@vidstack/react";
 import { DefaultVideoLayout, defaultLayoutIcons } from "@vidstack/react/player/layouts/default";

@@ -1,7 +1,4 @@
-"use client";
-
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { Link, useLocation } from "react-router";
 import { Avatar, cn } from "@orbix/ui";
 import { apiFetch } from "@/lib/api";
 import type { Library, Profile } from "@/lib/types";
@@ -27,7 +24,7 @@ function NavLink({
 }) {
   return (
     <Link
-      href={href}
+      to={href}
       onClick={onNavigate}
       className={cn(
         "flex items-center gap-3 rounded-[var(--radius-sm)] px-3 py-2 text-sm transition-colors",
@@ -76,7 +73,7 @@ export default function Sidebar({
   className,
   onNavigate,
 }: SidebarProps) {
-  const pathname = usePathname();
+  const { pathname } = useLocation();
   const multiLib = libraries.length > 1;
 
   async function handleLogout() {
@@ -98,7 +95,7 @@ export default function Sidebar({
     >
       {/* Wordmark */}
       <Link
-        href="/"
+        to="/"
         onClick={onNavigate}
         className="px-2 py-3 text-xl font-bold text-[var(--text)]"
       >
@@ -175,7 +172,7 @@ export default function Sidebar({
           </div>
         )}
         <Link
-          href="/profiles"
+          to="/profiles"
           onClick={onNavigate}
           className="px-3 py-1.5 text-xs text-[var(--text-dim)] transition-colors hover:text-[var(--text)]"
         >

@@ -1,7 +1,5 @@
-"use client";
-
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router";
 import { Button, Card, Input, Avatar } from "@orbix/ui";
 import { apiFetch } from "@/lib/api";
 
@@ -14,7 +12,7 @@ interface Profile {
 }
 
 export default function ProfilesPage() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [newName, setNewName] = useState("");
@@ -31,7 +29,7 @@ export default function ProfilesPage() {
         return;
       }
       if (res.status === 401) {
-        router.replace("/login");
+        navigate("/login", { replace: true });
         return;
       }
       setSelectError("Failed to load profiles");
@@ -74,7 +72,11 @@ export default function ProfilesPage() {
       method: "POST",
     });
     if (res.ok) {
-      router.replace("/");
+      // Full reload (like logout) so the TanStack Query cache is dropped and the
+      // guard re-reads the new orbix_profile cookie. A client navigate would
+      // re-enter RequireProfile with stale profile-scoped cache → bounce back to
+      // /profiles and briefly show the previous profile's data.
+      window.location.assign("/");
     } else {
       const body = (await res.json()) as { error?: string };
       if (body.error === "pin_required") {

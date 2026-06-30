@@ -1,8 +1,8 @@
-"use client";
-
 import { useState, useEffect, useRef } from "react";
+import { Link } from "react-router";
 import { Button, Card, Input } from "@orbix/ui";
 import { apiFetch } from "@/lib/api";
+import { queryClient } from "@/lib/queryClient";
 
 interface Source {
   id: string;
@@ -80,6 +80,13 @@ export default function AdminLibrariesPage() {
     }
   }
 
+  // Reload local state AND invalidate the shared libraries query so the
+  // sidebar nav (RequireProfile → useLibraries) reflects the change.
+  async function refresh() {
+    await loadLibraries();
+    void queryClient.invalidateQueries({ queryKey: ["libraries"] });
+  }
+
   useEffect(() => {
     loadLibraries();
   }, []);
@@ -95,7 +102,7 @@ export default function AdminLibrariesPage() {
       });
       if (res.ok) {
         setNewLibName("");
-        await loadLibraries();
+        await refresh();
       } else {
         const body = (await res.json()) as { error?: string };
         setLibError(body.error ?? "Failed to create library");
@@ -109,7 +116,7 @@ export default function AdminLibrariesPage() {
 
   async function handleDeleteLibrary(id: string) {
     await apiFetch(`/libraries/${id}`, { method: "DELETE" });
-    await loadLibraries();
+    await refresh();
   }
 
   async function handleCreateSection(e: React.FormEvent, libraryId: string) {
@@ -123,7 +130,7 @@ export default function AdminLibrariesPage() {
       });
       if (res.ok) {
         setSectionForms((s) => ({ ...s, [libraryId]: "" }));
-        await loadLibraries();
+        await refresh();
       }
     } catch {
       // ignore
@@ -134,7 +141,7 @@ export default function AdminLibrariesPage() {
 
   async function handleDeleteSection(id: string) {
     await apiFetch(`/sections/${id}`, { method: "DELETE" });
-    await loadLibraries();
+    await refresh();
   }
 
   async function handleCreateSource(e: React.FormEvent, sectionId: string) {
@@ -149,7 +156,7 @@ export default function AdminLibrariesPage() {
       });
       if (res.ok) {
         setSourceForms((s) => ({ ...s, [sectionId]: "" }));
-        await loadLibraries();
+        await refresh();
       } else {
         const body = (await res.json()) as { error?: string };
         setSourceErrors((s) => ({
@@ -166,7 +173,7 @@ export default function AdminLibrariesPage() {
 
   async function handleDeleteSource(id: string) {
     await apiFetch(`/sources/${id}`, { method: "DELETE" });
-    await loadLibraries();
+    await refresh();
   }
 
   async function handleScan(sectionId: string) {
@@ -185,7 +192,7 @@ export default function AdminLibrariesPage() {
       }
       const { jobId } = (await res.json()) as { jobId: string };
 
-      // Open SSE stream (same-origin via Next.js proxy rewrite)
+      // Open SSE stream (same-origin: served by Fastify in prod, Vite-proxied in dev).
       // Close any prior EventSource for this section before opening a new one
       esRef.current.get(sectionId)?.close();
       const es = new EventSource(`/api/scan/${jobId}/stream`);
@@ -198,7 +205,7 @@ export default function AdminLibrariesPage() {
           es.close();
           esRef.current.delete(sectionId);
           setScanLoading((s) => ({ ...s, [sectionId]: false }));
-          if (data.phase === "done") void loadLibraries();
+          if (data.phase === "done") void refresh();
         }
       };
 
@@ -240,12 +247,12 @@ export default function AdminLibrariesPage() {
      <div className="mx-auto flex max-w-4xl flex-col gap-8">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-[var(--text)]">Libraries</h1>
-        <a
-          href="/admin/settings"
+        <Link
+          to="/admin/settings"
           className="text-sm text-[var(--text-dim)] hover:text-[var(--text)]"
         >
           Settings
-        </a>
+        </Link>
       </div>
 
       {error && <p className="text-sm text-red-400">{error}</p>}

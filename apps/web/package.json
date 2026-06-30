@@ -3,30 +3,38 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 1060",
-    "build": "next build",
-    "start": "next start -p 1060",
+    "dev": "vite --port 1060",
+    "build": "vite build",
+    "preview": "vite preview --port 1060",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "test:e2e": "playwright test",
     "lint": "eslint ."
   },
   "dependencies": {
     "@orbix/ui": "workspace:*",
+    "@tanstack/react-query": "~5.101.2",
     "@vidstack/react": "^1.0.0",
     "hls.js": "^1.6.16",
-    "next": "^15.0.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "react-router": "~8.1.0"
   },
   "devDependencies": {
     "@orbix/core": "workspace:*",
     "@orbix/db": "workspace:*",
     "@playwright/test": "^1.48.0",
-    "@tailwindcss/postcss": "^4.0.0",
+    "@tailwindcss/vite": "~4.3.2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^26.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "tailwindcss": "^4.0.0",
-    "typescript": "^5.6.0"
+    "@vitejs/plugin-react": "^6.0.3",
+    "jsdom": "^29.1.1",
+    "tailwindcss": "^4.3.1",
+    "typescript": "^5.6.0",
+    "vite": "~8.1.0",
+    "vitest": "~4.1.9"
   }
 }

@@ -1,12 +1,10 @@
-"use client";
-
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router";
 import { Button, Input, Card } from "@orbix/ui";
 import { apiFetch } from "@/lib/api";
 
 export default function SetupPage() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -22,7 +20,7 @@ export default function SetupPage() {
         body: JSON.stringify({ email, password }),
       });
       if (res.ok) {
-        router.replace("/profiles");
+        navigate("/profiles", { replace: true });
       } else {
         const body = (await res.json()) as { error?: string };
         setError(body.error ?? "Setup failed. Please try again.");

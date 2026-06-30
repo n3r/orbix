@@ -1,48 +1,26 @@
-"use client";
-
 import { useState, type FormEvent } from "react";
-import { apiFetch } from "@/lib/api";
+import { ApiError } from "@/lib/api";
+import { useSearch } from "@/lib/queries";
 import PosterCard from "@/components/PosterCard";
-import type { MediaCard } from "@/lib/types";
-
-interface SearchResponse {
-  items: MediaCard[];
-  usedEmbeddings: boolean;
-}
 
 export default function SearchPage() {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<MediaCard[] | null>(null);
-  const [usedEmbeddings, setUsedEmbeddings] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState("");
+  const { data, isFetching, error } = useSearch(submitted);
 
-  async function handleSubmit(e: FormEvent) {
+  function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!query.trim()) return;
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const res = await apiFetch(`/search?q=${encodeURIComponent(query.trim())}`);
-      if (res.status === 401) {
-        setError("Please sign in to search.");
-        return;
-      }
-      if (!res.ok) {
-        setError("Search failed. Please try again.");
-        return;
-      }
-      const data = (await res.json()) as SearchResponse;
-      setResults(data.items ?? []);
-      setUsedEmbeddings(data.usedEmbeddings ?? false);
-    } catch {
-      setError("Search failed. Please try again.");
-    } finally {
-      setLoading(false);
-    }
+    setSubmitted(query.trim());
   }
+
+  const errorMsg = error
+    ? error instanceof ApiError && error.status === 401
+      ? "Please sign in to search."
+      : "Search failed. Please try again."
+    : null;
+  const results = data?.items ?? null;
+  const usedEmbeddings = data?.usedEmbeddings ?? false;
 
   return (
     <main className="flex min-h-screen flex-col gap-6 px-6 md:px-8 lg:px-10 py-8">
@@ -59,14 +37,14 @@ export default function SearchPage() {
         />
         <button
           type="submit"
-          disabled={loading}
+          disabled={isFetching}
           className="px-6 py-2 rounded-[var(--radius)] bg-[var(--accent)] text-white font-medium disabled:opacity-50"
         >
-          {loading ? "Searching…" : "Search"}
+          {isFetching ? "Searching…" : "Search"}
         </button>
       </form>
 
-      {error && <p className="text-red-400 text-sm">{error}</p>}
+      {errorMsg && <p className="text-red-400 text-sm">{errorMsg}</p>}
 
       {results !== null && (
         <>

@@ -1,7 +1,5 @@
-"use client";
-
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useNavigate } from "react-router";
 import { Button, Input } from "@orbix/ui";
 import { apiFetch } from "@/lib/api";
 
@@ -12,13 +10,9 @@ interface Candidate {
   posterPath?: string;
 }
 
-interface Props {
-  params: Promise<{ id: string }>;
-}
-
-export default function FixMatchPage({ params }: Props) {
-  const router = useRouter();
-  const [id, setId] = useState<string | null>(null);
+export default function FixMatchPage() {
+  const { id } = useParams();
+  const navigate = useNavigate();
   const [itemTitle, setItemTitle] = useState<string>("");
   const [query, setQuery] = useState<string>("");
   const [candidates, setCandidates] = useState<Candidate[]>([]);
@@ -29,11 +23,6 @@ export default function FixMatchPage({ params }: Props) {
   const [posterPath, setPosterPath] = useState<string | null>(null);
   const [settingPoster, setSettingPoster] = useState<string | null>(null);
   const [posterError, setPosterError] = useState<string | null>(null);
-
-  // Resolve the dynamic route param
-  useEffect(() => {
-    params.then((p) => setId(p.id));
-  }, [params]);
 
   // Fetch item title to pre-fill the search box
   useEffect(() => {
@@ -98,7 +87,7 @@ export default function FixMatchPage({ params }: Props) {
         setMatchError("Failed to apply match.");
         return;
       }
-      router.push(`/title/${id}`);
+      navigate(`/title/${id}`);
     } catch {
       setMatchError("Network error.");
     } finally {
@@ -135,7 +124,7 @@ export default function FixMatchPage({ params }: Props) {
     <main className="p-8 max-w-4xl mx-auto flex flex-col gap-8">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button variant="ghost" onClick={() => id && router.push(`/title/${id}`)}>
+        <Button variant="ghost" onClick={() => id && navigate(`/title/${id}`)}>
           &larr; Back
         </Button>
         <h1 className="text-2xl font-bold text-[var(--text)]">Fix Match</h1>

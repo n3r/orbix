@@ -58,10 +58,9 @@ openssl rand -base64 32
 ### 3. Deploy
 
 Click **Deploy the stack**. Portainer will:
-1. Build both Docker images (api + web) from source — this takes **5–15 minutes** on first deploy (model download, Next.js build)
+1. Build the Docker image (a single `api` image that also bundles the built web UI) from source — this takes **5–15 minutes** on first deploy (model download, SPA build)
 2. Start postgres and redis, wait for them to be healthy
-3. Start the API (runs `prisma migrate deploy` automatically on each start)
-4. Start the web UI
+3. Start the API — it runs `prisma migrate deploy` automatically on each start, then serves both the web UI and `/api` on the same port
 
 **Watch the logs** in Portainer → Containers → select `orbix-api-1` → Logs.
 
@@ -116,10 +115,9 @@ docker run --rm -v orbix-metadata:/data -v $(pwd):/backup alpine \
 
 | Port | Service | Description |
 |------|---------|-------------|
-| `8080` | Web UI | Main Orbix interface — share this with your users |
-| `8081` | API | Direct API access (optional, for debugging) |
+| `8080` | Orbix | Web UI **and** API (`/api/*`) on the same origin — share this with your users |
 
-To change the web port, set `WEB_PORT=XXXX` and update `WEB_ORIGIN` to match.
+To change the port, set `WEB_PORT=XXXX` and update `WEB_ORIGIN` to match.
 
 ---
 

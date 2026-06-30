@@ -20,6 +20,7 @@ import playstateRoute from "./routes/playstate";
 import discoveryRoute from "./routes/discovery";
 import { fixRoute } from "./routes/fix";
 import { refreshRoute } from "./routes/refresh";
+import { staticWebPlugin } from "./plugins/static-web";
 import { TmdbClient, getSetting } from "@orbix/core";
 import { refreshMetadata } from "./jobs/refresh-metadata.js";
 
@@ -31,21 +32,23 @@ export async function buildApp(env: Env): Promise<FastifyInstance> {
   await app.register(dbPlugin);
   await app.register(sessionPlugin);
   await app.register(queuePlugin(env));
-  await app.register(health);
-  await app.register(setup);
-  await app.register(auth);
-  await app.register(profilesRoute);
-  await app.register(settingsRoute);
-  await app.register(librariesRoute);
-  await app.register(imagesRoute(env));
-  await app.register(scanRoute);
-  await app.register(catalogRoute);
-  await app.register(streamRoute(env));
-  await app.register(subtitlesRoute);
-  await app.register(playstateRoute);
-  await app.register(discoveryRoute);
-  await app.register(fixRoute(env));
-  await app.register(refreshRoute(env));
+  await app.register(health); // root — used by the Docker healthcheck
+  // All app API routes live under /api so Fastify can serve them same-origin
+  // alongside the static SPA (the browser always calls relative /api/...).
+  await app.register(setup, { prefix: "/api" });
+  await app.register(auth, { prefix: "/api" });
+  await app.register(profilesRoute, { prefix: "/api" });
+  await app.register(settingsRoute, { prefix: "/api" });
+  await app.register(librariesRoute, { prefix: "/api" });
+  await app.register(imagesRoute(env), { prefix: "/api" });
+  await app.register(scanRoute, { prefix: "/api" });
+  await app.register(catalogRoute, { prefix: "/api" });
+  await app.register(streamRoute(env), { prefix: "/api" });
+  await app.register(subtitlesRoute, { prefix: "/api" });
+  await app.register(playstateRoute, { prefix: "/api" });
+  await app.register(discoveryRoute, { prefix: "/api" });
+  await app.register(fixRoute(env), { prefix: "/api" });
+  await app.register(refreshRoute(env), { prefix: "/api" });
 
   // ── Periodic metadata refresh (daily; selectStaleItems decides what's stale) ──
   const REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 h
@@ -73,6 +76,9 @@ export async function buildApp(env: Env): Promise<FastifyInstance> {
     }
   }, REFRESH_INTERVAL_MS);
   refreshTimer.unref(); // don't block process shutdown
+
+  // Serve the built SPA last so its catch-all fallback sits below the API routes.
+  await app.register(staticWebPlugin, {});
 
   return app;
 }

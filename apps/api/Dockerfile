@@ -34,6 +34,11 @@ RUN pnpm install --frozen-lockfile
 # Generate Prisma client
 RUN pnpm --filter @orbix/db exec prisma generate
 
+# Build the Vite SPA; Fastify serves it from WEB_DIST via @fastify/static.
+# (Collapses the former separate web container into this one — same origin.)
+RUN pnpm --filter @orbix/web build
+ENV WEB_DIST=/app/apps/web/dist
+
 # ── Bake the embedding model (needs network at build time) ──────────
 # Downloads Xenova/bge-small-en-v1.5 (~130 MB) into /app/data/models.
 # Set MODELS_DIR=/app/data/models at runtime (matches this baked path).

@@ -1,7 +1,5 @@
-"use client";
-
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import { Link } from "react-router";
 import { Button, cn } from "@orbix/ui";
 
 export interface HeroItem {
@@ -64,10 +62,10 @@ export default function Hero({ items }: { items: HeroItem[] }) {
             </p>
           )}
           <div className="mt-1 flex items-center gap-3">
-            <Link href={`/title/${active.id}`}>
+            <Link to={`/title/${active.id}`}>
               <Button>▶ Play</Button>
             </Link>
-            <Link href={`/title/${active.id}`}>
+            <Link to={`/title/${active.id}`}>
               <Button variant="ghost">More info</Button>
             </Link>
           </div>

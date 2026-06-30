@@ -4,4 +4,6 @@ WORKDIR /app
 COPY . .
 RUN pnpm install --frozen-lockfile
 EXPOSE 1060
-CMD ["pnpm", "--filter", "@orbix/web", "dev"]
+# Vite dev server (HMR). --host binds 0.0.0.0 so it's reachable from the host;
+# the /api proxy target comes from API_INTERNAL_URL (set in docker-compose).
+CMD ["pnpm", "--filter", "@orbix/web", "exec", "vite", "--port", "1060", "--host"]
