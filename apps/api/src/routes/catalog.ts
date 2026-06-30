@@ -3,12 +3,12 @@ import { requireAuth } from "../lib/auth";
 import { activeProfile, kidsRatingWhere, profileAllowsItem } from "../lib/catalog-filter";
 
 export default async function catalogRoute(app: FastifyInstance) {
-  // GET /sections/:id/items?sort=&q=
+  // GET /libraries/:id/items?sort=&q=
   app.get<{
     Params: { id: string };
     Querystring: { sort?: string; q?: string };
   }>(
-    "/sections/:id/items",
+    "/libraries/:id/items",
     { preHandler: requireAuth(app) },
     async (req, reply) => {
       const { id } = req.params;
@@ -33,7 +33,7 @@ export default async function catalogRoute(app: FastifyInstance) {
       // MVP cap at 500 items
       const items = await app.prisma.mediaItem.findMany({
         where: {
-          sectionId: id,
+          libraryId: id,
           ...(q ? { title: { contains: q, mode: "insensitive" } } : {}),
           ...(ratingFilter ?? {}),
         },

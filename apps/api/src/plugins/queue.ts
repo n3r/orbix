@@ -8,6 +8,7 @@ import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import type { Env } from "@orbix/config";
 import { Prisma } from "@orbix/db";
+import { buildMountRuntime, type MountRuntime } from "../lib/mount-runtime";
 import {
   scanSource,
   probeFile,
@@ -80,24 +81,37 @@ async function listFiles(
 
 // ── Job data shape ───────────────────────────────────────────────────────────
 
+export interface ScanSourceRow {
+  id: string;
+  kind: string;
+  path: string | null;
+  smbHost: string | null;
+  smbShare: string | null;
+  smbSubpath: string | null;
+  smbUsername: string | null;
+  smbPassword: string | null;
+  smbDomain: string | null;
+}
+
 export interface ScanJobData {
   jobId: string;
-  sectionId: string;
-  sources: { id: string; path: string }[];
+  libraryId: string;
+  sources: ScanSourceRow[];
 }
 
 // ── Plugin factory ───────────────────────────────────────────────────────────
 
-export function queuePlugin(env: Env) {
+export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
   return fp(async (app: FastifyInstance) => {
     const connection = { url: env.REDIS_URL };
+    const runtime = deps?.runtime ?? buildMountRuntime(env);
 
     const queue = new Queue<ScanJobData>("scan", { connection });
 
     // ── Processor ─────────────────────────────────────────────────────────
 
     async function processor(job: Job<ScanJobData>): Promise<void> {
-      const { jobId, sectionId, sources } = job.data;
+      const { jobId, libraryId, sources } = job.data;
       const { prisma } = app;
 
       try {
@@ -125,7 +139,7 @@ export function queuePlugin(env: Env) {
       };
 
       const upsertItemAndFile = async (input: {
-        sectionId: string;
+        libraryId: string;
         file: { path: string; mtime: Date; size: number };
         parsed: {
           title: string;
@@ -175,7 +189,7 @@ export function queuePlugin(env: Env) {
 
           let series = await prisma.mediaItem.findFirst({
             where: {
-              sectionId: input.sectionId,
+              libraryId: input.libraryId,
               kind: "series",
               sortTitle: input.parsed.title.toLowerCase(),
               year: input.parsed.year ?? null,
@@ -185,7 +199,7 @@ export function queuePlugin(env: Env) {
           if (!series) {
             series = await prisma.mediaItem.create({
               data: {
-                sectionId: input.sectionId,
+                libraryId: input.libraryId,
                 kind: "series",
                 title: input.parsed.title,
                 sortTitle: input.parsed.title.toLowerCase(),
@@ -227,7 +241,7 @@ export function queuePlugin(env: Env) {
         // ── Movie: find or create the parent MediaItem ────────────────────
         let item = await prisma.mediaItem.findFirst({
           where: {
-            sectionId: input.sectionId,
+            libraryId: input.libraryId,
             kind: "movie",
             sortTitle: input.parsed.title.toLowerCase(),
             year: input.parsed.year ?? null,
@@ -238,7 +252,7 @@ export function queuePlugin(env: Env) {
         if (!item) {
           item = await prisma.mediaItem.create({
             data: {
-              sectionId: input.sectionId,
+              libraryId: input.libraryId,
               kind: "movie",
               title: input.parsed.title,
               sortTitle: input.parsed.title.toLowerCase(),
@@ -274,8 +288,21 @@ export function queuePlugin(env: Env) {
 
         scanEvents.emit(jobId, { phase: "scanning", processed: i, total: sources.length });
 
+        // Resolve each source to a local root (mounting SMB if needed). A
+        // per-source failure is reported and skipped; remaining sources proceed.
+        let root: string;
+        try {
+          root = await runtime.resolve(source);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "source unavailable";
+          await prisma.source.update({ where: { id: source.id }, data: { status: "error", statusMessage: message } });
+          scanEvents.emit(jobId, { phase: "scanning", processed: i, total: sources.length, message: `skipped source: ${message}` });
+          continue;
+        }
+        await prisma.source.update({ where: { id: source.id }, data: { status: "ok", statusMessage: null } });
+
         const result = await scanSource(
-          { sectionId, root: source.path },
+          { libraryId, root },
           { listFiles, probe, findFileByPath, upsertItemAndFile },
         );
 
@@ -546,10 +573,10 @@ export function queuePlugin(env: Env) {
           }
         };
 
-        // Build enrichment set: touched items UNION any still-unmatched in this section
+        // Build enrichment set: touched items UNION any still-unmatched in this library
         const enrichIds = new Set<string>(allItemIds);
         const unmatchedItems = await prisma.mediaItem.findMany({
-          where: { sectionId, matchState: "unmatched" },
+          where: { libraryId, matchState: "unmatched" },
           select: { id: true },
         });
         for (const u of unmatchedItems) enrichIds.add(u.id);

@@ -5,12 +5,14 @@ import type { Env } from "@orbix/config";
 import dbPlugin from "./plugins/db";
 import sessionPlugin from "./plugins/session";
 import { queuePlugin } from "./plugins/queue";
+import { mountsPlugin } from "./plugins/mounts";
+import type { MountRuntime } from "./lib/mount-runtime";
 import health from "./routes/health";
 import setup from "./routes/setup";
 import auth from "./routes/auth";
 import profilesRoute from "./routes/profiles";
 import settingsRoute from "./routes/settings";
-import librariesRoute from "./routes/libraries";
+import { librariesRoute } from "./routes/libraries";
 import { imagesRoute } from "./routes/images";
 import scanRoute from "./routes/scan";
 import catalogRoute from "./routes/catalog";
@@ -26,14 +28,16 @@ import { staticWebPlugin } from "./plugins/static-web";
 import { TmdbClient, getSetting } from "@orbix/core";
 import { refreshMetadata } from "./jobs/refresh-metadata.js";
 
-export async function buildApp(env: Env): Promise<FastifyInstance> {
+export async function buildApp(env: Env, overrides?: { mountRuntime?: MountRuntime }): Promise<FastifyInstance> {
   const app = Fastify({ logger: true });
+  const runtime = overrides?.mountRuntime;
   const origins = env.WEB_ORIGIN.split(",").map((s) => s.trim());
   await app.register(cors, { origin: origins, credentials: true });
   await app.register(cookie, { secret: env.SESSION_SECRET });
   await app.register(dbPlugin);
   await app.register(sessionPlugin);
-  await app.register(queuePlugin(env));
+  await app.register(queuePlugin(env, { runtime }));
+  await app.register(mountsPlugin(env, { runtime }));
   await app.register(health); // root — used by the Docker healthcheck
   // All app API routes live under /api so Fastify can serve them same-origin
   // alongside the static SPA (the browser always calls relative /api/...).
@@ -41,7 +45,7 @@ export async function buildApp(env: Env): Promise<FastifyInstance> {
   await app.register(auth, { prefix: "/api" });
   await app.register(profilesRoute, { prefix: "/api" });
   await app.register(settingsRoute, { prefix: "/api" });
-  await app.register(librariesRoute, { prefix: "/api" });
+  await app.register(librariesRoute(env, { runtime }), { prefix: "/api" });
   await app.register(imagesRoute(env), { prefix: "/api" });
   await app.register(scanRoute, { prefix: "/api" });
   await app.register(catalogRoute, { prefix: "/api" });
