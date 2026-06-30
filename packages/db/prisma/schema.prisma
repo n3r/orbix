@@ -74,48 +74,48 @@ model Source {
 }
 
 model MediaItem {
-  id           String                 @id @default(cuid())
-  sectionId    String
-  section      Section                @relation(fields: [sectionId], references: [id], onDelete: Cascade)
-  kind         String                 @default("movie")
-  title        String
-  sortTitle    String
-  year         Int?
-  overview     String?
-  runtimeSec   Int?
-  rating       String?
-  tagline      String?
-  status       String?
-  tmdbId       Int?
-  imdbId       String?
-  posterPath   String?
-  backdropPath String?
+  id             String                 @id @default(cuid())
+  sectionId      String
+  section        Section                @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  kind           String                 @default("movie")
+  title          String
+  sortTitle      String
+  year           Int?
+  overview       String?
+  runtimeSec     Int?
+  rating         String?
+  tagline        String?
+  status         String?
+  tmdbId         Int?
+  imdbId         String?
+  posterPath     String?
+  backdropPath   String?
   backdropSource String?
-  logoPath     String?
-  tmdbScore    Float?
-  imdbRating   Float?
-  imdbVotes    Int?
-  rtRating     Int?
-  metacritic   Int?
-  matchState   String             @default("unmatched")
-  addedAt      DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
-  files        MediaFile[]
-  genres       MediaItemGenre[]
-  keywords     MediaItemKeyword[]
-  credits      Credit[]
-  translations MediaItemTranslation[]
-  seasons      Season[]
-  episodes     Episode[]
+  logoPath       String?
+  tmdbScore      Float?
+  imdbRating     Float?
+  imdbVotes      Int?
+  rtRating       Int?
+  metacritic     Int?
+  matchState     String                 @default("unmatched")
+  addedAt        DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  files          MediaFile[]
+  genres         MediaItemGenre[]
+  keywords       MediaItemKeyword[]
+  credits        Credit[]
+  translations   MediaItemTranslation[]
+  seasons        Season[]
+  episodes       Episode[]
 
   @@index([sectionId, sortTitle])
   @@index([tmdbId])
 }
 
 model Season {
-  id           String    @id @default(cuid())
+  id           String              @id @default(cuid())
   seriesId     String
-  series       MediaItem @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  series       MediaItem           @relation(fields: [seriesId], references: [id], onDelete: Cascade)
   seasonNumber Int
   name         String?
   overview     String?
@@ -123,16 +123,17 @@ model Season {
   airYear      Int?
   tmdbSeasonId Int?
   episodes     Episode[]
+  translations SeasonTranslation[]
 
   @@unique([seriesId, seasonNumber])
 }
 
 model Episode {
-  id            String      @id @default(cuid())
+  id            String               @id @default(cuid())
   seasonId      String
-  season        Season      @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  season        Season               @relation(fields: [seasonId], references: [id], onDelete: Cascade)
   seriesId      String
-  series        MediaItem   @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  series        MediaItem            @relation(fields: [seriesId], references: [id], onDelete: Cascade)
   episodeNumber Int
   title         String?
   overview      String?
@@ -141,6 +142,7 @@ model Episode {
   airDate       DateTime?
   tmdbEpisodeId Int?
   files         MediaFile[]
+  translations  EpisodeTranslation[]
 
   @@unique([seasonId, episodeNumber])
   @@index([seriesId])
@@ -285,4 +287,26 @@ model GenreTranslation {
   name     String
 
   @@id([genreId, language])
+}
+
+model SeasonTranslation {
+  seasonId String
+  season   Season  @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  language String
+  name     String?
+  overview String?
+
+  @@id([seasonId, language])
+  @@index([seasonId])
+}
+
+model EpisodeTranslation {
+  episodeId String
+  episode   Episode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  language  String
+  title     String?
+  overview  String?
+
+  @@id([episodeId, language])
+  @@index([episodeId])
 }
