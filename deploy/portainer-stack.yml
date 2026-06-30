@@ -1,0 +1,133 @@
+# ──────────────────────────────────────────────────────────────────
+# Orbix — Portainer NAS Production Stack
+#
+# Usage:
+#   1. In Portainer: Stacks → Add Stack → Git / Upload → point at this file.
+#   2. Copy deploy/.env.production.example → deploy/.env (or paste the env
+#      vars into Portainer's "Environment variables" tab — recommended).
+#   3. Set ORBIX_MEDIA_PATH to your NAS media share path.
+#   4. Deploy. Access the web UI at http://YOUR-NAS-IP:8080
+#
+# Ports published on the host:
+#   8080  → Orbix web UI (set WEB_ORIGIN=http://YOUR-NAS-IP:8080)
+#   8081  → Orbix API (optional direct access / debugging; API is also
+#           proxied through the web on /api/*)
+#   Postgres and Redis are internal-only (not published).
+#
+# Build context:
+#   context ".." = repo root (one level up from deploy/).
+#   Works with Portainer "from git" — Portainer clones the full repo first.
+#   If you prefer pre-built images, replace the `build:` blocks with
+#   `image: ghcr.io/your-org/orbix-api:latest` etc.
+# ──────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── Postgres (pgvector) ───────────────────────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: orbix
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: orbix
+    volumes:
+      - orbix-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orbix"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # ── Redis ─────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  # ── Orbix API ─────────────────────────────────────────────────────
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      API_PORT: "1061"
+      WEB_PORT: ${WEB_PORT:-8080}
+      WEB_ORIGIN: ${WEB_ORIGIN}
+      SESSION_SECRET: ${SESSION_SECRET}
+      METADATA_DIR: /data/metadata
+      TRANSCODE_DIR: /data/transcode
+      # Model is baked into the image at /app/data/models.
+      # To use an external volume instead, set MODELS_DIR=/data/models
+      # and uncomment the orbix-models volume under volumes: below.
+      MODELS_DIR: /app/data/models
+      EMBEDDINGS_ENABLED: ${EMBEDDINGS_ENABLED:-true}
+    ports:
+      - "${API_PORT_HOST:-8081}:1061"
+    volumes:
+      - orbix-metadata:/data/metadata
+      - orbix-transcode:/data/transcode
+      - ${ORBIX_MEDIA_PATH:-/tmp/orbixmedia}:/media:ro
+      # Uncomment to use an external models volume (opt-in, overrides baked model):
+      # - orbix-models:/data/models
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:1061/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+    # ── Optional: Intel/AMD integrated GPU hardware transcoding ──────
+    # Uncomment the block below to enable VAAPI/QSV hardware acceleration.
+    # Your NAS user must be in the 'video' and 'render' groups (or run as root).
+    # devices:
+    #   - "/dev/dri:/dev/dri"
+    # group_add:
+    #   - video
+    #   - render
+
+  # ── Orbix Web ─────────────────────────────────────────────────────
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      WEB_PORT: ${WEB_PORT:-8080}
+      # API_INTERNAL_URL: the container-network address of the API service.
+      # The Next.js rewrite proxies browser /api/* requests through here.
+      API_INTERNAL_URL: http://api:1061
+    ports:
+      - "${WEB_PORT:-8080}:${WEB_PORT:-8080}"
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:${WEB_PORT:-8080}/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
+
+volumes:
+  orbix-db:
+    name: orbix-db
+  orbix-metadata:
+    name: orbix-metadata
+  orbix-transcode:
+    name: orbix-transcode
+  # Uncomment to use an external models volume (see api.environment.MODELS_DIR above):
+  # orbix-models:
+  #   name: orbix-models
