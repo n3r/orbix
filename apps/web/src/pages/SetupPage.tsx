@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Button, Input, Card } from "@orbix/ui";
 import { apiFetch } from "@/lib/api";
 import { errorMessage } from "@/lib/i18n/tError";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
 
 export default function SetupPage() {
   const navigate = useNavigate();
@@ -36,7 +37,10 @@ export default function SetupPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-8">
+    <main className="relative flex min-h-screen items-center justify-center p-8">
+      <div className="absolute right-4 top-4">
+        <LanguageSwitcher />
+      </div>
       <Card className="w-full max-w-sm">
         <h1 className="mb-6 text-2xl font-bold text-[var(--text)]">{t("auth:setup.title")}</h1>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">

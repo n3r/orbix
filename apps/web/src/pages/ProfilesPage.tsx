@@ -4,6 +4,8 @@ import { useTranslation } from "react-i18next";
 import { Button, Card, Input, Avatar } from "@orbix/ui";
 import { apiFetch } from "@/lib/api";
 import { errorMessage } from "@/lib/i18n/tError";
+import { SUPPORTED_LANGUAGES, LANGUAGE_LABELS, isLanguageCode } from "@/lib/i18n/languages";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
 
 interface Profile {
   id: string;
@@ -15,10 +17,13 @@ interface Profile {
 
 export default function ProfilesPage() {
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [newName, setNewName] = useState("");
+  const [newLanguage, setNewLanguage] = useState(
+    isLanguageCode(i18n.language) ? i18n.language : "en",
+  );
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [selectError, setSelectError] = useState<string | null>(null);
@@ -52,7 +57,7 @@ export default function ProfilesPage() {
     try {
       const res = await apiFetch("/profiles", {
         method: "POST",
-        body: JSON.stringify({ name: newName, kind: "standard" }),
+        body: JSON.stringify({ name: newName, kind: "standard", language: newLanguage }),
       });
       if (res.ok) {
         setNewName("");
@@ -91,7 +96,10 @@ export default function ProfilesPage() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-8 p-8">
+    <main className="relative flex min-h-screen flex-col items-center justify-center gap-8 p-8">
+      <div className="absolute right-4 top-4">
+        <LanguageSwitcher />
+      </div>
       <h1 className="text-3xl font-bold text-[var(--text)]">{t("profiles:title")}</h1>
 
       {profiles.length > 0 && (
@@ -139,6 +147,26 @@ export default function ProfilesPage() {
                 placeholder={t("profiles:form.namePlaceholder")}
                 autoFocus
               />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="profile-language" className="text-sm font-medium text-[var(--text-dim)]">
+                {t("profiles:language.label")}
+              </label>
+              <select
+                id="profile-language"
+                value={newLanguage}
+                onChange={(e) => {
+                  if (isLanguageCode(e.target.value)) setNewLanguage(e.target.value);
+                }}
+                className="rounded-[var(--radius)] bg-[var(--surface)] px-3 py-2 text-[var(--text)]"
+              >
+                {SUPPORTED_LANGUAGES.map((l) => (
+                  <option key={l} value={l}>
+                    {LANGUAGE_LABELS[l]}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-[var(--text-dim)]">{t("profiles:language.help")}</p>
             </div>
             {formError && <p className="text-sm text-red-400">{formError}</p>}
             <div className="flex gap-2">

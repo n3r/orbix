@@ -2,6 +2,7 @@ import { Link, useLocation } from "react-router";
 import { useTranslation } from "react-i18next";
 import { Avatar, cn } from "@orbix/ui";
 import { apiFetch } from "@/lib/api";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
 import type { Library, Profile } from "@/lib/types";
 
 interface SidebarProps {
@@ -173,6 +174,12 @@ export default function Sidebar({
             </span>
           </div>
         )}
+        <div className="px-2">
+          <LanguageSwitcher
+            persistToProfileId={profile?.id}
+            className="w-full rounded-[var(--radius-sm)] bg-[var(--surface-2)] px-2 py-1 text-xs text-[var(--text)]"
+          />
+        </div>
         <Link
           to="/profiles"
           onClick={onNavigate}

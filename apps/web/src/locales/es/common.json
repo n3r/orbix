@@ -1,5 +1,6 @@
 {
   "app": { "name": "Orbix" },
+  "language": "Idioma",
   "actions": {
     "save": "Guardar",
     "cancel": "Cancelar",
