@@ -103,7 +103,7 @@ export function queuePlugin(env: Env) {
       try {
       // ── Real adapters ──────────────────────────────────────────────────
 
-      const probe = async (p: string): Promise<MediaFileTechnical & { probedOk: boolean }> => {
+      const probe = async (p: string): Promise<MediaFileTechnical> => {
         try {
           const tech = await probeFile(p, { run: ffprobeRunner });
           return { ...tech, probedOk: true };
@@ -137,8 +137,7 @@ export function queuePlugin(env: Env) {
         };
         tech: MediaFileTechnical;
       }): Promise<{ itemId: string; created: boolean }> => {
-        // probe returns MediaFileTechnical & { probedOk: boolean } at runtime
-        const probedOk = (input.tech as MediaFileTechnical & { probedOk?: boolean }).probedOk ?? true;
+        const probedOk = input.tech.probedOk ?? true;
         // Check if the file already exists
         const existing = await prisma.mediaFile.findUnique({
           where: { path: input.file.path },
@@ -265,7 +264,7 @@ export function queuePlugin(env: Env) {
 
       // ── Scan phase ─────────────────────────────────────────────────────
 
-      const allItemIds: string[] = [];
+      const allItemIds = new Set<string>();
       let totalAdded = 0;
       let totalUpdated = 0;
       let totalSkipped = 0;
@@ -284,9 +283,7 @@ export function queuePlugin(env: Env) {
         totalUpdated += result.updated;
         totalSkipped += result.skipped;
 
-        for (const id of result.itemIds) {
-          if (!allItemIds.includes(id)) allItemIds.push(id);
-        }
+        for (const id of result.itemIds) allItemIds.add(id);
 
         // Mark last scan time
         await prisma.source.update({
@@ -367,6 +364,9 @@ export function queuePlugin(env: Env) {
           : undefined;
 
         const saveMetadata = async (input: SaveMetadataInput): Promise<void> => {
+          // ~40 sequential queries (genres/keywords/cast upserts) in one
+          // interactive transaction can exceed Prisma's 5s default on a slow
+          // NAS, aborting enrichment. Raise the window generously.
           await prisma.$transaction(async (tx) => {
             // Update MediaItem scalars. Optional artwork/ratings are only written
             // when present so a run without an OMDb/fanart key (or a TMDB backdrop)
@@ -462,7 +462,7 @@ export function queuePlugin(env: Env) {
                 },
               });
             }
-          });
+          }, { timeout: 20_000, maxWait: 10_000 });
         };
 
         const saveSeries = async (input: SaveSeriesInput): Promise<void> => {

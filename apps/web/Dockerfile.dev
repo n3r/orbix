@@ -1,8 +1,18 @@
 FROM node:22-bookworm-slim
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 RUN corepack enable
 WORKDIR /app
-COPY . .
+# Copy only manifests first so the (slow) install layer stays cached until a
+# package.json / lockfile changes — source edits no longer bust the install.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/api/package.json apps/api/
+COPY apps/web/package.json apps/web/
+COPY packages/config/package.json packages/config/
+COPY packages/core/package.json packages/core/
+COPY packages/db/package.json packages/db/
+COPY packages/ui/package.json packages/ui/
 RUN pnpm install --frozen-lockfile
+COPY . .
 EXPOSE 1060
 # Vite dev server (HMR). --host binds 0.0.0.0 so it's reachable from the host;
 # the /api proxy target comes from API_INTERNAL_URL (set in docker-compose).

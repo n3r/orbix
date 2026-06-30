@@ -28,7 +28,7 @@ export default defineConfig({
     {
       command: "pnpm --filter @orbix/api dev",
       port: 1061,
-      reuseExistingServer: true,
+      reuseExistingServer: !process.env.CI,
       timeout: 120_000,
       env: {
         DATABASE_URL: "postgresql://orbix:orbix@localhost:1062/orbix",
@@ -44,7 +44,7 @@ export default defineConfig({
       // `dev` now runs Vite (port 1060) and proxies /api → the API server.
       command: "pnpm --filter @orbix/web dev",
       url: "http://localhost:1060",
-      reuseExistingServer: true,
+      reuseExistingServer: !process.env.CI,
       timeout: 120_000,
       env: {
         API_INTERNAL_URL: "http://localhost:1061",

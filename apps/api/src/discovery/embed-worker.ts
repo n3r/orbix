@@ -10,6 +10,15 @@ import { embedText, embedItemText, EmbedderUnavailable } from "./embedder.js";
 
 const EMBED_MODEL = "Xenova/bge-small-en-v1.5";
 
+/** Embed a passage string → vector. Injectable so callers/tests run offline. */
+export type EmbedFn = (text: string) => Promise<number[]>;
+
+interface EmbedDeps {
+  embed?: EmbedFn;
+}
+
+const defaultEmbed: EmbedFn = (text) => embedText(text);
+
 /**
  * Format a number[] as a pgvector literal that PostgreSQL accepts.
  * e.g. [0.1, -0.2, 0.3] → '[0.1,-0.2,0.3]'
@@ -30,7 +39,9 @@ function toVectorLiteral(vec: number[]): string {
 export async function embedItem(
   prisma: PrismaClient,
   mediaItemId: string,
+  deps: EmbedDeps = {},
 ): Promise<void> {
+  const embed = deps.embed ?? defaultEmbed;
   const item = await prisma.mediaItem.findUnique({
     where: { id: mediaItemId },
     select: {
@@ -54,7 +65,12 @@ export async function embedItem(
     keywords,
   });
 
-  const vector = await embedText(text);
+  const vector = await embed(text);
+  // Guard: a non-finite element would make the ::vector cast throw at the DB
+  // (or silently corrupt the row). Skip this item rather than 500 the backfill.
+  if (!vector.every(Number.isFinite)) {
+    throw new Error(`non-finite embedding vector for MediaItem ${mediaItemId}`);
+  }
   const vectorStr = toVectorLiteral(vector);
 
   // Raw SQL upsert — Prisma cannot bind the vector(384) type directly.
@@ -74,13 +90,23 @@ export async function embedItem(
   );
 }
 
+/** Outcome of a backfill run. */
+export interface BackfillResult {
+  processed: number;
+  skipped: number;
+}
+
 /**
  * Backfill: find all matched MediaItems that lack an Embedding row and embed them.
  *
  * Stops early (without throwing) if the embedder becomes unavailable.
  * Per-item errors are logged and skipped so the backfill continues best-effort.
+ * Returns the processed/skipped counts (also logged on completion).
  */
-export async function backfillEmbeddings(prisma: PrismaClient): Promise<void> {
+export async function backfillEmbeddings(
+  prisma: PrismaClient,
+  deps: EmbedDeps = {},
+): Promise<BackfillResult> {
   const items = await prisma.$queryRaw<{ id: string }[]>`
     SELECT m.id
     FROM "MediaItem" m
@@ -89,18 +115,28 @@ export async function backfillEmbeddings(prisma: PrismaClient): Promise<void> {
       AND e."mediaItemId" IS NULL
   `;
 
+  let processed = 0;
+  let skipped = 0;
+
   for (const { id } of items) {
     try {
-      await embedItem(prisma, id);
+      await embedItem(prisma, id, deps);
+      processed++;
     } catch (err) {
       if (err instanceof EmbedderUnavailable) {
         console.error(
           "[backfillEmbeddings] Embedder unavailable — stopping backfill:",
           err.message,
         );
-        return;
+        return { processed, skipped };
       }
+      skipped++;
       console.error(`[backfillEmbeddings] embedItem failed for ${id}:`, err);
     }
   }
+
+  console.log(
+    `[backfillEmbeddings] done — processed=${processed} skipped=${skipped}`,
+  );
+  return { processed, skipped };
 }

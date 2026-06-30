@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { buildSmartRows, itemSimilarity, continueWatching, parseConstraints } from "@orbix/core";
+import { buildSmartRows, itemSimilarity, continueWatching, parseConstraints, ratingTier, certsAtOrBelow } from "@orbix/core";
 import { requireAuth } from "../lib/auth";
 import { activeProfile, kidsRatingWhere } from "../lib/catalog-filter";
 import { embedText, EmbedderUnavailable } from "../discovery/embedder.js";
@@ -277,6 +277,21 @@ export default async function discoveryRoute(app: FastifyInstance) {
       if (c.genres.length > 0) {
         where.genres = {
           some: { genre: { name: { in: c.genres } } },
+        };
+      }
+
+      // Rating-cap filter: apply the parsed ratingMax (e.g. "PG") as a cert
+      // allowlist. Excludes unrated titles, matching kids-filter semantics.
+      // Intersect with any existing kids-profile rating filter so the stricter
+      // cap wins (e.g. a kids cap of PG-13 + a "for kids" query → {G,PG}).
+      if (c.ratingMax) {
+        const allowed = certsAtOrBelow(ratingTier(c.ratingMax));
+        const existing =
+          where.rating && typeof where.rating === "object" && "in" in where.rating
+            ? (where.rating.in as string[])
+            : null;
+        where.rating = {
+          in: existing ? allowed.filter((r) => existing.includes(r)) : allowed,
         };
       }
 

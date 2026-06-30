@@ -80,10 +80,11 @@ async function resolveSession(
   return session;
 }
 
-export default function streamRoute(env: { TRANSCODE_DIR: string }) {
+export default function streamRoute(env: { TRANSCODE_DIR: string; MAX_TRANSCODE_SESSIONS?: number }) {
   return async function (app: FastifyInstance) {
     const manager = new SessionManager({
       transcodeDir: env.TRANSCODE_DIR,
+      maxSessions: env.MAX_TRANSCODE_SESSIONS,
       getEncoder: () =>
         getSetting<string>("encoder", {
           fallback: "software",

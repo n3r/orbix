@@ -8,7 +8,7 @@ import TitleHero from "@/components/TitleHero";
 import SimilarRail from "@/components/SimilarRail";
 import SeasonEpisodeList, { type PlayEpisode } from "@/components/SeasonEpisodeList";
 
-const Player = lazy(() => import("@/components/Player"));
+const PlayerOverlay = lazy(() => import("@/components/PlayerOverlay"));
 
 interface PlayTarget {
   fileId: string;
@@ -78,21 +78,18 @@ export default function TitlePage() {
     <main className="flex w-full flex-col">
       <TitleHero item={item} canPlay={canPlay} playLabel="Play" onPlay={handleHeroPlay} />
 
-      {/* Player */}
+      {/* Full-page player overlay (portaled to <body>) */}
       {playTarget && id && (
-        <div className="w-full px-6 py-6 md:px-12 lg:px-16">
-          <Suspense
-            fallback={<p className="py-2 text-sm text-[var(--text-dim)]">Loading player…</p>}
-          >
-            <Player
-              key={playTarget.episodeId ?? playTarget.fileId}
-              fileId={playTarget.fileId}
-              mediaItemId={id}
-              episodeId={playTarget.episodeId}
-              title={playTarget.title}
-            />
-          </Suspense>
-        </div>
+        <Suspense fallback={null}>
+          <PlayerOverlay
+            key={playTarget.episodeId ?? playTarget.fileId}
+            fileId={playTarget.fileId}
+            mediaItemId={id}
+            episodeId={playTarget.episodeId}
+            title={playTarget.title}
+            onClose={() => setPlayTarget(null)}
+          />
+        </Suspense>
       )}
 
       {/* Seasons & Episodes (series only) */}

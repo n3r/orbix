@@ -15,6 +15,8 @@ const EnvSchema = z.object({
     .enum(["true", "false"])
     .default("true")
     .transform((v) => v === "true"),
+  // Cap on concurrent ffmpeg transcode sessions (LRU-evicted past the cap).
+  MAX_TRANSCODE_SESSIONS: z.coerce.number().int().positive().default(4),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

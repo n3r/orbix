@@ -58,7 +58,10 @@ async function seedDb() {
   await prisma.mediaItem.deleteMany({ where: { id: ITEM_ID } });
   await prisma.section.deleteMany({ where: { id: SECTION_ID } });
   await prisma.library.deleteMany({ where: { id: LIBRARY_ID } });
-  await prisma.account.deleteMany({ where: { email: ADMIN_EMAIL } });
+  // Wipe ALL accounts (not just this email): the DB enforces a single admin
+  // (partial unique index on isAdmin), so a leftover admin from an earlier spec
+  // (e.g. onboarding) would make the create() below fail with P2002.
+  await prisma.account.deleteMany();
 
   // Create the admin account directly (bypassing the setup API race condition).
   // This ensures the playback spec can always log in regardless of whether the
@@ -149,8 +152,11 @@ async function cleanDb() {
 // to other specs' afterAll deleting all profiles.
 
 async function doOnboarding(page: Page) {
+  // The Vite SPA renders at "/" and THEN the client-side guard redirects to
+  // setup/login/profiles — wait for that redirect to land (the old `|$`
+  // alternative matched the transient bare "/" and skipped onboarding).
   await page.goto("http://localhost:1060/");
-  await page.waitForURL(/\/(setup|login|profiles|$)/, { timeout: 15_000 });
+  await page.waitForURL(/\/(setup|login|profiles)/, { timeout: 15_000 });
 
   if (page.url().includes("/setup")) {
     // Our account already exists in the DB (from seedDb), but the home page
@@ -211,8 +217,12 @@ test.describe("Playback wiring", () => {
     // The decision API request MUST fire (proves Player mounted + useEffect ran)
     await decisionReq;
 
-    // The Player renders a div with our aspect-video class once the decision resolves
-    await expect(page.locator(".aspect-video").first()).toBeVisible({ timeout: 20_000 });
+    // Clicking Play mounts the full-page PlayerOverlay (a portal). Its close
+    // affordance always renders once mounted — independent of video decode,
+    // which headless Chromium can't do for H.264 — so it's the stable signal
+    // that the Player UI is up. (The inline aspect-video block was removed when
+    // the player became a full-screen overlay.)
+    await expect(page.getByRole("button", { name: /close player/i })).toBeVisible({ timeout: 20_000 });
   });
 
   // ── Test 2: progress / continue-watching / resume round-trip ─────────────

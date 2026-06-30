@@ -1,5 +1,16 @@
 import { test, expect } from "@playwright/test";
 
+// This spec creates the first admin via the setup wizard. Clean it up so it
+// doesn't leave a second admin behind — the DB now enforces a single admin
+// (partial unique index on isAdmin), which a later spec's create() would hit.
+test.afterAll(async () => {
+  process.env.DATABASE_URL ??= "postgresql://orbix:orbix@localhost:1062/orbix";
+  const { prisma } = await import("@orbix/db");
+  await prisma.profile.deleteMany();
+  await prisma.account.deleteMany();
+  await prisma.$disconnect();
+});
+
 test("first run: setup -> create profile -> select", async ({ page }) => {
   await page.goto("http://localhost:1060/");
   // fresh DB redirects to /setup
