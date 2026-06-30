@@ -19,6 +19,9 @@ import subtitlesRoute from "./routes/subtitles";
 import playstateRoute from "./routes/playstate";
 import discoveryRoute from "./routes/discovery";
 import { fixRoute } from "./routes/fix";
+import { refreshRoute } from "./routes/refresh";
+import { TmdbClient, getSetting } from "@orbix/core";
+import { refreshMetadata } from "./jobs/refresh-metadata.js";
 
 export async function buildApp(env: Env): Promise<FastifyInstance> {
   const app = Fastify({ logger: true });
@@ -42,5 +45,34 @@ export async function buildApp(env: Env): Promise<FastifyInstance> {
   await app.register(playstateRoute);
   await app.register(discoveryRoute);
   await app.register(fixRoute(env));
+  await app.register(refreshRoute(env));
+
+  // ── Periodic metadata refresh (daily; selectStaleItems decides what's stale) ──
+  const REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 h
+  const refreshTimer = setInterval(async () => {
+    try {
+      const token = await getSetting<string>("tmdbToken", {
+        fallback: "",
+        read: (k) => app.prisma.setting.findUnique({ where: { key: k } }),
+      });
+      if (!token) return; // no-op cleanly when unconfigured
+
+      const cadenceDays = await getSetting<number>("refreshCadenceDays", {
+        fallback: 90,
+        read: (k) => app.prisma.setting.findUnique({ where: { key: k } }),
+      });
+
+      const client = new TmdbClient(token);
+      const result = await refreshMetadata(app.prisma, client, {
+        cadenceDays,
+        metadataDir: env.METADATA_DIR,
+      });
+      app.log.info(result, "Scheduled metadata refresh complete");
+    } catch (err) {
+      app.log.error({ err }, "Scheduled metadata refresh failed");
+    }
+  }, REFRESH_INTERVAL_MS);
+  refreshTimer.unref(); // don't block process shutdown
+
   return app;
 }
