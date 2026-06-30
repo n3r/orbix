@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { localizeItem, localizeGenres, tmdbLanguageTag } from "./localize";
+import { localizeItem, localizeName, localizeGenres, tmdbLanguageTag } from "./localize";
 
 describe("tmdbLanguageTag", () => {
   it("maps known codes", () => {
@@ -27,6 +27,19 @@ describe("localizeItem", () => {
   it("preserves extra fields on the base", () => {
     expect(localizeItem({ id: "x", title: "A", overview: "o", year: 1999 }, { title: "Á" }))
       .toEqual({ id: "x", title: "Á", overview: "o", year: 1999 });
+  });
+});
+
+describe("localizeName", () => {
+  it("prefers a non-empty translation name/overview, else base", () => {
+    expect(localizeName({ name: "Season 1", overview: "o" }, { name: "Temporada 1", overview: null }))
+      .toEqual({ name: "Temporada 1", overview: "o" });
+  });
+  it("returns base when no translation", () => {
+    expect(localizeName({ name: "S1", overview: null })).toEqual({ name: "S1", overview: null });
+  });
+  it("ignores empty translation strings", () => {
+    expect(localizeName({ name: "S1", overview: "o" }, { name: "  " }).name).toBe("S1");
   });
 });
 

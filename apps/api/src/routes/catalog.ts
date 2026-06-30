@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { localizeItem, localizeGenres } from "@orbix/core";
+import { localizeItem, localizeGenres, localizeName } from "@orbix/core";
 import { requireAuth } from "../lib/auth";
 import { activeProfile, kidsRatingWhere, profileAllowsItem } from "../lib/catalog-filter";
 
@@ -109,6 +109,7 @@ export default async function catalogRoute(app: FastifyInstance) {
                 name: true,
                 posterPath: true,
                 _count: { select: { episodes: true } },
+                translations: { where: { language: lang }, select: { name: true } },
               },
               orderBy: { seasonNumber: "asc" },
             },
@@ -195,7 +196,7 @@ export default async function catalogRoute(app: FastifyInstance) {
           ? {
               seasons: item.seasons.map((s) => ({
                 seasonNumber: s.seasonNumber,
-                name: s.name,
+                name: localizeName({ name: s.name }, s.translations[0]).name,
                 episodeCount: s._count.episodes,
                 posterPath: s.posterPath,
               })),

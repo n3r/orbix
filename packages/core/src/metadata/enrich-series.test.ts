@@ -128,4 +128,72 @@ describe("enrichSeries", () => {
     expect(result.matched).toBe(false);
     expect(calls).toHaveLength(0);
   });
+
+  it("emits series/season/episode translations from translateClients", async () => {
+    const client = makeClient();
+    const cacheImage = makeImageSpy();
+    const { saveSeries, calls } = makeSaveSpy();
+
+    const esClient = {
+      async tv(): Promise<TmdbTv> {
+        return {
+          ...fakeTv,
+          title: "Arcane (ES)",
+          overview: "Dos hermanas en bandos opuestos.",
+          seasons: [
+            { seasonNumber: 0, episodeCount: 3, name: "Especiales" },
+            { seasonNumber: 1, episodeCount: 9, name: "Temporada 1" },
+            { seasonNumber: 2, episodeCount: 9, name: "Temporada 2" },
+          ],
+        };
+      },
+      async tvSeason(_id: number, n: number): Promise<TmdbEpisode[]> {
+        return n === 1
+          ? [
+              { episodeNumber: 1, title: "Bienvenidos", overview: "oe1" },
+              { episodeNumber: 2, title: "Algunos misterios", overview: "oe2" },
+            ]
+          : [];
+      },
+    };
+
+    await enrichSeries(
+      { id: "series-es", title: "Arcane", year: 2021 },
+      { client, cacheImage, saveSeries, localSeasonNumbers: [1], translateClients: new Map([["es", esClient]]) },
+    );
+
+    const saved = calls[0];
+    expect(saved.translations).toEqual([
+      { language: "es", title: "Arcane (ES)", overview: "Dos hermanas en bandos opuestos." },
+    ]);
+    const s1 = saved.seasons.find((s) => s.seasonNumber === 1)!;
+    expect(s1.translations).toEqual([{ language: "es", name: "Temporada 1" }]);
+    expect(s1.episodes[0].translations).toEqual([
+      { language: "es", title: "Bienvenidos", overview: "oe1" },
+    ]);
+  });
+
+  it("skips a failing translate client and still succeeds", async () => {
+    const client = makeClient();
+    const cacheImage = makeImageSpy();
+    const { saveSeries, calls } = makeSaveSpy();
+
+    const badClient = {
+      async tv(): Promise<TmdbTv> {
+        throw new Error("tmdb down");
+      },
+      async tvSeason(): Promise<TmdbEpisode[]> {
+        return [];
+      },
+    };
+
+    const result = await enrichSeries(
+      { id: "series-bad", title: "Arcane" },
+      { client, cacheImage, saveSeries, localSeasonNumbers: [1], translateClients: new Map([["de", badClient]]) },
+    );
+
+    expect(result.matched).toBe(true);
+    expect(calls[0].translations).toEqual([]);
+    expect(calls[0].seasons[0].translations).toBeUndefined();
+  });
 });

@@ -352,6 +352,20 @@ describe("TmdbClient language param", () => {
     expect(calls[0].url).toContain("/genre/tv/list?language=ru-RU");
   });
 
+  it("appends the language tag to tv (joining with & after append_to_response)", async () => {
+    const { fake, calls } = makeFetch({ id: 1, name: "X", genres: [], seasons: [] });
+    const client = new TmdbClient("tok", fake, "es-ES");
+    await client.tv(1);
+    expect(calls[0].url).toContain("append_to_response=external_ids&language=es-ES");
+  });
+
+  it("appends the language tag to tvSeason (joining with ?)", async () => {
+    const { fake, calls } = makeFetch({ episodes: [] });
+    const client = new TmdbClient("tok", fake, "fr-FR");
+    await client.tvSeason(1, 2);
+    expect(calls[0].url).toContain("/tv/1/season/2?language=fr-FR");
+  });
+
   it("omits the language param when no language is configured", async () => {
     const { fake, calls } = makeFetch({ id: 1, title: "X", genres: [] });
     const client = new TmdbClient("tok", fake);

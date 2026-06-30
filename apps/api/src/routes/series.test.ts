@@ -30,8 +30,8 @@ describe("GET /items/:id/seasons/:n/episodes", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (app as any).prisma.episode = {
       findMany: async () => [
-        { id: "e1", episodeNumber: 1, title: "Pilot", overview: "o", stillPath: "still/e1.jpg", runtimeSec: 1500, airDate: new Date("2021-11-06T00:00:00.000Z"), files: [{ id: "f1" }] },
-        { id: "e2", episodeNumber: 2, title: "Next", overview: null, stillPath: null, runtimeSec: null, airDate: null, files: [] },
+        { id: "e1", episodeNumber: 1, title: "Pilot", overview: "o", stillPath: "still/e1.jpg", runtimeSec: 1500, airDate: new Date("2021-11-06T00:00:00.000Z"), files: [{ id: "f1" }], translations: [] },
+        { id: "e2", episodeNumber: 2, title: "Next", overview: null, stillPath: null, runtimeSec: null, airDate: null, files: [], translations: [] },
       ],
     };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
