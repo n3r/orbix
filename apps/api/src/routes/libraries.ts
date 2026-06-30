@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import fs from "node:fs";
 import { validateLibraryInput, validateSectionInput, validateSourceInput, validateSectionPatch, LibraryValidationError } from "@orbix/core";
 import { Prisma } from "@orbix/db";
-import { requireAuth } from "../lib/auth";
+import { requireAuth, requireAdmin } from "../lib/auth";
 import { requireNonKids } from "../lib/catalog-filter";
 
 export default async function libraries(app: FastifyInstance) {
@@ -19,7 +19,7 @@ export default async function libraries(app: FastifyInstance) {
   );
 
   // POST /libraries
-  app.post<{ Body: unknown }>("/libraries", { preHandler: [requireAuth(app), requireNonKids(app)] }, async (req, reply) => {
+  app.post<{ Body: unknown }>("/libraries", { preHandler: [requireAuth(app), requireAdmin(app), requireNonKids(app)] }, async (req, reply) => {
     try {
       const v = validateLibraryInput(req.body);
       const lib = await app.prisma.library.create({
@@ -34,7 +34,7 @@ export default async function libraries(app: FastifyInstance) {
   });
 
   // DELETE /libraries/:id
-  app.delete<{ Params: { id: string } }>("/libraries/:id", { preHandler: [requireAuth(app), requireNonKids(app)] }, async (req, reply) => {
+  app.delete<{ Params: { id: string } }>("/libraries/:id", { preHandler: [requireAuth(app), requireAdmin(app), requireNonKids(app)] }, async (req, reply) => {
     try {
       await app.prisma.library.delete({ where: { id: req.params.id } });
       return reply.code(204).send();
@@ -47,7 +47,7 @@ export default async function libraries(app: FastifyInstance) {
   });
 
   // POST /sections
-  app.post<{ Body: unknown }>("/sections", { preHandler: [requireAuth(app), requireNonKids(app)] }, async (req, reply) => {
+  app.post<{ Body: unknown }>("/sections", { preHandler: [requireAuth(app), requireAdmin(app), requireNonKids(app)] }, async (req, reply) => {
     try {
       const v = validateSectionInput(req.body);
       const section = await app.prisma.section.create({
@@ -62,7 +62,7 @@ export default async function libraries(app: FastifyInstance) {
   });
 
   // PATCH /sections/:id
-  app.patch<{ Params: { id: string }; Body: unknown }>("/sections/:id", { preHandler: [requireAuth(app), requireNonKids(app)] }, async (req, reply) => {
+  app.patch<{ Params: { id: string }; Body: unknown }>("/sections/:id", { preHandler: [requireAuth(app), requireAdmin(app), requireNonKids(app)] }, async (req, reply) => {
     try {
       const patch = validateSectionPatch(req.body);
       const data: { name?: string; order?: number } = {};
@@ -84,7 +84,7 @@ export default async function libraries(app: FastifyInstance) {
   });
 
   // DELETE /sections/:id
-  app.delete<{ Params: { id: string } }>("/sections/:id", { preHandler: [requireAuth(app), requireNonKids(app)] }, async (req, reply) => {
+  app.delete<{ Params: { id: string } }>("/sections/:id", { preHandler: [requireAuth(app), requireAdmin(app), requireNonKids(app)] }, async (req, reply) => {
     try {
       await app.prisma.section.delete({ where: { id: req.params.id } });
       return reply.code(204).send();
@@ -97,7 +97,7 @@ export default async function libraries(app: FastifyInstance) {
   });
 
   // POST /sources
-  app.post<{ Body: unknown }>("/sources", { preHandler: [requireAuth(app), requireNonKids(app)] }, async (req, reply) => {
+  app.post<{ Body: unknown }>("/sources", { preHandler: [requireAuth(app), requireAdmin(app), requireNonKids(app)] }, async (req, reply) => {
     try {
       const v = validateSourceInput(req.body);
       // Check that the path exists and is readable
@@ -118,7 +118,7 @@ export default async function libraries(app: FastifyInstance) {
   });
 
   // DELETE /sources/:id
-  app.delete<{ Params: { id: string } }>("/sources/:id", { preHandler: [requireAuth(app), requireNonKids(app)] }, async (req, reply) => {
+  app.delete<{ Params: { id: string } }>("/sources/:id", { preHandler: [requireAuth(app), requireAdmin(app), requireNonKids(app)] }, async (req, reply) => {
     try {
       await app.prisma.source.delete({ where: { id: req.params.id } });
       return reply.code(204).send();
