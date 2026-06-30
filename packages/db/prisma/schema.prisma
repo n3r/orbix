@@ -57,6 +57,7 @@ model Section {
   order     Int         @default(0)
   sources   Source[]
   items     MediaItem[]
+  menuEntries ProfileMenuEntry[]
 
   @@index([libraryId])
 }
@@ -70,6 +71,17 @@ model Source {
   lastScanAt DateTime?
 
   @@index([sectionId])
+}
+
+model ProfileMenuEntry {
+  id        String  @id @default(cuid())
+  profileId String
+  sectionId String
+  position  Int
+  section   Section @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, sectionId])
+  @@index([profileId])
 }
 
 model MediaItem {
