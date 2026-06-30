@@ -21,20 +21,27 @@ function flatten(obj: object, prefix = ""): string[] {
   );
 }
 
-function keysFor(lng: string, ns: string): string[] {
+// i18next plural keys carry a CLDR category suffix; the count of forms differs
+// per language (e.g. Russian uses _one/_few/_many/_other where English uses
+// _one/_other). Compare the LOGICAL base keys, suffix-agnostic, so a locale
+// with the correct (different) number of plural forms still passes parity.
+const PLURAL_SUFFIX = /_(zero|one|two|few|many|other)$/;
+
+function baseKeys(lng: string, ns: string): string[] {
   const mod = bundles[`./${lng}/${ns}.json`];
-  return mod ? flatten(mod.default).sort() : [];
+  if (!mod) return [];
+  return [...new Set(flatten(mod.default).map((k) => k.replace(PLURAL_SUFFIX, "")))].sort();
 }
 
 describe("locale bundle parity", () => {
   for (const ns of NAMESPACES) {
-    const enKeys = keysFor("en", ns);
+    const enKeys = baseKeys("en", ns);
     if (enKeys.length === 0) continue; // namespace not yet authored in en
 
     for (const lng of SUPPORTED_LANGUAGES) {
       if (lng === "en" || !shippedLocales.has(lng)) continue;
-      it(`${lng}/${ns} has exactly the en key set`, () => {
-        expect(keysFor(lng, ns)).toEqual(enKeys);
+      it(`${lng}/${ns} covers exactly the en logical key set`, () => {
+        expect(baseKeys(lng, ns)).toEqual(enKeys);
       });
     }
   }
