@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { Prisma } from "@orbix/db";
 import { createAdminAccount, isSetupComplete, createSession, SESSION_TTL_MS, SetupAlreadyCompleteError, ValidationError } from "@orbix/core";
 
 export default async function setup(app: FastifyInstance) {
@@ -21,6 +22,11 @@ export default async function setup(app: FastifyInstance) {
     } catch (e) {
       if (e instanceof SetupAlreadyCompleteError) return reply.code(409).send({ error: "setup_complete" });
       if (e instanceof ValidationError) return reply.code(400).send({ error: "invalid" });
+      // DB-level single-admin guard (partial unique index) won a TOCTOU race
+      // against a concurrent setup request — treat as already-complete.
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+        return reply.code(409).send({ error: "setup_complete" });
+      }
       throw e;
     }
   });
