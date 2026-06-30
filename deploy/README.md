@@ -85,6 +85,7 @@ All persistent data is stored in **named Docker volumes**:
 | `orbix-db` | (postgres) | PostgreSQL database |
 | `orbix-metadata` | `/data/metadata` | Poster/art cache, NFO files |
 | `orbix-transcode` | `/data/transcode` | HLS transcode segments |
+| `orbix-mounts` | `/data/mounts` | Mount points for SMB/CIFS external sources |
 
 **Your media files** are mounted **read-only** from `ORBIX_MEDIA_PATH` — Orbix never modifies your media.
 
@@ -100,6 +101,31 @@ docker run --rm -v orbix-db:/data -v $(pwd):/backup alpine \
 docker run --rm -v orbix-metadata:/data -v $(pwd):/backup alpine \
   tar czf /backup/orbix-metadata-$(date +%Y%m%d).tar.gz -C /data .
 ```
+
+---
+
+## External (SMB) Sources
+
+A library can pull from **local** folders (under your mounted `/media`) and/or
+**external SMB/CIFS** shares. Add sources per library in **Admin → Libraries**.
+
+SMB shares are mounted **inside the API container** to `/data/mounts/<sourceId>`
+(read-only), then scanned and streamed exactly like local paths. This requires
+the container privileges already set in the stack:
+
+```yaml
+cap_add: ["SYS_ADMIN"]
+security_opt: ["apparmor:unconfined"]
+```
+
+Notes:
+
+- Without those privileges (or `cifs-utils` in the image), an SMB source shows
+  **status `error`** with a message and is skipped on scan — **local libraries
+  keep working**.
+- SMB **credentials are encrypted at rest** (AES-256-GCM, key derived from
+  `SESSION_SECRET`) and are never returned by the API.
+- Mounts are re-established on container start and are read-only.
 
 ---
 

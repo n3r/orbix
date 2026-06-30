@@ -42,53 +42,50 @@ model Session {
 // ── Catalog models ──────────────────────────────────────────────────────────
 
 model Library {
-  id        String    @id @default(cuid())
-  name      String
-  type      String    @default("movie")
-  createdAt DateTime  @default(now())
-  sections  Section[]
-}
-
-model Section {
-  id        String      @id @default(cuid())
-  libraryId String
-  library   Library     @relation(fields: [libraryId], references: [id], onDelete: Cascade)
-  name      String
-  kind      String      @default("movie")
-  order     Int         @default(0)
-  sources   Source[]
-  items     MediaItem[]
+  id          String             @id @default(cuid())
+  name        String
+  order       Int                @default(0)
+  createdAt   DateTime           @default(now())
+  sources     Source[]
+  items       MediaItem[]
   menuEntries ProfileMenuEntry[]
-
-  @@index([libraryId])
 }
 
 model Source {
-  id         String    @id @default(cuid())
-  sectionId  String
-  section    Section   @relation(fields: [sectionId], references: [id], onDelete: Cascade)
-  path       String
-  enabled    Boolean   @default(true)
-  lastScanAt DateTime?
+  id            String    @id @default(cuid())
+  libraryId     String
+  library       Library   @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+  kind          String    @default("local") // "local" | "smb"
+  path          String? // local root (required when kind=local)
+  smbHost       String?
+  smbShare      String?
+  smbSubpath    String?
+  smbUsername   String?
+  smbPassword   String? // AES-256-GCM at rest; never returned by the API
+  smbDomain     String?
+  enabled       Boolean   @default(true)
+  status        String    @default("ok") // "ok" | "error" | "unmounted"
+  statusMessage String?
+  lastScanAt    DateTime?
 
-  @@index([sectionId])
+  @@index([libraryId])
 }
 
 model ProfileMenuEntry {
   id        String  @id @default(cuid())
   profileId String
-  sectionId String
+  libraryId String
   position  Int
-  section   Section @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  library   Library @relation(fields: [libraryId], references: [id], onDelete: Cascade)
 
-  @@unique([profileId, sectionId])
+  @@unique([profileId, libraryId])
   @@index([profileId])
 }
 
 model MediaItem {
   id             String                 @id @default(cuid())
-  sectionId      String
-  section        Section                @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  libraryId      String
+  library        Library                @relation(fields: [libraryId], references: [id], onDelete: Cascade)
   kind           String                 @default("movie")
   title          String
   sortTitle      String
@@ -120,7 +117,7 @@ model MediaItem {
   seasons        Season[]
   episodes       Episode[]
 
-  @@index([sectionId, sortTitle])
+  @@index([libraryId, sortTitle])
   @@index([tmdbId])
 }
 

@@ -15,9 +15,10 @@
 # ──────────────────────────────────────────────────────────────────
 FROM node:22-bookworm-slim
 
-# System deps: ffmpeg + ffprobe (transcoding), curl (healthcheck)
+# System deps: ffmpeg + ffprobe (transcoding), curl (healthcheck),
+# cifs-utils (mount SMB/CIFS shares for external library sources)
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg curl \
+    && apt-get install -y --no-install-recommends ffmpeg curl cifs-utils \
     && rm -rf /var/lib/apt/lists/*
 
 # Enable corepack so pnpm is available

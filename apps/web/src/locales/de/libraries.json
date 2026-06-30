@@ -13,7 +13,16 @@
   },
   "source": {
     "addButton": "Quelle hinzufügen",
-    "pathPlaceholder": "/pfad/zum/medien/ordner"
+    "pathPlaceholder": "/pfad/zum/medien/ordner",
+    "kindLocal": "Local",
+    "kindSmb": "SMB",
+    "smbHostPlaceholder": "NAS host (e.g. 192.168.1.10)",
+    "smbSharePlaceholder": "Share (e.g. media)",
+    "smbSubpathPlaceholder": "Subpath (optional)",
+    "smbUsernamePlaceholder": "Username (optional)",
+    "smbPasswordPlaceholder": "Password (optional)",
+    "smbDomainPlaceholder": "Domain (optional)",
+    "errorLabel": "error"
   },
   "scan": {
     "button": "Scannen",

@@ -13,7 +13,16 @@
   },
   "source": {
     "addButton": "Добавить источник",
-    "pathPlaceholder": "/путь/к/папке/с/медиа"
+    "pathPlaceholder": "/путь/к/папке/с/медиа",
+    "kindLocal": "Local",
+    "kindSmb": "SMB",
+    "smbHostPlaceholder": "NAS host (e.g. 192.168.1.10)",
+    "smbSharePlaceholder": "Share (e.g. media)",
+    "smbSubpathPlaceholder": "Subpath (optional)",
+    "smbUsernamePlaceholder": "Username (optional)",
+    "smbPasswordPlaceholder": "Password (optional)",
+    "smbDomainPlaceholder": "Domain (optional)",
+    "errorLabel": "error"
   },
   "scan": {
     "button": "Сканировать",

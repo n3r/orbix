@@ -5,14 +5,14 @@ import { Input } from "@orbix/ui";
 import PosterCard from "@/components/PosterCard";
 import { ApiError } from "@/lib/api";
 import { errorMessage } from "@/lib/i18n/tError";
-import { useSectionItems } from "@/lib/queries";
+import { useLibraryItems } from "@/lib/queries";
 
 export default function LibraryPage() {
   const { t } = useTranslation();
-  const { sectionId } = useParams();
+  const { libraryId } = useParams();
   const [sort, setSort] = useState("title");
   const [q, setQ] = useState("");
-  const { data: items = [], isLoading, error } = useSectionItems(sectionId, sort, q);
+  const { data: items = [], isLoading, error } = useLibraryItems(libraryId, sort, q);
 
   return (
     <main className="px-6 md:px-8 lg:px-10 py-8">

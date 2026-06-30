@@ -5,8 +5,8 @@ import NavCategories from "./NavCategories";
 import type { MenuItem } from "@/lib/types";
 
 const items: MenuItem[] = [
-  { sectionId: "s1", name: "Movies", libraryName: "Films" },
-  { sectionId: "s2", name: "Shows", libraryName: "TV" },
+  { libraryId: "s1", name: "Movies" },
+  { libraryId: "s2", name: "Shows" },
 ];
 
 describe("NavCategories", () => {
@@ -23,7 +23,7 @@ describe("NavCategories", () => {
 
   it("collapses overflow beyond maxVisible into a More menu", () => {
     const many: MenuItem[] = Array.from({ length: 5 }, (_, i) => ({
-      sectionId: `x${i}`, name: `Cat${i}`, libraryName: "L",
+      libraryId: `x${i}`, name: `Cat${i}`,
     }));
     renderWithProviders(<NavCategories items={many} pathname="/" maxVisible={3} />);
     expect(screen.getByText("More")).toBeTruthy();

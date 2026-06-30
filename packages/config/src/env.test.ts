@@ -18,6 +18,10 @@ describe("loadEnv", () => {
     expect(env.NODE_ENV).toBe("development");
   });
 
+  it("defaults MOUNTS_DIR", () => {
+    expect(loadEnv(valid).MOUNTS_DIR).toBe("./data/mounts");
+  });
+
   it("throws when SESSION_SECRET is too short", () => {
     expect(() => loadEnv({ ...valid, SESSION_SECRET: "short" })).toThrow();
   });

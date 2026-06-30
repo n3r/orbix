@@ -6,7 +6,7 @@ const env: Env = {
   NODE_ENV: "test", DATABASE_URL: "postgresql://x", REDIS_URL: "redis://x",
   API_PORT: 1061, WEB_PORT: 1060, SESSION_SECRET: "x".repeat(32), WEB_ORIGIN: "http://localhost:1060",
   METADATA_DIR: "./data/metadata", TRANSCODE_DIR: "./data/transcode",
-  MODELS_DIR: "./data/models", EMBEDDINGS_ENABLED: true, MAX_TRANSCODE_SESSIONS: 4,
+  MODELS_DIR: "./data/models", MOUNTS_DIR: "./data/mounts", EMBEDDINGS_ENABLED: true, MAX_TRANSCODE_SESSIONS: 4,
 };
 
 // Minimal authenticated + profile-selected session wired onto the mocked prisma.
@@ -80,7 +80,7 @@ describe("GET /items/:id localization", () => {
   });
 });
 
-describe("GET /sections/:id/items localization", () => {
+describe("GET /libraries/:id/items localization", () => {
   it("coalesces the list title to the requested language", async () => {
     const app = await buildApp(env);
     authed(app, { id: "p1", name: "Alex", avatar: null, kind: "standard", maturityCap: null, language: "es" });
@@ -92,7 +92,7 @@ describe("GET /sections/:id/items localization", () => {
     };
 
     const res = await app.inject({
-      method: "GET", url: "/api/sections/s1/items",
+      method: "GET", url: "/api/libraries/s1/items",
       cookies: { orbix_session: "s1", orbix_profile: "p1" },
     });
     expect(res.statusCode).toBe(200);

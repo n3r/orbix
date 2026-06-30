@@ -37,8 +37,8 @@ export default function BottomNav() {
             <div className="flex flex-col">
               {items.map((item) => (
                 <Link
-                  key={item.sectionId}
-                  to={`/library/${item.sectionId}`}
+                  key={item.libraryId}
+                  to={`/library/${item.libraryId}`}
                   className="rounded-[var(--radius-sm)] px-2 py-3 text-[var(--text)] hover:bg-[var(--surface-2)]"
                 >
                   {item.name}

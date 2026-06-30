@@ -4,27 +4,26 @@
 
 export interface Source {
   id: string;
-  sectionId: string;
-  path: string;
-  enabled: boolean;
-  lastScanAt: string | null;
-}
-
-export interface Section {
-  id: string;
-  name: string;
   libraryId: string;
-  kind: string;
-  order: number;
-  sources?: Source[];
+  kind: "local" | "smb";
+  path: string | null;
+  smbHost?: string | null;
+  smbShare?: string | null;
+  smbSubpath?: string | null;
+  smbUsername?: string | null;
+  smbDomain?: string | null;
+  enabled: boolean;
+  status: string;
+  statusMessage: string | null;
+  lastScanAt: string | null;
 }
 
 export interface Library {
   id: string;
   name: string;
-  type: string;
+  order: number;
   createdAt: string;
-  sections: Section[];
+  sources: Source[];
 }
 
 export interface Profile {
@@ -35,16 +34,15 @@ export interface Profile {
   maturityCap: number | null;
 }
 
-/** One catalog category in the profile's nav (resolved from sections). */
+/** One catalog category in the profile's nav (one per library). */
 export interface MenuItem {
-  sectionId: string;
+  libraryId: string;
   name: string;
-  libraryName: string;
 }
 
-/** Editor payload: all sections + the profile's currently-enabled ordered ids. */
+/** Editor payload: all libraries + the profile's currently-enabled ordered ids. */
 export interface MenuConfig {
-  sections: MenuItem[];
+  libraries: MenuItem[];
   enabled: string[];
 }
 

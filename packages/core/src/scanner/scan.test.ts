@@ -30,7 +30,7 @@ function makeDeps(files: typeof fileA[]): { deps: ScanDeps; repo: Map<string, { 
 }
 
 describe("scanSource", () => {
-  const opts = { sectionId: "sec-1", root: "/m" };
+  const opts = { libraryId: "lib-1", root: "/m" };
 
   it("first scan: adds both files", async () => {
     const { deps } = makeDeps([fileA, fileB]);

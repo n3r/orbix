@@ -11,10 +11,10 @@ vi.mock("@/lib/queries", async (orig) => {
 });
 
 const config: MenuConfig = {
-  sections: [
-    { sectionId: "s1", name: "Movies", libraryName: "Films" },
-    { sectionId: "s2", name: "Shows", libraryName: "TV" },
-    { sectionId: "s3", name: "Docs", libraryName: "Films" },
+  libraries: [
+    { libraryId: "s1", name: "Movies" },
+    { libraryId: "s2", name: "Shows" },
+    { libraryId: "s3", name: "Docs" },
   ],
   enabled: ["s1", "s2", "s3"],
 };

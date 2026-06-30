@@ -11,6 +11,7 @@ const EnvSchema = z.object({
   METADATA_DIR: z.string().default("./data/metadata"),
   TRANSCODE_DIR: z.string().default("./data/transcode"),
   MODELS_DIR: z.string().default("./data/models"),
+  MOUNTS_DIR: z.string().default("./data/mounts"),
   EMBEDDINGS_ENABLED: z
     .enum(["true", "false"])
     .default("true")

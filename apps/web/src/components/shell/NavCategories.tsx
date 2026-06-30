@@ -7,7 +7,7 @@ import { ChevronDownIcon } from "./icons";
 function CategoryLink({ item, active, onNavigate }: { item: MenuItem; active: boolean; onNavigate?: () => void }) {
   return (
     <Link
-      to={`/library/${item.sectionId}`}
+      to={`/library/${item.libraryId}`}
       onClick={onNavigate}
       aria-current={active ? "page" : undefined}
       className={cn(
@@ -39,7 +39,7 @@ export default function NavCategories({
   return (
     <div className="flex items-center gap-4">
       {visible.map((item) => (
-        <CategoryLink key={item.sectionId} item={item} active={isActive(item.sectionId)} onNavigate={onNavigate} />
+        <CategoryLink key={item.libraryId} item={item} active={isActive(item.libraryId)} onNavigate={onNavigate} />
       ))}
       {overflow.length > 0 && (
         <details className="relative">
@@ -48,7 +48,7 @@ export default function NavCategories({
           </summary>
           <div className="absolute right-0 z-50 mt-2 flex min-w-40 flex-col gap-1 rounded-[var(--radius)] border border-[var(--surface-2)] bg-[var(--surface)] p-2 shadow-lg">
             {overflow.map((item) => (
-              <CategoryLink key={item.sectionId} item={item} active={isActive(item.sectionId)} onNavigate={onNavigate} />
+              <CategoryLink key={item.libraryId} item={item} active={isActive(item.libraryId)} onNavigate={onNavigate} />
             ))}
           </div>
         </details>

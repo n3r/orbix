@@ -1,51 +1,43 @@
-export interface MenuSection {
-  sectionId: string;
+export interface MenuLibrary {
+  libraryId: string;
   name: string;
-  libraryName: string;
   order: number;
 }
 
 export interface MenuEntry {
-  sectionId: string;
+  libraryId: string;
   position: number;
 }
 
 export interface ResolvedMenuItem {
-  sectionId: string;
+  libraryId: string;
   name: string;
-  libraryName: string;
 }
 
-const view = (s: MenuSection): ResolvedMenuItem => ({
-  sectionId: s.sectionId,
-  name: s.name,
-  libraryName: s.libraryName,
+const view = (l: MenuLibrary): ResolvedMenuItem => ({
+  libraryId: l.libraryId,
+  name: l.name,
 });
 
 /**
  * Resolve the ordered catalog menu for a profile.
- *   - no entries  → every section in default order (order, then library name, then section name)
- *   - has entries → the entries' sections in `position` order, dropping any whose
- *                   section no longer exists.
+ *   - no entries  → every library in default order (order, then name)
+ *   - has entries → the entries' libraries in `position` order, dropping any whose
+ *                   library no longer exists.
  */
 export function resolveProfileMenu(
-  sections: MenuSection[],
+  libraries: MenuLibrary[],
   entries: MenuEntry[],
 ): ResolvedMenuItem[] {
   if (entries.length === 0) {
-    return [...sections]
-      .sort(
-        (a, b) =>
-          a.order - b.order ||
-          a.libraryName.localeCompare(b.libraryName) ||
-          a.name.localeCompare(b.name),
-      )
+    return [...libraries]
+      .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name))
       .map(view);
   }
-  const byId = new Map(sections.map((s) => [s.sectionId, s]));
+  const byId = new Map(libraries.map((l) => [l.libraryId, l]));
   return [...entries]
     .sort((a, b) => a.position - b.position)
-    .map((e) => byId.get(e.sectionId))
-    .filter((s): s is MenuSection => Boolean(s))
+    .map((e) => byId.get(e.libraryId))
+    .filter((l): l is MenuLibrary => Boolean(l))
     .map(view);
 }

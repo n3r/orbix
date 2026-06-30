@@ -5,16 +5,26 @@ import { requireAuth, requireAdmin } from "../lib/auth";
 import { requireNonKids } from "../lib/catalog-filter";
 
 export default async function scanRoute(app: FastifyInstance) {
-  // POST /sections/:id/scan — enqueue a scan job, return { jobId }
+  // POST /libraries/:id/scan — enqueue a scan job, return { jobId }
   app.post<{ Params: { id: string } }>(
-    "/sections/:id/scan",
+    "/libraries/:id/scan",
     { preHandler: [requireAuth(app), requireAdmin(app), requireNonKids(app)] },
     async (req, reply) => {
-      const sectionId = req.params.id;
+      const libraryId = req.params.id;
 
       const sources = await app.prisma.source.findMany({
-        where: { sectionId, enabled: true },
-        select: { id: true, path: true },
+        where: { libraryId, enabled: true },
+        select: {
+          id: true,
+          kind: true,
+          path: true,
+          smbHost: true,
+          smbShare: true,
+          smbSubpath: true,
+          smbUsername: true,
+          smbPassword: true,
+          smbDomain: true,
+        },
       });
 
       if (sources.length === 0) {
@@ -22,7 +32,7 @@ export default async function scanRoute(app: FastifyInstance) {
       }
 
       const jobId = randomUUID();
-      await app.scanQueue.add("scan", { jobId, sectionId, sources });
+      await app.scanQueue.add("scan", { jobId, libraryId, sources });
 
       return { jobId };
     },
