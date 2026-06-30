@@ -1,9 +1,11 @@
 import { useState, type FormEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { ApiError } from "@/lib/api";
 import { useSearch } from "@/lib/queries";
 import PosterCard from "@/components/PosterCard";
 
 export default function SearchPage() {
+  const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const [submitted, setSubmitted] = useState("");
   const { data, isFetching, error } = useSearch(submitted);
@@ -16,31 +18,31 @@ export default function SearchPage() {
 
   const errorMsg = error
     ? error instanceof ApiError && error.status === 401
-      ? "Please sign in to search."
-      : "Search failed. Please try again."
+      ? t("errors:unauthenticated")
+      : t("search:errors.failed")
     : null;
   const results = data?.items ?? null;
   const usedEmbeddings = data?.usedEmbeddings ?? false;
 
   return (
     <main className="flex min-h-screen flex-col gap-6 px-6 md:px-8 lg:px-10 py-8">
-      <h1 className="text-2xl font-semibold text-[var(--text)]">Search</h1>
+      <h1 className="text-2xl font-semibold text-[var(--text)]">{t("search:title")}</h1>
 
       <form onSubmit={handleSubmit} className="flex gap-3 max-w-2xl">
         <input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="e.g. comedy under 2 hours, something funny and lighthearted"
+          placeholder={t("search:placeholder")}
           className="flex-1 px-4 py-2 rounded-[var(--radius)] bg-[var(--surface)] text-[var(--text)] border border-[var(--border,transparent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
-          aria-label="Search query"
+          aria-label={t("search:queryAriaLabel")}
         />
         <button
           type="submit"
           disabled={isFetching}
           className="px-6 py-2 rounded-[var(--radius)] bg-[var(--accent)] text-white font-medium disabled:opacity-50"
         >
-          {isFetching ? "Searching…" : "Search"}
+          {isFetching ? t("search:searching") : t("search:submit")}
         </button>
       </form>
 
@@ -50,7 +52,7 @@ export default function SearchPage() {
         <>
           <div className="flex items-center gap-3">
             <p className="text-sm text-[var(--text-dim)]">
-              {results.length} result{results.length !== 1 ? "s" : ""}
+              {t("search:results", { count: results.length })}
             </p>
             <span
               className={`text-xs px-2 py-0.5 rounded-full ${
@@ -59,12 +61,12 @@ export default function SearchPage() {
                   : "bg-[var(--surface)] text-[var(--text-dim)]"
               }`}
             >
-              {usedEmbeddings ? "semantic" : "keyword"}
+              {usedEmbeddings ? t("search:mode.semantic") : t("search:mode.keyword")}
             </span>
           </div>
 
           {results.length === 0 ? (
-            <p className="text-[var(--text-dim)]">No results found.</p>
+            <p className="text-[var(--text-dim)]">{t("search:empty")}</p>
           ) : (
             <div className="grid grid-cols-3 gap-4 sm:grid-cols-4 md:grid-cols-5 md:gap-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8">
               {results.map((item) => (

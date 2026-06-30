@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { cn } from "@orbix/ui";
 
 /** Slim top bar shown only on mobile — hosts the drawer hamburger. */
@@ -8,6 +9,7 @@ export default function TopBar({
   onMenu: () => void;
   className?: string;
 }) {
+  const { t } = useTranslation();
   return (
     <div
       className={cn(
@@ -18,7 +20,7 @@ export default function TopBar({
       <button
         type="button"
         onClick={onMenu}
-        aria-label="Open navigation"
+        aria-label={t("nav:openNavigation")}
         className="text-[var(--text-dim)] transition-colors hover:text-[var(--text)]"
       >
         <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>

@@ -1,0 +1,22 @@
+{
+  "rows": {
+    "continue": "Continue Watching",
+    "hiddenGems": "Hidden gems",
+    "tonight": "Pick something for tonight"
+  },
+  "browse": {
+    "title": "Browse",
+    "searchPlaceholder": "Search titles…",
+    "empty": "No items found.",
+    "sort": {
+      "title": "Title (A–Z)",
+      "added": "Recently Added",
+      "year": "Year"
+    }
+  },
+  "hero": {
+    "play": "Play",
+    "moreInfo": "More info",
+    "showSlide": "Show {{title}}"
+  }
+}

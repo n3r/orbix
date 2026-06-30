@@ -1,4 +1,5 @@
 import { Link, useLocation } from "react-router";
+import { useTranslation } from "react-i18next";
 import { Avatar, cn } from "@orbix/ui";
 import { apiFetch } from "@/lib/api";
 import type { Library, Profile } from "@/lib/types";
@@ -74,6 +75,7 @@ export default function Sidebar({
   onNavigate,
 }: SidebarProps) {
   const { pathname } = useLocation();
+  const { t } = useTranslation();
   const multiLib = libraries.length > 1;
 
   async function handleLogout() {
@@ -104,17 +106,17 @@ export default function Sidebar({
 
       {/* Primary */}
       <NavLink href="/" active={pathname === "/"} onNavigate={onNavigate}>
-        <HomeIcon /> Home
+        <HomeIcon /> {t("nav:home")}
       </NavLink>
       <NavLink href="/search" active={pathname === "/search"} onNavigate={onNavigate}>
-        <SearchIcon /> Search
+        <SearchIcon /> {t("nav:search")}
       </NavLink>
 
       {/* Library nav tree */}
       {libraries.length > 0 && (
         <>
           <p className="px-3 pt-4 pb-1 text-xs uppercase tracking-wide text-[var(--text-dim)]">
-            Library
+            {t("nav:library")}
           </p>
           {libraries.map((lib) => (
             <div key={lib.id} className="flex flex-col gap-1">
@@ -142,21 +144,21 @@ export default function Sidebar({
       {!isKids && (
         <>
           <p className="px-3 pt-4 pb-1 text-xs uppercase tracking-wide text-[var(--text-dim)]">
-            Admin
+            {t("nav:admin")}
           </p>
           <NavLink
             href="/admin/libraries"
             active={pathname.startsWith("/admin/libraries")}
             onNavigate={onNavigate}
           >
-            <LibraryIcon /> Manage
+            <LibraryIcon /> {t("nav:manage")}
           </NavLink>
           <NavLink
             href="/admin/settings"
             active={pathname.startsWith("/admin/settings")}
             onNavigate={onNavigate}
           >
-            <GearIcon /> Settings
+            <GearIcon /> {t("nav:settings")}
           </NavLink>
         </>
       )}
@@ -176,14 +178,14 @@ export default function Sidebar({
           onClick={onNavigate}
           className="px-3 py-1.5 text-xs text-[var(--text-dim)] transition-colors hover:text-[var(--text)]"
         >
-          Switch profile
+          {t("nav:switchProfile")}
         </Link>
         <button
           type="button"
           onClick={handleLogout}
           className="px-3 py-1.5 text-left text-xs text-[var(--text-dim)] transition-colors hover:text-[var(--text)]"
         >
-          Log out
+          {t("nav:logout")}
         </button>
       </div>
     </nav>

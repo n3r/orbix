@@ -7,7 +7,7 @@ export default function HomeRows({ rows }: { rows: HomeRow[] }) {
   return (
     <div className="flex flex-col gap-2">
       {rows.map((row) => (
-        <MediaRow key={row.key} title={row.title} items={row.items} />
+        <MediaRow key={row.key} rowKey={row.key} title={row.title} items={row.items} />
       ))}
     </div>
   );

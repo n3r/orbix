@@ -1,0 +1,16 @@
+{
+  "loading": "Cargando reproductor…",
+  "close": "Cerrar reproductor",
+  "seek": {
+    "backward": "Retroceder {{seconds}} segundos",
+    "forward": "Avanzar {{seconds}} segundos"
+  },
+  "track": {
+    "label": "Pista {{index}}"
+  },
+  "error": {
+    "decision": "No se pudo obtener la decisión de reproducción",
+    "network": "Error de red al cargar el reproductor",
+    "generic": "No se pudo cargar el reproductor"
+  }
+}

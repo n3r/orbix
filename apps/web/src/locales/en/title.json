@@ -1,0 +1,20 @@
+{
+  "notFound": "Title not found",
+  "loadFailed": "Failed to load title",
+  "unmatchedNotice": "Metadata not matched yet — scan with a TMDB token to enrich.",
+  "fixMatch": "Fix match / poster (admin)",
+  "play": "Play",
+  "playNoMedia": "Play (no media)",
+  "section": {
+    "overview": "Overview",
+    "director": "Director",
+    "cast": "Cast"
+  },
+  "rating": {
+    "unrated": "Unrated"
+  },
+  "runtime": {
+    "hm": "{{h}}h {{m}}m",
+    "m": "{{m}}m"
+  }
+}

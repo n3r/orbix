@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import Player from "./Player";
 
@@ -32,6 +33,8 @@ interface Props {
  * on the top-left chevron or `Esc`.
  */
 export default function PlayerOverlay({ fileId, mediaItemId, title, onClose }: Props) {
+  const { t } = useTranslation();
+
   // Lock background scroll while the overlay is open.
   useEffect(() => {
     const previous = document.body.style.overflow;
@@ -62,7 +65,7 @@ export default function PlayerOverlay({ fileId, mediaItemId, title, onClose }: P
       <button
         type="button"
         onClick={onClose}
-        aria-label="Close player"
+        aria-label={t("player:close")}
         className="absolute left-3 top-3 z-10 grid h-10 w-10 place-items-center rounded-full bg-black/40 text-white/90 transition-colors hover:bg-black/70 hover:text-white"
       >
         <ChevronDownIcon className="h-6 w-6" />

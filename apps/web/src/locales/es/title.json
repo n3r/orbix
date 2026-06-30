@@ -1,0 +1,20 @@
+{
+  "notFound": "Título no encontrado",
+  "loadFailed": "No se pudo cargar el título",
+  "unmatchedNotice": "Metadatos aún sin coincidencia: escanea con un token de TMDB para enriquecerlos.",
+  "fixMatch": "Corregir coincidencia / póster (administrador)",
+  "play": "Reproducir",
+  "playNoMedia": "Reproducir (sin contenido)",
+  "section": {
+    "overview": "Sinopsis",
+    "director": "Director",
+    "cast": "Reparto"
+  },
+  "rating": {
+    "unrated": "Sin clasificar"
+  },
+  "runtime": {
+    "hm": "{{h}} h {{m}} min",
+    "m": "{{m}} min"
+  }
+}

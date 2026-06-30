@@ -1,0 +1,12 @@
+{
+  "home": "Home",
+  "search": "Search",
+  "library": "Library",
+  "admin": "Admin",
+  "manage": "Manage",
+  "settings": "Settings",
+  "switchProfile": "Switch profile",
+  "logout": "Log out",
+  "openNavigation": "Open navigation",
+  "tmdbAttribution": "This product uses the TMDB API but is not endorsed or certified by TMDB."
+}

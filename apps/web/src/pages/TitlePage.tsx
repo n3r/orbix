@@ -1,4 +1,6 @@
 import { useState, lazy, Suspense } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router";
 import { Button } from "@orbix/ui";
@@ -40,15 +42,16 @@ interface ItemDetail {
   files: MediaFile[];
 }
 
-function formatRuntime(seconds: number | null): string | null {
+function formatRuntime(seconds: number | null, t: TFunction): string | null {
   if (seconds == null) return null;
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
-  if (h === 0) return `${m}m`;
-  return `${h}h ${m}m`;
+  if (h === 0) return t("title:runtime.m", { m });
+  return t("title:runtime.hm", { h, m });
 }
 
 export default function TitlePage() {
+  const { t } = useTranslation();
   const { id } = useParams();
   const [playing, setPlaying] = useState(false);
 
@@ -66,7 +69,7 @@ export default function TitlePage() {
   if (itemQuery.isLoading) {
     return (
       <main className="p-8">
-        <p className="text-[var(--text-dim)]">Loading…</p>
+        <p className="text-[var(--text-dim)]">{t("common:status.loading")}</p>
       </main>
     );
   }
@@ -74,7 +77,7 @@ export default function TitlePage() {
   if (notFound) {
     return (
       <main className="p-8">
-        <h1 className="text-2xl font-bold text-[var(--text)]">Title not found</h1>
+        <h1 className="text-2xl font-bold text-[var(--text)]">{t("title:notFound")}</h1>
       </main>
     );
   }
@@ -83,12 +86,12 @@ export default function TitlePage() {
   if (!item) {
     return (
       <main className="p-8">
-        <p className="text-sm text-red-400">Failed to load title</p>
+        <p className="text-sm text-red-400">{t("title:loadFailed")}</p>
       </main>
     );
   }
 
-  const runtime = formatRuntime(item.runtimeSec);
+  const runtime = formatRuntime(item.runtimeSec, t);
 
   return (
     <main className="flex flex-col min-h-screen">
@@ -119,13 +122,13 @@ export default function TitlePage() {
             <div className="flex gap-3 flex-wrap text-[var(--text-dim)] text-sm">
               {item.year && <span>{item.year}</span>}
               {runtime && <span>{runtime}</span>}
-              {item.rating && <span>{item.rating}</span>}
+              <span>{item.rating ?? t("title:rating.unrated")}</span>
             </div>
 
             {/* Unmatched notice */}
             {item.matchState !== "matched" && item.matchState !== "manual" && (
               <p className="text-sm text-yellow-400">
-                Metadata not matched yet — scan with a TMDB token to enrich.
+                {t("title:unmatchedNotice")}
               </p>
             )}
 
@@ -136,7 +139,7 @@ export default function TitlePage() {
                   to={`/title/${id}/fix`}
                   className="text-xs text-[var(--text-dim)] hover:text-[var(--accent)] underline underline-offset-2"
                 >
-                  Fix match / poster (admin)
+                  {t("title:fixMatch")}
                 </Link>
               </div>
             )}
@@ -158,9 +161,9 @@ export default function TitlePage() {
             {/* Play button */}
             <div className="mt-2">
               {item.files?.[0]?.id ? (
-                <Button onClick={() => setPlaying(true)}>Play</Button>
+                <Button onClick={() => setPlaying(true)}>{t("title:play")}</Button>
               ) : (
-                <Button disabled>Play (no media)</Button>
+                <Button disabled>{t("title:playNoMedia")}</Button>
               )}
             </div>
           </div>
@@ -181,7 +184,7 @@ export default function TitlePage() {
         {/* Overview */}
         {item.overview && (
           <div>
-            <h2 className="text-lg font-semibold text-[var(--text)] mb-2">Overview</h2>
+            <h2 className="text-lg font-semibold text-[var(--text)] mb-2">{t("title:section.overview")}</h2>
             <p className="text-[var(--text-dim)] leading-relaxed">{item.overview}</p>
           </div>
         )}
@@ -189,7 +192,7 @@ export default function TitlePage() {
         {/* Director */}
         {item.director && (
           <div>
-            <h2 className="text-lg font-semibold text-[var(--text)] mb-2">Director</h2>
+            <h2 className="text-lg font-semibold text-[var(--text)] mb-2">{t("title:section.director")}</h2>
             <p className="text-[var(--text-dim)]">{item.director.name}</p>
           </div>
         )}
@@ -197,7 +200,7 @@ export default function TitlePage() {
         {/* Cast */}
         {item.cast.length > 0 && (
           <div>
-            <h2 className="text-lg font-semibold text-[var(--text)] mb-3">Cast</h2>
+            <h2 className="text-lg font-semibold text-[var(--text)] mb-3">{t("title:section.cast")}</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
               {item.cast.map((c, i) => (
                 <div key={i} className="bg-[var(--surface)] rounded-[var(--radius)] p-3">
