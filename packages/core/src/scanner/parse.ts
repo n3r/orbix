@@ -19,8 +19,16 @@ const IMDB_RE = /\[imdbid-(tt\d+)\]/i;
 // TV episode patterns.
 const SE_RE = /[sS](\d{1,2})[\s._-]*[eE](\d{1,3})/; //  S01E02 / s1.e2
 const X_RE = /\b(\d{1,2})x(\d{1,3})\b/; //               1x02
-const SEASON_FOLDER_RE = /^(?:season|series|s)[\s._-]*(\d{1,2})$/i; // "Season 01"
-const SPECIALS_FOLDER_RE = /^specials$/i;
+// "Season 01" / "S1" (word-first, group 1) or "02 сезон" / "2 season" (number-first,
+// group 2). Also accepts the Cyrillic "сезон" keyword in either order.
+const SEASON_FOLDER_RE =
+  /^(?:(?:season|series|s|сезон)[\s._-]*(\d{1,2})|(\d{1,2})[\s._-]*(?:season|series|сезон))$/i;
+const SPECIALS_FOLDER_RE = /^(?:specials|спецвыпуски)$/i;
+
+/** Season number from a SEASON_FOLDER_RE match (word-first or number-first). */
+function seasonFromFolderMatch(m: RegExpExecArray): number {
+  return parseInt(m[1] ?? m[2], 10);
+}
 
 function extractYear(s: string): number | undefined {
   const m = YEAR_RE.exec(s);
@@ -37,11 +45,20 @@ function extractImdbId(s: string): string | undefined {
   return m ? m[1] : undefined;
 }
 
-/** Episode number from an E-tag, "Episode N", or an anime-style trailing "- NN". */
+/**
+ * Episode number from an E-tag, "Episode N", the Cyrillic "серия N" (either order),
+ * a leading "NN." (common in localized releases), or an anime-style trailing "- NN".
+ * Only called once a season/specials folder is confirmed, so a leading number is
+ * unambiguously an episode index.
+ */
 function extractEpisodeNum(s: string): number | undefined {
   const m =
     /[eE](\d{1,3})/.exec(s) ??
     /\bep(?:isode)?[\s._-]*(\d{1,3})/i.exec(s) ??
+    // NB: no \b — JS word boundaries are ASCII-only and never fire next to Cyrillic.
+    /(?:^|[\s._-])сери[ияюей][\s._-]*(\d{1,3})/i.exec(s) ?? //  "серия 5"
+    /(\d{1,3})[\s._-]*сери[ияюей]/i.exec(s) ?? //              "5 серия"
+    /^(\d{1,3})[.)\s_-]/.exec(s) ?? //                         leading "100. Title"
     /-[\s._]*(\d{1,3})(?:[\s._)\]-]|$)/.exec(s);
   return m ? parseInt(m[1], 10) : undefined;
 }
@@ -62,7 +79,7 @@ function detectEpisode(filenameNoExt: string, folder: string): EpisodeMarker | n
   const seasonFolder = SEASON_FOLDER_RE.exec(folder);
   if (seasonFolder) {
     const ep = extractEpisodeNum(filenameNoExt);
-    if (ep !== undefined) return { seasonNumber: parseInt(seasonFolder[1], 10), episodeNumber: ep };
+    if (ep !== undefined) return { seasonNumber: seasonFromFolderMatch(seasonFolder), episodeNumber: ep };
   }
 
   if (SPECIALS_FOLDER_RE.test(folder)) {
@@ -91,7 +108,11 @@ export function parseMediaPath(fullPath: string): ParsedMediaPath {
     const folderTitle = filenameParse(showFolder, false).title?.trim() || "";
     const tvTitle = filenameParse(filenameNoExt, true).title?.trim() || "";
     // Prefer the show-folder title (stable across all episodes of the series).
-    const seriesTitle = folderTitle || tvTitle || showFolder;
+    const rawSeriesTitle = folderTitle || tvTitle || showFolder;
+    // Show folders often carry a release year/range ("Show Name 2010-2019 WEBRip")
+    // that the filename parser leaves as a trailing year — drop it so the series
+    // matches cleanly. Only a *trailing* year, so titles like "2012" are kept.
+    const seriesTitle = rawSeriesTitle.replace(/[\s._-]+\d{4}$/, "").trim() || rawSeriesTitle;
 
     const year = extractYear(showFolder) ?? extractYear(folder);
     const tmdbId = extractTmdbId(showFolder) ?? extractTmdbId(filename);
