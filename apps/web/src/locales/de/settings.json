@@ -35,6 +35,21 @@
       "vaapi": "VA-API (h264_vaapi)",
       "qsv": "Intel QSV (h264_qsv)",
       "nvenc": "NVIDIA NVENC (h264_nvenc)"
+    },
+    "capabilities": {
+      "testButton": "Encoder testen",
+      "testing": "Wird getestet…",
+      "available": "Verfügbar",
+      "unavailable": "Nicht verfügbar",
+      "current": "aktuell",
+      "toolsFound": "ffmpeg {{ffmpeg}} · ffprobe {{ffprobe}} · im PATH gefunden",
+      "toolsMissing": "ffmpeg oder ffprobe wurden im Server-PATH nicht gefunden.",
+      "error": "Der Encoder-Test konnte nicht ausgeführt werden.",
+      "reasons": {
+        "not_built_in": "Nicht in ffmpeg auf diesem Server integriert",
+        "test_failed": "Encoder-Test fehlgeschlagen",
+        "ffmpeg_not_found": "ffmpeg nicht gefunden"
+      }
     }
   },
   "library": {

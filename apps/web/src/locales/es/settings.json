@@ -35,6 +35,21 @@
       "vaapi": "VA-API (h264_vaapi)",
       "qsv": "Intel QSV (h264_qsv)",
       "nvenc": "NVIDIA NVENC (h264_nvenc)"
+    },
+    "capabilities": {
+      "testButton": "Probar codificadores",
+      "testing": "Probando…",
+      "available": "Disponible",
+      "unavailable": "No disponible",
+      "current": "actual",
+      "toolsFound": "ffmpeg {{ffmpeg}} · ffprobe {{ffprobe}} · encontrado en PATH",
+      "toolsMissing": "ffmpeg o ffprobe no se encontraron en el PATH del servidor.",
+      "error": "No se pudo ejecutar la prueba del codificador.",
+      "reasons": {
+        "not_built_in": "No está integrado en ffmpeg en este servidor",
+        "test_failed": "La prueba de codificación falló",
+        "ffmpeg_not_found": "ffmpeg no encontrado"
+      }
     }
   },
   "library": {
