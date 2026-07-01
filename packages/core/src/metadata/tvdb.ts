@@ -44,6 +44,13 @@ export interface TvdbSeries {
   seasons: TvdbSeasonRef[];
 }
 
+export interface TvdbTranslation {
+  title?: string;
+  overview?: string;
+  /** key `${seasonNumber}:${episodeNumber}` → localized title/overview */
+  episodes: Map<string, { title?: string; overview?: string }>;
+}
+
 export interface TvdbEpisode {
   seasonNumber: number;
   episodeNumber: number;
@@ -105,6 +112,10 @@ interface RawEpisode {
   image?: string | null;
   runtime?: number | null;
   aired?: string | null;
+}
+interface RawTranslation {
+  name?: string | null;
+  overview?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -276,5 +287,36 @@ export class TvdbClient {
       page++;
     }
     return out;
+  }
+
+  /**
+   * Localized series title/overview + per-episode title/overview, in the
+   * client's configured language (default eng). One translations call plus a
+   * paginated localized-episodes sweep.
+   */
+  async seriesTranslated(id: number): Promise<TvdbTranslation> {
+    const lang = this.language ?? "eng";
+    const series = (await this.get<{ data?: RawTranslation }>(`${BASE}/series/${id}/translations/${lang}`)).data;
+    const episodes = new Map<string, { title?: string; overview?: string }>();
+    let page = 0;
+    for (let guard = 0; guard < 100; guard++) {
+      const raw = await this.get<{ data?: { episodes?: RawEpisode[] }; links?: { next?: string | null } }>(
+        `${BASE}/series/${id}/episodes/default/${lang}?page=${page}`,
+      );
+      for (const e of raw.data?.episodes ?? []) {
+        const key = `${e.seasonNumber ?? 0}:${e.number ?? 0}`;
+        episodes.set(key, {
+          ...(e.name ? { title: e.name } : {}),
+          ...(e.overview ? { overview: e.overview } : {}),
+        });
+      }
+      if (!raw.links?.next) break;
+      page++;
+    }
+    return {
+      ...(series?.name ? { title: series.name } : {}),
+      ...(series?.overview ? { overview: series.overview } : {}),
+      episodes,
+    };
   }
 }

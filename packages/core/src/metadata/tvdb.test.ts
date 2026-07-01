@@ -199,3 +199,24 @@ describe("TvdbClient.seasonEpisodes", () => {
     ]);
   });
 });
+
+describe("TvdbClient.seriesTranslated", () => {
+  it("returns localized series + episode text keyed by season:episode", async () => {
+    const fetchImpl = fakeFetch([
+      { match: "/login", body: { status: "success", data: { token: "t" } } },
+      { match: "/series/9/translations/spa", body: { status: "success", data: { name: "Juego de Tronos", overview: "Nueve familias…", language: "spa" } } },
+      {
+        match: "/series/9/episodes/default/spa",
+        body: {
+          data: { episodes: [{ id: 1, seasonNumber: 1, number: 1, name: "Se acerca el invierno", overview: "o-es" }] },
+          links: { next: null },
+        },
+      },
+    ]);
+    const client = new TvdbClient("k", fetchImpl, undefined, "spa");
+    const tr = await client.seriesTranslated(9);
+    expect(tr.title).toBe("Juego de Tronos");
+    expect(tr.overview).toBe("Nueve familias…");
+    expect(tr.episodes.get("1:1")).toEqual({ title: "Se acerca el invierno", overview: "o-es" });
+  });
+});
