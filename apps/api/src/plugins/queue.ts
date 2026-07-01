@@ -519,7 +519,11 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
             for (const g of input.genres) {
               const genre = await tx.genre.upsert({
                 where: { name: g.name },
-                create: { name: g.name, tmdbId: g.tmdbId },
+                // Genre.tmdbId is @unique. TVDB genres have no TMDB id and arrive
+                // as the sentinel 0; a 2nd such genre would violate the unique
+                // constraint (P2002). Coerce any non-positive id to null so
+                // multiple TVDB genres coexist (Postgres allows many NULLs).
+                create: { name: g.name, tmdbId: g.tmdbId && g.tmdbId > 0 ? g.tmdbId : null },
                 update: {},
               });
               await tx.mediaItemGenre.create({
@@ -630,7 +634,11 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
             for (const g of input.genres) {
               const genre = await tx.genre.upsert({
                 where: { name: g.name },
-                create: { name: g.name, tmdbId: g.tmdbId },
+                // Genre.tmdbId is @unique. TVDB genres have no TMDB id and arrive
+                // as the sentinel 0; a 2nd such genre would violate the unique
+                // constraint (P2002). Coerce any non-positive id to null so
+                // multiple TVDB genres coexist (Postgres allows many NULLs).
+                create: { name: g.name, tmdbId: g.tmdbId && g.tmdbId > 0 ? g.tmdbId : null },
                 update: {},
               });
               await tx.mediaItemGenre.create({
