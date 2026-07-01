@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { localizeItem, localizeName, localizeGenres, tmdbLanguageTag } from "./localize";
+import { localizeItem, localizeName, localizeGenres, tmdbLanguageTag, tvdbLanguageTag } from "./localize";
 
 describe("tmdbLanguageTag", () => {
   it("maps known codes", () => {
@@ -10,6 +10,20 @@ describe("tmdbLanguageTag", () => {
   });
   it("defaults unknown codes to en-US", () => {
     expect(tmdbLanguageTag("zz")).toBe("en-US");
+  });
+});
+
+describe("tvdbLanguageTag", () => {
+  it("maps known 2-letter codes to 3-letter ISO 639-2", () => {
+    expect(tvdbLanguageTag("en")).toBe("eng");
+    expect(tvdbLanguageTag("es")).toBe("spa");
+    expect(tvdbLanguageTag("de")).toBe("deu");
+    expect(tvdbLanguageTag("pt")).toBe("por");
+    expect(tvdbLanguageTag("ru")).toBe("rus");
+    expect(tvdbLanguageTag("fr")).toBe("fra");
+  });
+  it("defaults unknown codes to eng", () => {
+    expect(tvdbLanguageTag("zz")).toBe("eng");
   });
 });
 
