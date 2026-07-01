@@ -77,5 +77,20 @@ describe("parseMediaPath", () => {
       expect(r.seasonNumber).toBe(0);
       expect(r.episodeNumber).toBe(2);
     });
+
+    it("parses a Cyrillic 'NN сезон' folder + leading 'NN. Title' episode", () => {
+      const r = parseMediaPath(
+        "/tv/Сериал/Сериал.2010-2019.WEBRip 720p/02 сезон/100. Тест.mp4",
+      );
+      expect(r.title).toBe("Сериал");
+      expect(r.seasonNumber).toBe(2);
+      expect(r.episodeNumber).toBe(100);
+    });
+
+    it("parses the 'сезон N' order and a 'серия N' episode", () => {
+      const r = parseMediaPath("/tv/Сериал/Сезон 3/Сериал серия 5.mp4");
+      expect(r.seasonNumber).toBe(3);
+      expect(r.episodeNumber).toBe(5);
+    });
   });
 });
