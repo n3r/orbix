@@ -30,13 +30,12 @@ interface SettingsBody {
 export default async function settings(app: FastifyInstance) {
   app.get("/settings", { preHandler: [requireAuth(app), requireAdmin(app), requireNonKids(app)] }, async () => {
     const r = read(app);
-    const [token, encoder, omdbKey, fanartKey, tvdbApiKey, tvdbPin, refreshCadenceDays] = await Promise.all([
+    const [token, encoder, omdbKey, fanartKey, tvdbApiKey, refreshCadenceDays] = await Promise.all([
       getSetting<string>("tmdbToken", { fallback: "", read: r }),
       getSetting<string>("encoder", { fallback: "software", read: r }),
       getSetting<string>("omdbKey", { fallback: "", read: r }),
       getSetting<string>("fanartKey", { fallback: "", read: r }),
       getSetting<string>("tvdbApiKey", { fallback: "", read: r }),
-      getSetting<string>("tvdbPin", { fallback: "", read: r }),
       getSetting<number>("refreshCadenceDays", { fallback: 90, read: r }),
     ]);
     return {
