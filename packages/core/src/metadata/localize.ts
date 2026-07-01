@@ -21,6 +21,34 @@ export function tmdbLanguageTag(code: string): string {
   return TMDB_LANGUAGE_TAGS[code] ?? "en-US";
 }
 
+/**
+ * TMDB's per-language detail endpoints (`/movie/:id?language=<lang>`, `/tv/:id?...`)
+ * never return an empty `title`/`name`: when the requested language has no
+ * translation they backfill it with the ORIGINAL-language value. Storing that as
+ * a translation makes e.g. a Language-1 profile show a Language-2 title. This
+ * detects that fallback so the caller can skip it (and fall back to the base instead).
+ *
+ * Returns true only when `localized` is a genuine translation for `language`.
+ */
+export function isRealTranslation(
+  language: string,
+  localized: { title?: string | null; originalTitle?: string | null; originalLanguage?: string | null },
+): boolean {
+  const title = localized.title?.trim();
+  if (!title) return false;
+  // Requested a language other than the original, yet TMDB returned the original
+  // title verbatim → it fell back; not a real translation.
+  if (
+    localized.originalLanguage &&
+    localized.originalLanguage !== language &&
+    localized.originalTitle != null &&
+    title === localized.originalTitle.trim()
+  ) {
+    return false;
+  }
+  return true;
+}
+
 function pick(translated: string | null | undefined, base: string): string;
 function pick(translated: string | null | undefined, base: string | null | undefined): string | null | undefined;
 function pick(translated: string | null | undefined, base: string | null | undefined) {

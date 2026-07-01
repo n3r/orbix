@@ -56,6 +56,7 @@ export async function rebuildMetadata(
   const candidates = await prisma.mediaItem.findMany({
     select: {
       id: true,
+      kind: true,
       title: true,
       year: true,
       tmdbId: true,
@@ -86,6 +87,12 @@ export async function rebuildMetadata(
   let skipped = 0;
 
   for (const item of candidates) {
+    // Series are enriched as MOVIES by enrichItem below (client.movie(tmdbId)),
+    // which would corrupt them — TMDB ids are type-namespaced, so movie/<tvId>
+    // is a different title. Series are correctly (re-)enriched + localized by the
+    // scan worker (enrichSeries), so skip them here rather than mangle them.
+    if (item.kind === "series") continue;
+
     const isManual = item.matchState === "manual";
 
     // Snapshot manual artwork so a manual item's admin-chosen poster/backdrop

@@ -173,6 +173,31 @@ describe("enrichSeries", () => {
     ]);
   });
 
+  it("skips a series translation that is TMDB's original-language fallback", async () => {
+    const client = makeClient();
+    const cacheImage = makeImageSpy();
+    const { saveSeries, calls } = makeSaveSpy();
+
+    // TMDB returns the original-language name when the requested language has no
+    // translation: title === originalTitle and originalLanguage !== "lang1".
+    const lang1Client = {
+      async tv(): Promise<TmdbTv> {
+        return { ...fakeTv, title: "Kaltor", originalTitle: "Kaltor", originalLanguage: "lang2", seasons: [] };
+      },
+      async tvSeason(): Promise<TmdbEpisode[]> {
+        return [];
+      },
+    };
+
+    await enrichSeries(
+      { id: "series-lang1", title: "Zephyra", year: 2021 },
+      { client, cacheImage, saveSeries, localSeasonNumbers: [1], translateClients: new Map([["lang1", lang1Client]]) },
+    );
+
+    // No real lang1 translation → store none (the catalog then falls back to base).
+    expect(calls[0].translations).toEqual([]);
+  });
+
   it("skips a failing translate client and still succeeds", async () => {
     const client = makeClient();
     const cacheImage = makeImageSpy();

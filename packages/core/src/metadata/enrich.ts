@@ -1,6 +1,7 @@
 import type { TmdbSearchResult, TmdbMovie, TmdbCredits, TmdbKeyword } from "./tmdb";
 import type { ImageKind } from "./images";
 import type { ExternalRatings } from "./omdb";
+import { isRealTranslation } from "./localize";
 
 // ---------------------------------------------------------------------------
 // Structural interface — real TmdbClient satisfies this.
@@ -145,6 +146,10 @@ export async function enrichItem(
     for (const [language, client] of deps.translateClients) {
       try {
         const localized = await client.movie(tmdbId);
+        // TMDB backfills title/overview with the ORIGINAL language when the
+        // requested language has no translation; skip those so we don't store a
+        // wrong-language title (the catalog then falls back to the base title).
+        if (!isRealTranslation(language, localized)) continue;
         translations.push({
           language,
           title: localized.title,
