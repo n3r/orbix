@@ -98,6 +98,8 @@ export default function AdminSettingsPage() {
       setTmdbToken("");
       setOmdbKey("");
       setFanartKey("");
+      setTvdbApiKey("");
+      setTvdbPin("");
       setSuccess(true);
       await loadSettings();
     } catch {
