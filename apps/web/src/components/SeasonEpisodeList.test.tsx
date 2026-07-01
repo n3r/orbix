@@ -16,14 +16,15 @@ const seasons: SeasonSummary[] = [
 ];
 
 describe("SeasonEpisodeList", () => {
-  it("renders a season selector with every season, defaulting to the first non-specials season", () => {
+  it("renders a season tab per season, defaulting to the first non-specials season", () => {
     wrap(
       <SeasonEpisodeList seriesId="s1" seasons={seasons} onPlayEpisode={() => {}} playFirstToken={0} />,
     );
     expect(screen.getByText("Episodes")).toBeTruthy();
-    const select = screen.getByRole("combobox") as HTMLSelectElement;
-    expect(select.value).toBe("1");
-    expect(screen.getAllByRole("option")).toHaveLength(3);
+    const tabs = screen.getAllByRole("tab");
+    expect(tabs).toHaveLength(3);
+    const active = tabs.find((tab) => tab.getAttribute("aria-selected") === "true");
+    expect(active?.textContent).toBe("Season 1");
   });
 
   it("renders nothing when there are no seasons", () => {

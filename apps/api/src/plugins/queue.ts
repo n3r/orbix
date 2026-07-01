@@ -20,6 +20,7 @@ import {
   fetchOmdbRatings,
   fetchFanartLogoUrl,
   backdropFrameTimestampSec,
+  episodeFrameTimestampSec,
   TmdbClient,
   tmdbLanguageTag,
   getSetting,
@@ -646,20 +647,28 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
             }
 
             for (const e of s.episodes) {
-              const epData = {
+              const epBase = {
                 title: e.title ?? null,
                 overview: e.overview ?? null,
-                stillPath: e.stillPath ?? null,
                 runtimeSec: e.runtimeSec ?? null,
                 airDate: e.airDate ? new Date(e.airDate) : null,
                 tmdbEpisodeId: e.tmdbEpisodeId ?? null,
               };
+              // Only (re)write stillPath when TMDB provides one; otherwise leave
+              // the existing value so a frame still from the fallback survives.
+              const epUpdate = e.stillPath != null ? { ...epBase, stillPath: e.stillPath } : epBase;
               const episode = await prisma.episode.upsert({
                 where: {
                   seasonId_episodeNumber: { seasonId: season.id, episodeNumber: e.episodeNumber },
                 },
-                create: { seasonId: season.id, seriesId: input.itemId, episodeNumber: e.episodeNumber, ...epData },
-                update: epData,
+                create: {
+                  seasonId: season.id,
+                  seriesId: input.itemId,
+                  episodeNumber: e.episodeNumber,
+                  ...epBase,
+                  stillPath: e.stillPath ?? null,
+                },
+                update: epUpdate,
                 select: { id: true },
               });
 
@@ -791,6 +800,55 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
             app.log.debug(
               { err, itemId: it.id },
               "[scan] backdrop frame fallback failed (ffmpeg missing or unreadable file)",
+            );
+          }
+        }
+
+        // ── Episode still fallback ───────────────────────────────────────
+        // Episodes TMDB has no still for: grab an early frame from the local
+        // file via ffmpeg. Best-effort; skip silently when ffmpeg/file is absent.
+        const needStill = await prisma.episode.findMany({
+          where: {
+            seriesId: { in: enrichIdsArr },
+            stillPath: null,
+            files: { some: { probedOk: true } },
+          },
+          select: {
+            id: true,
+            files: {
+              where: { probedOk: true },
+              select: { path: true, durationSec: true },
+              take: 1,
+            },
+          },
+        });
+        for (const ep of needStill) {
+          const file = ep.files[0];
+          if (!file) continue;
+          const rel = `still/frame-${ep.id}.jpg`;
+          const outAbs = path.join(env.METADATA_DIR, rel);
+          try {
+            await fs.promises.mkdir(path.dirname(outAbs), { recursive: true });
+            const ts = episodeFrameTimestampSec(file.durationSec);
+            await execFileAsync("ffmpeg", [
+              "-y",
+              "-ss",
+              String(ts),
+              "-i",
+              file.path,
+              "-frames:v",
+              "1",
+              "-vf",
+              "scale=640:-2",
+              "-q:v",
+              "3",
+              outAbs,
+            ]);
+            await prisma.episode.update({ where: { id: ep.id }, data: { stillPath: rel } });
+          } catch (err) {
+            app.log.debug(
+              { err, episodeId: ep.id },
+              "[scan] episode still frame fallback failed (ffmpeg missing or unreadable file)",
             );
           }
         }
