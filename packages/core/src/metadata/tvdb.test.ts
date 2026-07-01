@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { TvdbClient, TvdbError } from "./tvdb";
+import { TvdbClient, TvdbError, pickArtwork } from "./tvdb";
 
 /** Build a fake fetch that returns queued JSON responses by URL substring. */
 function fakeFetch(routes: { match: string; status?: number; body: unknown }[]) {
@@ -79,8 +79,6 @@ describe("TvdbClient auth + searchSeries", () => {
     await expect(client.searchSeries("X")).rejects.toBeInstanceOf(TvdbError);
   });
 });
-
-import { pickArtwork } from "./tvdb";
 
 describe("pickArtwork", () => {
   const art = [

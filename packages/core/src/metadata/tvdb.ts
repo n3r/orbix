@@ -249,8 +249,8 @@ export class TvdbClient {
       ...(raw.overview != null ? { overview: raw.overview } : {}),
       ...(raw.status?.name ? { status: raw.status.name } : {}),
       ...(absUrl(raw.image) ? { posterUrl: absUrl(raw.image) } : {}),
-      ...(pickArtwork(artworks, ARTWORK_BACKDROP) ? { backdropUrl: pickArtwork(artworks, ARTWORK_BACKDROP) } : {}),
-      ...(pickArtwork(artworks, ARTWORK_CLEARLOGO, "eng") ? { logoUrl: pickArtwork(artworks, ARTWORK_CLEARLOGO, "eng") } : {}),
+      ...(absUrl(pickArtwork(artworks, ARTWORK_BACKDROP)) ? { backdropUrl: absUrl(pickArtwork(artworks, ARTWORK_BACKDROP)) } : {}),
+      ...(absUrl(pickArtwork(artworks, ARTWORK_CLEARLOGO, "eng")) ? { logoUrl: absUrl(pickArtwork(artworks, ARTWORK_CLEARLOGO, "eng")) } : {}),
       ...(imdb?.id ? { imdbId: imdb.id } : {}),
       ...(tmdb?.id && Number.isFinite(Number(tmdb.id)) ? { tmdbId: Number(tmdb.id) } : {}),
       ...(us?.name ? { contentRating: us.name } : {}),
@@ -274,13 +274,12 @@ export class TvdbClient {
 
   /** All episodes in aired (default) order, following pagination. */
   async seasonEpisodes(id: number): Promise<TvdbEpisode[]> {
-    const lang = this.language ? `/${this.language}` : "";
     const out: TvdbEpisode[] = [];
     let page = 0;
     // Bounded to avoid a runaway loop on a misbehaving API.
     for (let guard = 0; guard < 100; guard++) {
       const raw = await this.get<{ data?: { episodes?: RawEpisode[] }; links?: { next?: string | null } }>(
-        `${BASE}/series/${id}/episodes/default${lang}?page=${page}`,
+        `${BASE}/series/${id}/episodes/default?page=${page}`,
       );
       for (const e of raw.data?.episodes ?? []) out.push(this.mapEpisode(e));
       if (!raw.links?.next) break;
