@@ -546,17 +546,18 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
               });
             }
 
-            // Per-language metadata translations (additive; base row is en fallback)
+            // Per-language metadata translations — REPLACE (not additive) so a
+            // translation that is no longer real (e.g. a previously-stored
+            // original-language fallback) is removed on re-enrich. base = en.
+            await tx.mediaItemTranslation.deleteMany({ where: { mediaItemId: input.itemId } });
             for (const tr of input.translations ?? []) {
-              await tx.mediaItemTranslation.upsert({
-                where: { mediaItemId_language: { mediaItemId: input.itemId, language: tr.language } },
-                create: {
+              await tx.mediaItemTranslation.create({
+                data: {
                   mediaItemId: input.itemId,
                   language: tr.language,
                   title: tr.title,
                   overview: tr.overview ?? null,
                 },
-                update: { title: tr.title, overview: tr.overview ?? null },
               });
             }
           }, { timeout: 20_000, maxWait: 10_000 });
@@ -605,17 +606,18 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
               });
             }
 
-            // Series-level title/overview translations (additive; base = en).
+            // Series-level title/overview translations — REPLACE (not additive)
+            // so a no-longer-real translation (e.g. an old original-language
+            // fallback) is removed on re-enrich. base = en.
+            await tx.mediaItemTranslation.deleteMany({ where: { mediaItemId: input.itemId } });
             for (const tr of input.translations ?? []) {
-              await tx.mediaItemTranslation.upsert({
-                where: { mediaItemId_language: { mediaItemId: input.itemId, language: tr.language } },
-                create: {
+              await tx.mediaItemTranslation.create({
+                data: {
                   mediaItemId: input.itemId,
                   language: tr.language,
                   title: tr.title,
                   overview: tr.overview ?? null,
                 },
-                update: { title: tr.title, overview: tr.overview ?? null },
               });
             }
           });

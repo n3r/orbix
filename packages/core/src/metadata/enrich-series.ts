@@ -2,6 +2,7 @@ import type { TmdbSearchResult, TmdbTv, TmdbEpisode } from "./tmdb";
 import type { ImageKind } from "./images";
 import type { ExternalRatings } from "./omdb";
 import type { EnrichResult, MetadataTranslation } from "./enrich";
+import { isRealTranslation } from "./localize";
 
 /** Minimal client surface needed to fetch localized series/season/episode text. */
 export type TranslateSeriesClient = Pick<TmdbTvLike, "tv" | "tvSeason">;
@@ -170,6 +171,11 @@ export async function enrichSeries(
     for (const [language, client] of deps.translateClients) {
       try {
         const ltv = await client.tv(tmdbId);
+        // TMDB backfills name/overview with the ORIGINAL language when the
+        // requested language has no translation. Skip the whole language so we
+        // don't store e.g. a Language-2 title under Language 1 (the catalog then
+        // falls back to the base/default title).
+        if (!isRealTranslation(language, ltv)) continue;
         seriesTranslations.push({
           language,
           title: ltv.title,

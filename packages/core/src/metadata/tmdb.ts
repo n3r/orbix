@@ -36,6 +36,10 @@ export interface TmdbGenreRef {
 export interface TmdbMovie {
   tmdbId: number;
   title: string;
+  /** Original-language title + language code, used to detect TMDB's
+   *  original-language fallback on a localized (?language=) request. */
+  originalTitle?: string;
+  originalLanguage?: string;
   year?: number;
   overview?: string;
   tagline?: string;
@@ -60,6 +64,10 @@ export interface TmdbSeasonRef {
 export interface TmdbTv {
   tmdbId: number;
   title: string;
+  /** Original-language name + language code, used to detect TMDB's
+   *  original-language fallback on a localized (?language=) request. */
+  originalTitle?: string;
+  originalLanguage?: string;
   year?: number;
   overview?: string;
   tagline?: string;
@@ -106,6 +114,8 @@ interface RawSearchResult {
 interface RawMovie {
   id: number;
   title: string;
+  original_title?: string;
+  original_language?: string;
   release_date?: string;
   overview?: string;
   tagline?: string | null;
@@ -146,6 +156,8 @@ interface RawTvSearchResult {
 interface RawTv {
   id: number;
   name: string;
+  original_name?: string;
+  original_language?: string;
   first_air_date?: string;
   overview?: string;
   tagline?: string | null;
@@ -283,6 +295,8 @@ export class TmdbClient {
     return {
       tmdbId: raw.id,
       title: raw.title,
+      ...(raw.original_title != null ? { originalTitle: raw.original_title } : {}),
+      ...(raw.original_language != null ? { originalLanguage: raw.original_language } : {}),
       ...(raw.release_date
         ? { year: Number(raw.release_date.slice(0, 4)) }
         : {}),
@@ -329,6 +343,8 @@ export class TmdbClient {
     return {
       tmdbId: raw.id,
       title: raw.name,
+      ...(raw.original_name != null ? { originalTitle: raw.original_name } : {}),
+      ...(raw.original_language != null ? { originalLanguage: raw.original_language } : {}),
       ...(raw.first_air_date ? { year: Number(raw.first_air_date.slice(0, 4)) } : {}),
       ...(raw.overview != null ? { overview: raw.overview } : {}),
       ...(raw.tagline ? { tagline: raw.tagline } : {}),
