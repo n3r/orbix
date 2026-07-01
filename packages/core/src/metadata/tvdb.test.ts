@@ -158,3 +158,44 @@ describe("TvdbClient.series", () => {
     ]);
   });
 });
+
+describe("TvdbClient.seasonEpisodes", () => {
+  it("follows pagination and normalises episodes", async () => {
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/login")) {
+        return new Response(JSON.stringify({ status: "success", data: { token: "t" } }), { status: 200 });
+      }
+      if (url.includes("/episodes/default")) {
+        const page = new URL(url).searchParams.get("page") ?? "0";
+        if (page === "0") {
+          return new Response(
+            JSON.stringify({
+              data: {
+                episodes: [
+                  { id: 1, seasonNumber: 1, number: 1, name: "Winter Is Coming", overview: "o1", image: "https://a/e1.jpg", runtime: 62, aired: "2011-04-17" },
+                ],
+              },
+              links: { next: `${"https://api4.thetvdb.com/v4"}/series/9/episodes/default?page=1` },
+            }),
+            { status: 200 },
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            data: { episodes: [{ id: 2, seasonNumber: 1, number: 2, name: "The Kingsroad", aired: "2011-04-24" }] },
+            links: { next: null },
+          }),
+          { status: 200 },
+        );
+      }
+      throw new Error(`unexpected ${url}`);
+    }) as unknown as typeof fetch;
+    const client = new TvdbClient("k", fetchImpl);
+    const eps = await client.seasonEpisodes(9);
+    expect(eps).toEqual([
+      { seasonNumber: 1, episodeNumber: 1, title: "Winter Is Coming", overview: "o1", stillUrl: "https://a/e1.jpg", runtimeSec: 3720, airDate: "2011-04-17", tvdbEpisodeId: 1 },
+      { seasonNumber: 1, episodeNumber: 2, title: "The Kingsroad", airDate: "2011-04-24", tvdbEpisodeId: 2 },
+    ]);
+  });
+});

@@ -44,6 +44,17 @@ export interface TvdbSeries {
   seasons: TvdbSeasonRef[];
 }
 
+export interface TvdbEpisode {
+  seasonNumber: number;
+  episodeNumber: number;
+  title?: string;
+  overview?: string;
+  stillUrl?: string;
+  runtimeSec?: number;
+  airDate?: string;
+  tvdbEpisodeId: number;
+}
+
 // ---------------------------------------------------------------------------
 // Raw shapes (only what we read)
 // ---------------------------------------------------------------------------
@@ -84,6 +95,16 @@ interface RawSeriesExtended {
   seasons?: RawSeason[];
   artworks?: RawArtwork[];
   contentRatings?: { name?: string; country?: string }[];
+}
+interface RawEpisode {
+  id: number;
+  seasonNumber?: number;
+  number?: number;
+  name?: string | null;
+  overview?: string | null;
+  image?: string | null;
+  runtime?: number | null;
+  aired?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -225,5 +246,35 @@ export class TvdbClient {
       genres: (raw.genres ?? []).filter((g) => g.name).map((g) => ({ name: g.name as string })),
       seasons,
     };
+  }
+
+  private mapEpisode(e: RawEpisode): TvdbEpisode {
+    return {
+      seasonNumber: e.seasonNumber ?? 0,
+      episodeNumber: e.number ?? 0,
+      ...(e.name ? { title: e.name } : {}),
+      ...(e.overview ? { overview: e.overview } : {}),
+      ...(absUrl(e.image) ? { stillUrl: absUrl(e.image) } : {}),
+      ...(e.runtime != null ? { runtimeSec: e.runtime * 60 } : {}),
+      ...(e.aired ? { airDate: e.aired } : {}),
+      tvdbEpisodeId: e.id,
+    };
+  }
+
+  /** All episodes in aired (default) order, following pagination. */
+  async seasonEpisodes(id: number): Promise<TvdbEpisode[]> {
+    const lang = this.language ? `/${this.language}` : "";
+    const out: TvdbEpisode[] = [];
+    let page = 0;
+    // Bounded to avoid a runaway loop on a misbehaving API.
+    for (let guard = 0; guard < 100; guard++) {
+      const raw = await this.get<{ data?: { episodes?: RawEpisode[] }; links?: { next?: string | null } }>(
+        `${BASE}/series/${id}/episodes/default${lang}?page=${page}`,
+      );
+      for (const e of raw.data?.episodes ?? []) out.push(this.mapEpisode(e));
+      if (!raw.links?.next) break;
+      page++;
+    }
+    return out;
   }
 }
