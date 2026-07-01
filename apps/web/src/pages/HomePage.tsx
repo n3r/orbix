@@ -13,7 +13,7 @@ export default function HomePage() {
 
   // Hero candidates: top of Continue Watching (or first row); fetch detail for
   // backdrop + overview, which /home/rows does not include.
-  const firstRow = rows.find((r) => r.key === "continue_watching") ?? rows[0];
+  const firstRow = rows.find((r) => r.key === "continue") ?? rows[0];
   const candIds = (firstRow?.items ?? []).slice(0, 6).map((i) => i.id);
   const detailQueries = useQueries({
     queries: candIds.map((id) => ({
