@@ -96,6 +96,8 @@ model MediaItem {
   tagline        String?
   status         String?
   tmdbId         Int?
+  tvdbId         Int?
+  metadataSource String? // "tvdb" | "tmdb"; null = legacy/unmatched
   imdbId         String?
   posterPath     String?
   backdropPath   String?
@@ -119,6 +121,7 @@ model MediaItem {
 
   @@index([libraryId, sortTitle])
   @@index([tmdbId])
+  @@index([tvdbId])
 }
 
 model Season {
@@ -131,6 +134,7 @@ model Season {
   posterPath   String?
   airYear      Int?
   tmdbSeasonId Int?
+  tvdbSeasonId Int?
   episodes     Episode[]
   translations SeasonTranslation[]
 
@@ -150,6 +154,7 @@ model Episode {
   runtimeSec    Int?
   airDate       DateTime?
   tmdbEpisodeId Int?
+  tvdbEpisodeId Int?
   files         MediaFile[]
   translations  EpisodeTranslation[]
 
