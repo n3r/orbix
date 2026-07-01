@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiJson, apiFetch, ApiError } from "./api";
-import type { AuthMe, HomeRow, MediaCard, MenuConfig, MenuItem, Profile } from "./types";
+import type { AuthMe, HomeRow, MediaCard, MenuConfig, MenuItem, Profile, TitleDetail } from "./types";
 
 export interface SetupStatus { complete: boolean }
 export interface ActiveProfile {
@@ -58,4 +58,13 @@ export async function saveMenu(libraryIds: string[]): Promise<{ items: MenuItem[
   const res = await apiFetch("/me/menu", { method: "PUT", body: JSON.stringify({ libraryIds }) });
   if (!res.ok) throw new ApiError(res.status);
   return (await res.json()) as { items: MenuItem[] };
+}
+
+/** Full title detail; shared cache key ["item", id] (used by the spotlight hero). */
+export function useItemDetail(id: string | undefined) {
+  return useQuery({
+    queryKey: ["item", id],
+    enabled: !!id,
+    queryFn: () => apiJson<TitleDetail>(`/items/${id}`),
+  });
 }
