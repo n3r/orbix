@@ -12,6 +12,7 @@ interface SettingsResponse {
   encoder: EncoderValue;
   omdbConfigured: boolean;
   fanartConfigured: boolean;
+  tvdbConfigured: boolean;
   refreshCadenceDays: number;
 }
 
@@ -28,12 +29,15 @@ export default function AdminSettingsPage() {
   const [tmdbConfigured, setTmdbConfigured] = useState(false);
   const [omdbConfigured, setOmdbConfigured] = useState(false);
   const [fanartConfigured, setFanartConfigured] = useState(false);
+  const [tvdbConfigured, setTvdbConfigured] = useState(false);
 
   // Form fields (secrets are write-only; show placeholder when configured)
   const [tmdbToken, setTmdbToken] = useState("");
   const [encoder, setEncoder] = useState<EncoderValue>("software");
   const [omdbKey, setOmdbKey] = useState("");
   const [fanartKey, setFanartKey] = useState("");
+  const [tvdbApiKey, setTvdbApiKey] = useState("");
+  const [tvdbPin, setTvdbPin] = useState("");
   const [refreshCadenceDays, setRefreshCadenceDays] = useState(90);
 
   // Rebuild-metadata action (independent of the settings form)
@@ -55,6 +59,7 @@ export default function AdminSettingsPage() {
       setTmdbConfigured(data.tmdbConfigured);
       setOmdbConfigured(data.omdbConfigured);
       setFanartConfigured(data.fanartConfigured);
+      setTvdbConfigured(data.tvdbConfigured);
       setEncoder(data.encoder ?? "software");
       setRefreshCadenceDays(data.refreshCadenceDays ?? 90);
     } catch {
@@ -75,6 +80,8 @@ export default function AdminSettingsPage() {
       if (tmdbToken) body.tmdbToken = tmdbToken;
       if (omdbKey) body.omdbKey = omdbKey;
       if (fanartKey) body.fanartKey = fanartKey;
+      if (tvdbApiKey) body.tvdbApiKey = tvdbApiKey;
+      if (tvdbPin) body.tvdbPin = tvdbPin;
 
       const res = await apiFetch("/settings", {
         method: "PUT",
@@ -91,6 +98,8 @@ export default function AdminSettingsPage() {
       setTmdbToken("");
       setOmdbKey("");
       setFanartKey("");
+      setTvdbApiKey("");
+      setTvdbPin("");
       setSuccess(true);
       await loadSettings();
     } catch {
@@ -214,6 +223,38 @@ export default function AdminSettingsPage() {
                 value={fanartKey}
                 onChange={(e) => setFanartKey(e.target.value)}
                 placeholder={fanartConfigured ? t("settings:providers.placeholderKeyConfigured") : t("settings:providers.placeholderKeyEmpty")}
+                autoComplete="off"
+              />
+            </div>
+
+            {/* TheTVDB */}
+            <div>
+              <label className="block mb-1 text-sm font-medium text-[var(--text)]">
+                {t("settings:providers.tvdb.label")}{" "}
+                <span className="text-[var(--text-dim)] font-normal">{t("settings:providers.optional")}</span>
+              </label>
+              <p className="mb-2 text-xs text-[var(--text-dim)]">
+                {t("settings:providers.statusLabel")}{" "}
+                <span className={tvdbConfigured ? "text-green-400" : "text-[var(--text-dim)]"}>
+                  {tvdbConfigured ? t("settings:providers.status.configured") : t("settings:providers.status.notSet")}
+                </span>
+              </p>
+              <Input
+                type="password"
+                value={tvdbApiKey}
+                onChange={(e) => setTvdbApiKey(e.target.value)}
+                placeholder={tvdbConfigured ? t("settings:providers.placeholderKeyConfigured") : t("settings:providers.placeholderKeyEmpty")}
+                autoComplete="off"
+              />
+              <label className="block mt-3 mb-1 text-sm font-medium text-[var(--text)]">
+                {t("settings:providers.tvdb.pinLabel")}{" "}
+                <span className="text-[var(--text-dim)] font-normal">{t("settings:providers.optional")}</span>
+              </label>
+              <Input
+                type="password"
+                value={tvdbPin}
+                onChange={(e) => setTvdbPin(e.target.value)}
+                placeholder={tvdbConfigured ? t("settings:providers.tvdb.placeholderPinConfigured") : t("settings:providers.tvdb.placeholderPinEmpty")}
                 autoComplete="off"
               />
             </div>
