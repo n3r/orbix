@@ -139,6 +139,7 @@ export default function AdminSettingsPage() {
   async function handleTestEncoders() {
     setTesting(true);
     setTestError(null);
+    setCapabilities(null); // drop stale results so a failed re-test never shows old ones
     try {
       const res = await apiFetch("/transcode/test", { method: "POST" });
       if (!res.ok) {
