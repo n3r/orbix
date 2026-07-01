@@ -16,7 +16,12 @@
   },
   "hero": {
     "play": "Abspielen",
-    "moreInfo": "Mehr Infos",
-    "showSlide": "{{title}} anzeigen"
+    "moreInfo": "Mehr Infos"
+  },
+  "spotlight": {
+    "new": "NEU",
+    "seasons": "{{count}} Staffeln",
+    "timeLeftMinutes": "noch {{m}} Min.",
+    "timeLeftHours": "noch {{h}} Std. {{m}} Min."
   }
 }

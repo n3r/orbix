@@ -61,11 +61,18 @@ export interface MediaCard {
   matchState?: string;
 }
 
+/** Home-row card: MediaCard plus continue-watching + recency fields. */
+export interface HomeCard extends MediaCard {
+  addedAt?: string;
+  progress?: { positionSec: number; durationSec: number } | null;
+  resume?: { seasonNumber: number; episodeNumber: number; episodeTitle: string | null } | null;
+}
+
 /** One labelled row on the home screen (smart rows, continue watching, etc.). */
 export interface HomeRow {
   key: string;
   title: string;
-  items: MediaCard[];
+  items: HomeCard[];
 }
 
 /** Ratings shown on the title hero. All optional — render only what's present. */

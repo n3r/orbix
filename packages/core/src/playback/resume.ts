@@ -4,6 +4,7 @@ export interface PlaybackStateLike {
   durationSec: number;
   finished: boolean;
   updatedAt: Date;
+  episodeId: string;
 }
 
 /**
@@ -17,7 +18,7 @@ export function isFinished(positionSec: number, durationSec: number): boolean {
 
 /**
  * Returns in-progress items sorted by updatedAt descending (newest first),
- * mapped to { mediaItemId, positionSec, durationSec }.
+ * mapped to { mediaItemId, positionSec, durationSec, episodeId }.
  *
  * In-progress: positionSec > 0 && !finished.
  *
@@ -28,7 +29,7 @@ export function isFinished(positionSec: number, durationSec: number): boolean {
  */
 export function continueWatching(
   states: PlaybackStateLike[]
-): { mediaItemId: string; positionSec: number; durationSec: number }[] {
+): { mediaItemId: string; positionSec: number; durationSec: number; episodeId: string }[] {
   const seen = new Set<string>();
   return states
     .filter((s) => s.positionSec > 0 && !s.finished)
@@ -38,5 +39,10 @@ export function continueWatching(
       seen.add(s.mediaItemId);
       return true;
     })
-    .map(({ mediaItemId, positionSec, durationSec }) => ({ mediaItemId, positionSec, durationSec }));
+    .map(({ mediaItemId, positionSec, durationSec, episodeId }) => ({
+      mediaItemId,
+      positionSec,
+      durationSec,
+      episodeId,
+    }));
 }

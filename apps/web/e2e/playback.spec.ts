@@ -246,11 +246,14 @@ test.describe("Playback wiring", () => {
       `Expected ${ITEM_ID} in continue-watching, got: ${JSON.stringify(cwItems)}`,
     ).toBe(true);
 
-    // Reload home page — ContinueWatching row must show "Continue Watching" heading
-    // and a card linking to the seeded movie. Use the link role to disambiguate from the
-    // "Because you watched Playback Movie" smart-row heading (which is an <h2>, not a link).
+    // Reload home page — the in-progress movie is now the featured "spotlight" item:
+    // its title shows as the hero heading, and a poster card links to it. (The old
+    // "Continue Watching" rail heading no longer exists — the featured/continue row is
+    // rendered as the spotlight row, which carries no row label.)
     await page.reload();
-    await expect(page.getByText("Continue Watching")).toBeVisible({ timeout: 15_000 });
+    await expect(
+      page.getByRole("heading", { name: /Playback Movie/i }),
+    ).toBeVisible({ timeout: 15_000 });
     await expect(
       page.getByRole("link", { name: /Playback Movie/i }).first(),
     ).toBeVisible({ timeout: 15_000 });
