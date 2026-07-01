@@ -81,4 +81,46 @@ describe("continueWatching", () => {
   it("returns empty array when all items are finished or not started", () => {
     expect(continueWatching([states[0], states[1]])).toEqual([]);
   });
+
+  it("collapses multiple in-progress episodes of the same series to one entry (most recent)", () => {
+    // A series stores one PlaybackState per episode (unique on
+    // profileId+mediaItemId+episodeId), all sharing the series' mediaItemId.
+    // continueWatching must surface one resume card per series, not per episode.
+    const seriesStates = [
+      {
+        mediaItemId: "series-1",
+        positionSec: 10,
+        durationSec: 100,
+        finished: false,
+        updatedAt: new Date("2026-06-29T08:00:00Z"),
+      },
+      {
+        mediaItemId: "series-1",
+        positionSec: 60,
+        durationSec: 100,
+        finished: false,
+        updatedAt: new Date("2026-06-29T12:00:00Z"),
+      },
+      {
+        mediaItemId: "series-1",
+        positionSec: 30,
+        durationSec: 100,
+        finished: false,
+        updatedAt: new Date("2026-06-29T10:00:00Z"),
+      },
+      {
+        mediaItemId: "movie-2",
+        positionSec: 20,
+        durationSec: 100,
+        finished: false,
+        updatedAt: new Date("2026-06-29T09:00:00Z"),
+      },
+    ];
+    const result = continueWatching(seriesStates);
+    expect(result).toHaveLength(2);
+    // One card per media item; series first (its newest episode is newest overall).
+    expect(result.map((r) => r.mediaItemId)).toEqual(["series-1", "movie-2"]);
+    // Keeps the most-recently-watched episode's resume position.
+    expect(result[0]).toEqual({ mediaItemId: "series-1", positionSec: 60, durationSec: 100 });
+  });
 });

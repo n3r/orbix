@@ -1,5 +1,23 @@
 import { describe, it, expect } from "vitest";
-import { localizeItem, localizeName, localizeGenres, tmdbLanguageTag, tvdbLanguageTag } from "./localize";
+import { localizeItem, localizeName, localizeGenres, tmdbLanguageTag, tvdbLanguageTag, isRealTranslation } from "./localize";
+
+describe("isRealTranslation", () => {
+  it("accepts a genuine translation", () => {
+    expect(isRealTranslation("lang1", { title: "Zephyra (L1)", originalTitle: "Zephyra", originalLanguage: "lang2" })).toBe(true);
+  });
+  it("rejects TMDB's original-language fallback (Language 2 title under Language 1)", () => {
+    expect(isRealTranslation("lang1", { title: "Kaltor", originalTitle: "Kaltor", originalLanguage: "lang2" })).toBe(false);
+  });
+  it("rejects an empty/whitespace title", () => {
+    expect(isRealTranslation("lang1", { title: "  ", originalTitle: "x", originalLanguage: "lang2" })).toBe(false);
+  });
+  it("keeps a translation when requesting the original language", () => {
+    expect(isRealTranslation("lang2", { title: "Kaltor", originalTitle: "Kaltor", originalLanguage: "lang2" })).toBe(true);
+  });
+  it("keeps a translation when original info is absent", () => {
+    expect(isRealTranslation("lang1", { title: "Zephyra (L1)" })).toBe(true);
+  });
+});
 
 describe("tmdbLanguageTag", () => {
   it("maps known codes", () => {
