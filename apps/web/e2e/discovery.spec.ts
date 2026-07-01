@@ -212,7 +212,8 @@ test.describe("NL search — constraint path", () => {
     await expect(page.getByRole("link", { name: /Short Comedy Film/ })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole("link", { name: /Classic Comedy Film/ })).toBeVisible({ timeout: 15_000 });
 
-    // The 180-min drama must NOT be present (excluded by both runtime and genre filters)
-    await expect(page.getByText("Epic Drama Film")).not.toBeVisible();
+    // The 180-min drama must NOT be present (excluded by both runtime and genre filters).
+    // Target the card link (consistent with the positive assertions above).
+    await expect(page.getByRole("link", { name: /Epic Drama Film/ })).not.toBeVisible();
   });
 });
