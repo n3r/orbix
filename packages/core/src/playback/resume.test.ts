@@ -31,6 +31,7 @@ describe("continueWatching", () => {
       durationSec: 100,
       finished: true,
       updatedAt: new Date("2026-06-29T10:00:00Z"),
+      episodeId: "",
     },
     {
       mediaItemId: "not-started-item",
@@ -38,6 +39,7 @@ describe("continueWatching", () => {
       durationSec: 100,
       finished: false,
       updatedAt: new Date("2026-06-29T09:00:00Z"),
+      episodeId: "",
     },
     {
       mediaItemId: "in-progress-older",
@@ -45,6 +47,7 @@ describe("continueWatching", () => {
       durationSec: 100,
       finished: false,
       updatedAt: new Date("2026-06-29T08:00:00Z"),
+      episodeId: "",
     },
     {
       mediaItemId: "in-progress-newer",
@@ -52,6 +55,7 @@ describe("continueWatching", () => {
       durationSec: 120,
       finished: false,
       updatedAt: new Date("2026-06-29T11:00:00Z"),
+      episodeId: "",
     },
   ];
 
@@ -69,16 +73,39 @@ describe("continueWatching", () => {
     expect(result[1].mediaItemId).toBe("in-progress-older");
   });
 
-  it("maps output to {mediaItemId, positionSec, durationSec} only", () => {
+  it("maps output to {mediaItemId, positionSec, durationSec, episodeId} only", () => {
     const result = continueWatching(states);
     for (const item of result) {
-      expect(Object.keys(item).sort()).toEqual(["durationSec", "mediaItemId", "positionSec"]);
+      expect(Object.keys(item).sort()).toEqual(["durationSec", "episodeId", "mediaItemId", "positionSec"]);
     }
-    expect(result[0]).toEqual({ mediaItemId: "in-progress-newer", positionSec: 50, durationSec: 120 });
-    expect(result[1]).toEqual({ mediaItemId: "in-progress-older", positionSec: 30, durationSec: 100 });
+    expect(result[0]).toEqual({ mediaItemId: "in-progress-newer", positionSec: 50, durationSec: 120, episodeId: "" });
+    expect(result[1]).toEqual({ mediaItemId: "in-progress-older", positionSec: 30, durationSec: 100, episodeId: "" });
   });
 
   it("returns empty array when all items are finished or not started", () => {
     expect(continueWatching([states[0], states[1]])).toEqual([]);
+  });
+
+  it("passes episodeId through for each returned item", () => {
+    const withEp = [
+      {
+        mediaItemId: "series-1",
+        positionSec: 600,
+        durationSec: 1200,
+        finished: false,
+        updatedAt: new Date("2026-06-30T10:00:00Z"),
+        episodeId: "ep-42",
+      },
+      {
+        mediaItemId: "movie-1",
+        positionSec: 300,
+        durationSec: 6000,
+        finished: false,
+        updatedAt: new Date("2026-06-29T10:00:00Z"),
+        episodeId: "",
+      },
+    ];
+    const result = continueWatching(withEp);
+    expect(result.map((r) => r.episodeId)).toEqual(["ep-42", ""]);
   });
 });
