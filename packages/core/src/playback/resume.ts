@@ -21,13 +21,24 @@ export function isFinished(positionSec: number, durationSec: number): boolean {
  * mapped to { mediaItemId, positionSec, durationSec, episodeId }.
  *
  * In-progress: positionSec > 0 && !finished.
+ *
+ * Collapsed to one entry per mediaItemId: a TV series stores one PlaybackState
+ * per episode (all sharing the series' mediaItemId), so we keep only the most
+ * recently watched episode's progress — one resume card per series, not per
+ * episode.
  */
 export function continueWatching(
   states: PlaybackStateLike[]
 ): { mediaItemId: string; positionSec: number; durationSec: number; episodeId: string }[] {
+  const seen = new Set<string>();
   return states
     .filter((s) => s.positionSec > 0 && !s.finished)
     .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+    .filter((s) => {
+      if (seen.has(s.mediaItemId)) return false;
+      seen.add(s.mediaItemId);
+      return true;
+    })
     .map(({ mediaItemId, positionSec, durationSec, episodeId }) => ({
       mediaItemId,
       positionSec,

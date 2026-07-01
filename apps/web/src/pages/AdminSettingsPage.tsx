@@ -4,6 +4,8 @@ import { useTranslation } from "react-i18next";
 import { Button, Card, Input } from "@orbix/ui";
 import { apiFetch } from "@/lib/api";
 import { errorMessage } from "@/lib/i18n/tError";
+import type { CapabilityReport } from "@orbix/core";
+import EncoderCapabilityList from "@/components/settings/EncoderCapabilityList";
 
 type EncoderValue = "software" | "vaapi" | "qsv" | "nvenc";
 
@@ -12,6 +14,7 @@ interface SettingsResponse {
   encoder: EncoderValue;
   omdbConfigured: boolean;
   fanartConfigured: boolean;
+  tvdbConfigured: boolean;
   refreshCadenceDays: number;
 }
 
@@ -28,17 +31,25 @@ export default function AdminSettingsPage() {
   const [tmdbConfigured, setTmdbConfigured] = useState(false);
   const [omdbConfigured, setOmdbConfigured] = useState(false);
   const [fanartConfigured, setFanartConfigured] = useState(false);
+  const [tvdbConfigured, setTvdbConfigured] = useState(false);
 
   // Form fields (secrets are write-only; show placeholder when configured)
   const [tmdbToken, setTmdbToken] = useState("");
   const [encoder, setEncoder] = useState<EncoderValue>("software");
   const [omdbKey, setOmdbKey] = useState("");
   const [fanartKey, setFanartKey] = useState("");
+  const [tvdbApiKey, setTvdbApiKey] = useState("");
+  const [tvdbPin, setTvdbPin] = useState("");
   const [refreshCadenceDays, setRefreshCadenceDays] = useState(90);
 
   // Rebuild-metadata action (independent of the settings form)
   const [rebuilding, setRebuilding] = useState(false);
   const [rebuildMsg, setRebuildMsg] = useState<string | null>(null);
+
+  // Encoder capability test (independent of the settings form)
+  const [testing, setTesting] = useState(false);
+  const [capabilities, setCapabilities] = useState<CapabilityReport | null>(null);
+  const [testError, setTestError] = useState<string | null>(null);
 
   useEffect(() => {
     void loadSettings();
@@ -55,6 +66,7 @@ export default function AdminSettingsPage() {
       setTmdbConfigured(data.tmdbConfigured);
       setOmdbConfigured(data.omdbConfigured);
       setFanartConfigured(data.fanartConfigured);
+      setTvdbConfigured(data.tvdbConfigured);
       setEncoder(data.encoder ?? "software");
       setRefreshCadenceDays(data.refreshCadenceDays ?? 90);
     } catch {
@@ -75,6 +87,8 @@ export default function AdminSettingsPage() {
       if (tmdbToken) body.tmdbToken = tmdbToken;
       if (omdbKey) body.omdbKey = omdbKey;
       if (fanartKey) body.fanartKey = fanartKey;
+      if (tvdbApiKey) body.tvdbApiKey = tvdbApiKey;
+      if (tvdbPin) body.tvdbPin = tvdbPin;
 
       const res = await apiFetch("/settings", {
         method: "PUT",
@@ -91,6 +105,8 @@ export default function AdminSettingsPage() {
       setTmdbToken("");
       setOmdbKey("");
       setFanartKey("");
+      setTvdbApiKey("");
+      setTvdbPin("");
       setSuccess(true);
       await loadSettings();
     } catch {
@@ -126,6 +142,24 @@ export default function AdminSettingsPage() {
       setRebuildMsg(t("settings:maintenance.networkError"));
     } finally {
       setRebuilding(false);
+    }
+  }
+
+  async function handleTestEncoders() {
+    setTesting(true);
+    setTestError(null);
+    setCapabilities(null); // drop stale results so a failed re-test never shows old ones
+    try {
+      const res = await apiFetch("/transcode/test", { method: "POST" });
+      if (!res.ok) {
+        setTestError(t("settings:transcode.capabilities.error"));
+        return;
+      }
+      setCapabilities((await res.json()) as CapabilityReport);
+    } catch {
+      setTestError(t("errors:network"));
+    } finally {
+      setTesting(false);
     }
   }
 
@@ -217,6 +251,38 @@ export default function AdminSettingsPage() {
                 autoComplete="off"
               />
             </div>
+
+            {/* TheTVDB */}
+            <div>
+              <label className="block mb-1 text-sm font-medium text-[var(--text)]">
+                {t("settings:providers.tvdb.label")}{" "}
+                <span className="text-[var(--text-dim)] font-normal">{t("settings:providers.optional")}</span>
+              </label>
+              <p className="mb-2 text-xs text-[var(--text-dim)]">
+                {t("settings:providers.statusLabel")}{" "}
+                <span className={tvdbConfigured ? "text-green-400" : "text-[var(--text-dim)]"}>
+                  {tvdbConfigured ? t("settings:providers.status.configured") : t("settings:providers.status.notSet")}
+                </span>
+              </p>
+              <Input
+                type="password"
+                value={tvdbApiKey}
+                onChange={(e) => setTvdbApiKey(e.target.value)}
+                placeholder={tvdbConfigured ? t("settings:providers.placeholderKeyConfigured") : t("settings:providers.placeholderKeyEmpty")}
+                autoComplete="off"
+              />
+              <label className="block mt-3 mb-1 text-sm font-medium text-[var(--text)]">
+                {t("settings:providers.tvdb.pinLabel")}{" "}
+                <span className="text-[var(--text-dim)] font-normal">{t("settings:providers.optional")}</span>
+              </label>
+              <Input
+                type="password"
+                value={tvdbPin}
+                onChange={(e) => setTvdbPin(e.target.value)}
+                placeholder={tvdbConfigured ? t("settings:providers.tvdb.placeholderPinConfigured") : t("settings:providers.tvdb.placeholderPinEmpty")}
+                autoComplete="off"
+              />
+            </div>
           </div>
         </Card>
 
@@ -242,6 +308,23 @@ export default function AdminSettingsPage() {
                 </option>
               ))}
             </select>
+          </div>
+
+          <div className="mt-4">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={handleTestEncoders}
+              disabled={testing}
+            >
+              {testing
+                ? t("settings:transcode.capabilities.testing")
+                : t("settings:transcode.capabilities.testButton")}
+            </Button>
+            {testError && <p className="mt-2 text-sm text-red-400">{testError}</p>}
+            {capabilities && (
+              <EncoderCapabilityList report={capabilities} current={encoder} />
+            )}
           </div>
         </Card>
 

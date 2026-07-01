@@ -126,15 +126,10 @@ export default async function playstateRoute(app: FastifyInstance) {
         },
       });
 
-      // continueWatching returns in-progress states newest-first. A series can
-      // have several in-progress episodes, so collapse to one card per series
-      // (keep the most recent), which is what the rail shows.
-      const seenSeries = new Set<string>();
-      const inProgress = continueWatching(states).filter((s) => {
-        if (seenSeries.has(s.mediaItemId)) return false;
-        seenSeries.add(s.mediaItemId);
-        return true;
-      });
+      // continueWatching returns in-progress states newest-first, already
+      // collapsed to one entry per series (most recent episode) — exactly what
+      // the rail shows.
+      const inProgress = continueWatching(states);
       if (inProgress.length === 0) return [];
 
       const inProgressIds = inProgress.map((s) => s.mediaItemId);

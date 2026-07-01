@@ -2,7 +2,7 @@
 export type EncoderSetting = "software" | "vaapi" | "qsv" | "nvenc";
 
 /** Mapping from encoder setting value to ffmpeg codec name. */
-const ENCODER_MAP: Record<string, string> = {
+export const ENCODER_MAP: Record<string, string> = {
   software: "libx264",
   vaapi: "h264_vaapi",
   qsv: "h264_qsv",

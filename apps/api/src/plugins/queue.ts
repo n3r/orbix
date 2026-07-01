@@ -24,6 +24,10 @@ import {
   TmdbClient,
   tmdbLanguageTag,
   getSetting,
+  TvdbClient,
+  enrichSeriesTvdb,
+  tvdbLanguageTag,
+  type EnrichResult,
   type MediaFileTechnical,
   type ImageKind,
   type SaveMetadataInput,
@@ -418,6 +422,26 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
         const boundCacheImage = (tmdbPath: string, kind: ImageKind): Promise<string> =>
           cacheImage(tmdbPath, kind, imageIo);
 
+        // TVDB is optional; when configured, series enrich TVDB-first.
+        const tvdbApiKey = await getSetting<string>("tvdbApiKey", {
+          fallback: "",
+          read: (k) => prisma.setting.findUnique({ where: { key: k } }),
+        });
+        const tvdbPin = await getSetting<string>("tvdbPin", {
+          fallback: "",
+          read: (k) => prisma.setting.findUnique({ where: { key: k } }),
+        });
+        const tvdb = tvdbApiKey ? new TvdbClient(tvdbApiKey, fetch, tvdbPin || undefined) : null;
+        const tvdbTranslateClients = new Map<string, TvdbClient>();
+        if (tvdbApiKey) {
+          for (const lang of activeLanguages) {
+            tvdbTranslateClients.set(lang, new TvdbClient(tvdbApiKey, fetch, tvdbPin || undefined, tvdbLanguageTag(lang)));
+          }
+        }
+
+        const boundCacheImageUrl = (url: string, kind: ImageKind): Promise<string> =>
+          cacheImageFromUrl(url, kind, imageIo);
+
         // Resolve a hero logo: fanart.tv (transparent PNG, by likes) first, then
         // TMDB's own logo art. Returns a metadata-relative path or undefined.
         const resolveLogo = async (id: {
@@ -433,13 +457,18 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
           return undefined;
         };
 
-        // TV logo: fanart.tv's TV endpoint needs a TheTVDB id we don't have, so
-        // use TMDB's own logo art for series.
+        // TV logo: prefer the TVDB clearlogo art (absolute URL) when present,
+        // else TMDB's own logo art keyed by the cross-referenced tmdbId.
         const resolveLogoTv = async (id: {
-          tmdbId: number;
+          tvdbId?: number;
+          tmdbId?: number;
+          logoUrl?: string;
         }): Promise<string | undefined> => {
-          const tmdbLogo = await client.tvLogoPath(id.tmdbId);
-          if (tmdbLogo) return boundCacheImage(tmdbLogo, "logo");
+          if (id.logoUrl) return cacheImageFromUrl(id.logoUrl, "logo", imageIo);
+          if (id.tmdbId != null) {
+            const tmdbLogo = await client.tvLogoPath(id.tmdbId);
+            if (tmdbLogo) return boundCacheImage(tmdbLogo, "logo");
+          }
           return undefined;
         };
 
@@ -578,7 +607,9 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
               status: input.status ?? null,
               posterPath: input.posterPath ?? null,
               imdbId: input.imdbId ?? null,
-              tmdbId: input.tmdbId,
+              tmdbId: input.tmdbId ?? null,
+              tvdbId: input.tvdbId ?? null,
+              metadataSource: input.metadataSource ?? "tmdb",
               tmdbScore: input.tmdbScore ?? null,
               matchState: "matched",
               rating: input.rating ?? null,
@@ -630,6 +661,7 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
               posterPath: s.posterPath ?? null,
               airYear: s.airYear ?? null,
               tmdbSeasonId: s.tmdbSeasonId ?? null,
+              tvdbSeasonId: s.tvdbSeasonId ?? null,
             };
             const season = await prisma.season.upsert({
               where: {
@@ -655,6 +687,7 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
                 runtimeSec: e.runtimeSec ?? null,
                 airDate: e.airDate ? new Date(e.airDate) : null,
                 tmdbEpisodeId: e.tmdbEpisodeId ?? null,
+                tvdbEpisodeId: e.tvdbEpisodeId ?? null,
               };
               // Only (re)write stillPath when TMDB provides one; otherwise leave
               // the existing value so a frame still from the fallback survives.
@@ -705,7 +738,7 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
           const itemId = enrichIdsArr[i]!;
           const item = await prisma.mediaItem.findUnique({
             where: { id: itemId },
-            select: { id: true, kind: true, title: true, year: true, tmdbId: true, matchState: true },
+            select: { id: true, kind: true, title: true, year: true, tmdbId: true, tvdbId: true, matchState: true },
           });
           if (!item) continue;
 
@@ -719,21 +752,48 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
               year: item.year ?? undefined,
               tmdbId: item.tmdbId ?? undefined,
             };
-            let result;
+            let result: EnrichResult;
             if (item.kind === "series") {
               const localSeasons = await prisma.season.findMany({
                 where: { seriesId: item.id },
                 select: { seasonNumber: true },
               });
-              result = await enrichSeries(base, {
-                client,
-                cacheImage: boundCacheImage,
-                saveSeries,
-                resolveLogo: resolveLogoTv,
-                fetchRatings,
-                localSeasonNumbers: localSeasons.map((s) => s.seasonNumber),
-                translateClients,
-              });
+              const localSeasonNumbers = localSeasons.map((s) => s.seasonNumber);
+
+              // TVDB first (when configured); fall back to TMDB on no match.
+              if (tvdb) {
+                try {
+                  result = await enrichSeriesTvdb(
+                    { id: item.id, title: item.title, year: item.year ?? undefined, tvdbId: item.tvdbId ?? undefined },
+                    {
+                      client: tvdb,
+                      cacheImageUrl: boundCacheImageUrl,
+                      saveSeries,
+                      resolveLogo: resolveLogoTv,
+                      fetchRatings,
+                      localSeasonNumbers,
+                      translateClients: tvdbTranslateClients,
+                    },
+                  );
+                } catch (err) {
+                  app.log.warn({ err, itemId: item.id }, "TVDB enrichment failed — falling back to TMDB");
+                  result = { matched: false };
+                }
+              } else {
+                result = { matched: false };
+              }
+
+              if (!result.matched) {
+                result = await enrichSeries(base, {
+                  client,
+                  cacheImage: boundCacheImage,
+                  saveSeries,
+                  resolveLogo: resolveLogoTv,
+                  fetchRatings,
+                  localSeasonNumbers,
+                  translateClients,
+                });
+              }
             } else {
               result = await enrichItem(base, {
                 client,
@@ -913,6 +973,18 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
 
       const client = new TmdbClient(token, undefined, tag);
 
+      const tvdbApiKey = await getSetting<string>("tvdbApiKey", {
+        fallback: "",
+        read: (k) => prisma.setting.findUnique({ where: { key: k } }),
+      });
+      const tvdbPin = await getSetting<string>("tvdbPin", {
+        fallback: "",
+        read: (k) => prisma.setting.findUnique({ where: { key: k } }),
+      });
+      const tvdbClient = tvdbApiKey
+        ? new TvdbClient(tvdbApiKey, fetch, tvdbPin || undefined, tvdbLanguageTag(language))
+        : null;
+
       // Localized genre names (fixed TMDB list per language).
       try {
         for (const kind of ["movie", "tv"] as const) {
@@ -986,19 +1058,51 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
         }
       }
 
+      // Backfill a TVDB-sourced series: localized title/overview (series) and
+      // episode titles/overviews — matched to local rows by season/episode number.
+      async function translateSeriesTvdb(seriesId: string, tvdbId: number): Promise<void> {
+        if (!tvdbClient) return;
+        const tr = await tvdbClient.seriesTranslated(tvdbId);
+        if (tr.title) {
+          await prisma.mediaItemTranslation.upsert({
+            where: { mediaItemId_language: { mediaItemId: seriesId, language } },
+            create: { mediaItemId: seriesId, language, title: tr.title, overview: tr.overview ?? null },
+            update: { title: tr.title, overview: tr.overview ?? null },
+          });
+        }
+        const localEpisodes = await prisma.episode.findMany({
+          where: { seriesId },
+          select: { id: true, seasonId: true, episodeNumber: true, season: { select: { seasonNumber: true } } },
+        });
+        for (const le of localEpisodes) {
+          const t = tr.episodes.get(`${le.season.seasonNumber}:${le.episodeNumber}`);
+          if (!t || (t.title == null && t.overview == null)) continue;
+          await prisma.episodeTranslation.upsert({
+            where: { episodeId_language: { episodeId: le.id, language } },
+            create: { episodeId: le.id, language, title: t.title ?? null, overview: t.overview ?? null },
+            update: { title: t.title ?? null, overview: t.overview ?? null },
+          });
+        }
+      }
+
       // Per-item localized text for every matched item (movie or series).
       const items = await prisma.mediaItem.findMany({
-        where: { tmdbId: { not: null }, matchState: { not: "unmatched" } },
-        select: { id: true, kind: true, tmdbId: true },
+        where: {
+          matchState: { not: "unmatched" },
+          OR: [{ tmdbId: { not: null } }, { tvdbId: { not: null } }],
+        },
+        select: { id: true, kind: true, tmdbId: true, tvdbId: true, metadataSource: true },
       });
 
       let processed = 0;
       for (const item of items) {
         try {
-          if (item.kind === "series") {
-            await translateSeries(item.id, item.tmdbId!);
-          } else {
-            const m = await client.movie(item.tmdbId!);
+          if (item.kind === "series" && (item.metadataSource === "tvdb" || (item.tvdbId != null && item.tmdbId == null))) {
+            await translateSeriesTvdb(item.id, item.tvdbId!);
+          } else if (item.kind === "series" && item.tmdbId != null) {
+            await translateSeries(item.id, item.tmdbId);
+          } else if (item.tmdbId != null) {
+            const m = await client.movie(item.tmdbId);
             await prisma.mediaItemTranslation.upsert({
               where: { mediaItemId_language: { mediaItemId: item.id, language } },
               create: { mediaItemId: item.id, language, title: m.title, overview: m.overview ?? null },

@@ -21,6 +21,20 @@ export function tmdbLanguageTag(code: string): string {
   return TMDB_LANGUAGE_TAGS[code] ?? "en-US";
 }
 
+const TVDB_LANGUAGE_TAGS: Record<string, string> = {
+  en: "eng",
+  es: "spa",
+  de: "deu",
+  pt: "por",
+  ru: "rus",
+  fr: "fra",
+};
+
+/** Map an internal ISO-639-1 code to a TVDB 3-letter ISO-639-2 code (default eng). */
+export function tvdbLanguageTag(code: string): string {
+  return TVDB_LANGUAGE_TAGS[code] ?? "eng";
+}
+
 /**
  * TMDB's per-language detail endpoints (`/movie/:id?language=<lang>`, `/tv/:id?...`)
  * never return an empty `title`/`name`: when the requested language has no

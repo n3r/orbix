@@ -22,17 +22,20 @@ interface SettingsBody {
   encoder?: string;
   omdbKey?: string;
   fanartKey?: string;
+  tvdbApiKey?: string;
+  tvdbPin?: string;
   refreshCadenceDays?: number;
 }
 
 export default async function settings(app: FastifyInstance) {
   app.get("/settings", { preHandler: [requireAuth(app), requireAdmin(app), requireNonKids(app)] }, async () => {
     const r = read(app);
-    const [token, encoder, omdbKey, fanartKey, refreshCadenceDays] = await Promise.all([
+    const [token, encoder, omdbKey, fanartKey, tvdbApiKey, refreshCadenceDays] = await Promise.all([
       getSetting<string>("tmdbToken", { fallback: "", read: r }),
       getSetting<string>("encoder", { fallback: "software", read: r }),
       getSetting<string>("omdbKey", { fallback: "", read: r }),
       getSetting<string>("fanartKey", { fallback: "", read: r }),
+      getSetting<string>("tvdbApiKey", { fallback: "", read: r }),
       getSetting<number>("refreshCadenceDays", { fallback: 90, read: r }),
     ]);
     return {
@@ -40,6 +43,7 @@ export default async function settings(app: FastifyInstance) {
       encoder,
       omdbConfigured: omdbKey.length > 0,
       fanartConfigured: fanartKey.length > 0,
+      tvdbConfigured: tvdbApiKey.length > 0,
       refreshCadenceDays,
     }; // never return secrets
   });
@@ -80,6 +84,12 @@ export default async function settings(app: FastifyInstance) {
       }
       if (typeof body.fanartKey === "string") {
         tasks.push(setSetting("fanartKey", body.fanartKey, { write: w }));
+      }
+      if (typeof body.tvdbApiKey === "string") {
+        tasks.push(setSetting("tvdbApiKey", body.tvdbApiKey, { write: w }));
+      }
+      if (typeof body.tvdbPin === "string") {
+        tasks.push(setSetting("tvdbPin", body.tvdbPin, { write: w }));
       }
       if (body.refreshCadenceDays !== undefined) {
         tasks.push(setSetting("refreshCadenceDays", Number(body.refreshCadenceDays), { write: w }));

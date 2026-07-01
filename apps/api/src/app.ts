@@ -13,6 +13,7 @@ import auth from "./routes/auth";
 import profilesRoute from "./routes/profiles";
 import menuRoute from "./routes/menu";
 import settingsRoute from "./routes/settings";
+import transcodeRoute from "./routes/transcode";
 import { librariesRoute } from "./routes/libraries";
 import { imagesRoute } from "./routes/images";
 import scanRoute from "./routes/scan";
@@ -47,6 +48,7 @@ export async function buildApp(env: Env, overrides?: { mountRuntime?: MountRunti
   await app.register(profilesRoute, { prefix: "/api" });
   await app.register(menuRoute, { prefix: "/api" });
   await app.register(settingsRoute, { prefix: "/api" });
+  await app.register(transcodeRoute, { prefix: "/api" });
   await app.register(librariesRoute(env, { runtime }), { prefix: "/api" });
   await app.register(imagesRoute(env), { prefix: "/api" });
   await app.register(scanRoute, { prefix: "/api" });
