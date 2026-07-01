@@ -157,13 +157,16 @@ describe("buildHlsArgs", () => {
     expect(args[idx + 1]).toBe("copy");
   });
 
-  it("audioAction=aac: -c:a aac -b:a 192k", () => {
+  it("audioAction=aac: -c:a aac -b:a 192k, downmixed to stereo", () => {
     const args = buildHlsArgs(BASE_TRANSCODE);
     const idx = args.indexOf("-c:a");
     expect(idx).toBeGreaterThan(-1);
     expect(args[idx + 1]).toBe("aac");
     expect(args).toContain("-b:a");
     expect(args[args.indexOf("-b:a") + 1]).toBe("192k");
+    // Multichannel AAC breaks hls.js/MSE playback → force stereo.
+    expect(args).toContain("-ac");
+    expect(args[args.indexOf("-ac") + 1]).toBe("2");
   });
 
   // --- HLS muxer flags ---
