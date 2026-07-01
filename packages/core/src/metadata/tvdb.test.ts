@@ -79,3 +79,82 @@ describe("TvdbClient auth + searchSeries", () => {
     await expect(client.searchSeries("X")).rejects.toBeInstanceOf(TvdbError);
   });
 });
+
+import { pickArtwork } from "./tvdb";
+
+describe("pickArtwork", () => {
+  const art = [
+    { image: "https://a/logo-eng.png", type: 23, language: "eng", score: 10 },
+    { image: "https://a/logo-neutral.png", type: 23, language: null, score: 99 },
+    { image: "https://a/bg.jpg", type: 3, language: null, score: 5 },
+  ];
+  it("prefers the requested language, then highest score", () => {
+    expect(pickArtwork(art, 23, "eng")).toBe("https://a/logo-eng.png");
+  });
+  it("falls back to any of the type by score when language missing", () => {
+    expect(pickArtwork(art, 23, "spa")).toBe("https://a/logo-neutral.png");
+  });
+  it("returns undefined when the type is absent", () => {
+    expect(pickArtwork(art, 2, "eng")).toBeUndefined();
+  });
+});
+
+describe("TvdbClient.series", () => {
+  it("normalises the extended record", async () => {
+    const fetchImpl = fakeFetch([
+      { match: "/login", body: { status: "success", data: { token: "t" } } },
+      {
+        match: "/series/121361/extended",
+        body: {
+          status: "success",
+          data: {
+            id: 121361,
+            name: "Game of Thrones",
+            image: "https://a/poster.jpg",
+            overview: "Nine noble families…",
+            year: "2011",
+            status: { name: "Ended" },
+            genres: [{ id: 1, name: "Drama" }, { id: 2, name: "Fantasy" }],
+            remoteIds: [
+              { id: "tt0944947", type: 2, sourceName: "IMDB" },
+              { id: "1399", type: 12, sourceName: "TheMovieDB.com" },
+            ],
+            seasons: [
+              { id: 500, number: 0, image: "https://a/s0.jpg", type: { type: "official" } },
+              { id: 501, number: 1, image: "https://a/s1.jpg", type: { type: "official" } },
+              { id: 599, number: 1, image: "https://a/s1-dvd.jpg", type: { type: "dvd" } },
+            ],
+            artworks: [
+              { image: "https://a/bg.jpg", type: 3, language: null, score: 8 },
+              { image: "https://a/logo.png", type: 23, language: "eng", score: 8 },
+            ],
+            contentRatings: [
+              { name: "TV-MA", country: "usa" },
+              { name: "18", country: "gbr" },
+            ],
+          },
+        },
+      },
+    ]);
+    const client = new TvdbClient("k", fetchImpl);
+    const s = await client.series(121361);
+    expect(s).toMatchObject({
+      tvdbId: 121361,
+      title: "Game of Thrones",
+      year: 2011,
+      status: "Ended",
+      posterUrl: "https://a/poster.jpg",
+      backdropUrl: "https://a/bg.jpg",
+      logoUrl: "https://a/logo.png",
+      imdbId: "tt0944947",
+      tmdbId: 1399,
+      contentRating: "TV-MA",
+      genres: [{ name: "Drama" }, { name: "Fantasy" }],
+    });
+    // official seasons only, de-duped by number
+    expect(s.seasons).toEqual([
+      { seasonNumber: 0, posterUrl: "https://a/s0.jpg", tvdbSeasonId: 500 },
+      { seasonNumber: 1, posterUrl: "https://a/s1.jpg", tvdbSeasonId: 501 },
+    ]);
+  });
+});
