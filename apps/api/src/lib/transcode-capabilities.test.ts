@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { scanTranscodeCapabilities, tailReason, type ExecOutcome } from "./transcode-capabilities";
+import { scanTranscodeCapabilities, tailReason, realExec, type ExecOutcome } from "./transcode-capabilities";
 
 const ENCODER_STDOUT =
   "Encoders:\n ------\n V....D libx264 x\n V....D h264_nvenc x\n V....D h264_vaapi x\n V....D h264_qsv x\n";
@@ -40,6 +40,37 @@ describe("tailReason", () => {
     expect(tailReason("")).toBe("");
     expect(tailReason("x".repeat(500)).length).toBeLessThanOrEqual(200);
   });
+});
+
+describe("realExec", () => {
+  it("maps a missing binary to code ENOENT", async () => {
+    const out = await realExec("orbix-nonexistent-binary-xyz", ["-x"], 5000);
+    expect(out.code).toBe("ENOENT");
+  });
+
+  it("maps a non-zero exit to code 1 with stderr captured", async () => {
+    const out = await realExec(
+      "node",
+      ["-e", "console.error('boom'); process.exit(3)"],
+      5000,
+    );
+    expect(out.code).toBe(1);
+    expect(out.stderr).toContain("boom");
+  });
+
+  it(
+    "maps a timed-out child to code 1 with a 'timed out' reason",
+    async () => {
+      const out = await realExec(
+        "node",
+        ["-e", "setTimeout(()=>{}, 10000)"],
+        100,
+      );
+      expect(out.code).toBe(1);
+      expect(out.stderr).toBe("timed out");
+    },
+    10000,
+  );
 });
 
 describe("scanTranscodeCapabilities", () => {

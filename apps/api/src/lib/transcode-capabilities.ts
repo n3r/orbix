@@ -27,7 +27,7 @@ export type ExecFileImpl = (
 ) => Promise<ExecOutcome>;
 
 /** Real ffmpeg/ffprobe runner. Never throws — maps failures to an ExecOutcome. */
-const realExec: ExecFileImpl = async (cmd, args, timeoutMs) => {
+export const realExec: ExecFileImpl = async (cmd, args, timeoutMs) => {
   try {
     const { stdout, stderr } = await execFileAsync(cmd, args, {
       timeout: timeoutMs,
@@ -48,7 +48,7 @@ const realExec: ExecFileImpl = async (cmd, args, timeoutMs) => {
 export function tailReason(stderr: string): string {
   const lines = stderr.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const tail = lines.slice(-2).join(" ");
-  return tail.length > 200 ? tail.slice(-200) : tail;
+  return tail.length > 200 ? tail.slice(0, 200) : tail;
 }
 
 function parseVersion(stdout: string): string | undefined {
