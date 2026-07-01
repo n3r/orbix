@@ -24,6 +24,12 @@
     },
     "fanart": {
       "label": "Clave de la API de Fanart.tv"
+    },
+    "tvdb": {
+      "label": "Clave de API de TheTVDB",
+      "pinLabel": "PIN de suscriptor de TheTVDB",
+      "placeholderPinConfigured": "Deja en blanco para conservar el PIN actual",
+      "placeholderPinEmpty": "PIN de suscriptor (opcional)"
     }
   },
   "transcode": {
