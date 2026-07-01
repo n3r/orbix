@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { HomeCard } from "@/lib/types";
-import { useItemDetail } from "@/lib/queries";
+import { itemDetailOptions, useItemDetail } from "@/lib/queries";
 import SpotlightHero from "./SpotlightHero";
 import SpotlightPoster from "./SpotlightPoster";
 
@@ -18,6 +19,7 @@ export default function SpotlightRow({
 }) {
   const [activeId, setActiveId] = useState<string | null>(items[0]?.id ?? null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const qc = useQueryClient();
 
   const clear = () => {
     if (timer.current) clearTimeout(timer.current);
@@ -28,6 +30,12 @@ export default function SpotlightRow({
     timer.current = setTimeout(() => setActiveId(id), debounceMs);
   };
   useEffect(() => clear, []);
+
+  // Prefetch the first few items' details so the initial and next promotions
+  // paint instantly instead of flashing the skeleton on first hover.
+  useEffect(() => {
+    for (const it of items.slice(0, 3)) qc.prefetchQuery(itemDetailOptions(it.id));
+  }, [items, qc]);
 
   const active = items.find((i) => i.id === activeId) ?? items[0];
   const detail = useItemDetail(active?.id);

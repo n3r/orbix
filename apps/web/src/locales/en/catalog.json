@@ -16,7 +16,12 @@
   },
   "hero": {
     "play": "Play",
-    "moreInfo": "More info",
-    "showSlide": "Show {{title}}"
+    "moreInfo": "More info"
+  },
+  "spotlight": {
+    "new": "NEW",
+    "seasons": "{{count}} Seasons",
+    "timeLeftMinutes": "{{m}}m left",
+    "timeLeftHours": "{{h}}h {{m}}m left"
   }
 }

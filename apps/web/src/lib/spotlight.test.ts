@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isNew, progressPct, timeLeftLabel, resumeLabel } from "./spotlight";
+import { isNew, progressPct, timeLeftParts, resumeLabel } from "./spotlight";
 
 describe("isNew", () => {
   const now = new Date("2026-07-01T00:00:00Z");
@@ -26,15 +26,15 @@ describe("progressPct", () => {
   });
 });
 
-describe("timeLeftLabel", () => {
+describe("timeLeftParts", () => {
   it("formats minutes", () => {
-    expect(timeLeftLabel(600, 1200)).toBe("10m left");
+    expect(timeLeftParts(600, 1200)).toEqual({ h: 0, m: 10 });
   });
   it("formats hours + minutes", () => {
-    expect(timeLeftLabel(600, 4500)).toBe("1h 5m left");
+    expect(timeLeftParts(600, 4500)).toEqual({ h: 1, m: 5 });
   });
-  it("returns empty string for invalid duration", () => {
-    expect(timeLeftLabel(10, 0)).toBe("");
+  it("returns null for invalid duration", () => {
+    expect(timeLeftParts(10, 0)).toBeNull();
   });
 });
 

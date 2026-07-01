@@ -16,7 +16,12 @@
   },
   "hero": {
     "play": "Lire",
-    "moreInfo": "Plus d'infos",
-    "showSlide": "Afficher {{title}}"
+    "moreInfo": "Plus d'infos"
+  },
+  "spotlight": {
+    "new": "NOUVEAU",
+    "seasons": "{{count}} saisons",
+    "timeLeftMinutes": "{{m}} min restantes",
+    "timeLeftHours": "{{h}} h {{m}} min restantes"
   }
 }

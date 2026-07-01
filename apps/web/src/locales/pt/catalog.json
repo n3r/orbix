@@ -16,7 +16,12 @@
   },
   "hero": {
     "play": "Reproduzir",
-    "moreInfo": "Mais informações",
-    "showSlide": "Mostrar {{title}}"
+    "moreInfo": "Mais informações"
+  },
+  "spotlight": {
+    "new": "NOVO",
+    "seasons": "{{count}} temporadas",
+    "timeLeftMinutes": "faltam {{m}} min",
+    "timeLeftHours": "faltam {{h}} h {{m}} min"
   }
 }

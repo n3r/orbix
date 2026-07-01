@@ -16,7 +16,12 @@
   },
   "hero": {
     "play": "Смотреть",
-    "moreInfo": "Подробнее",
-    "showSlide": "Показать {{title}}"
+    "moreInfo": "Подробнее"
+  },
+  "spotlight": {
+    "new": "НОВОЕ",
+    "seasons": "Сезонов: {{count}}",
+    "timeLeftMinutes": "осталось {{m}} мин",
+    "timeLeftHours": "осталось {{h}} ч {{m}} мин"
   }
 }

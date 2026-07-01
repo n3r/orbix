@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Button, cn } from "@orbix/ui";
 import type { HomeCard, TitleDetail } from "@/lib/types";
 import BadgeStack from "./BadgeStack";
-import { isNew, progressPct, resumeLabel, timeLeftLabel } from "@/lib/spotlight";
+import { isNew, progressPct, resumeLabel, timeLeftParts } from "@/lib/spotlight";
 
 /** The large hero for the active spotlight item. Fixed-size slot; content swaps. */
 export default function SpotlightHero({
@@ -18,8 +18,11 @@ export default function SpotlightHero({
   const isContinue = !!(card.resume || card.progress);
   const resume = resumeLabel(card.resume);
   const pct = card.progress ? progressPct(card.progress.positionSec, card.progress.durationSec) : 0;
-  const timeLeft = card.progress
-    ? timeLeftLabel(card.progress.positionSec, card.progress.durationSec)
+  const parts = card.progress ? timeLeftParts(card.progress.positionSec, card.progress.durationSec) : null;
+  const timeLeft = parts
+    ? parts.h > 0
+      ? t("catalog:spotlight.timeLeftHours", { h: parts.h, m: parts.m })
+      : t("catalog:spotlight.timeLeftMinutes", { m: parts.m })
     : null;
 
   const metaLine = isContinue
@@ -27,7 +30,9 @@ export default function SpotlightHero({
     : [
         detail?.genres?.[0],
         card.year ?? detail?.year ?? null,
-        detail?.seasons && detail.seasons.length > 0 ? `${detail.seasons.length} Seasons` : null,
+        detail?.seasons && detail.seasons.length > 0
+          ? t("catalog:spotlight.seasons", { count: detail.seasons.length })
+          : null,
         detail?.rating,
       ]
         .filter(Boolean)

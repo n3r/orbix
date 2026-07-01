@@ -60,11 +60,12 @@ export async function saveMenu(libraryIds: string[]): Promise<{ items: MenuItem[
   return (await res.json()) as { items: MenuItem[] };
 }
 
+/** Shared query descriptor for a title's full detail; reusable for prefetching. */
+export function itemDetailOptions(id: string) {
+  return { queryKey: ["item", id] as const, queryFn: () => apiJson<TitleDetail>(`/items/${id}`) };
+}
+
 /** Full title detail; shared cache key ["item", id] (used by the spotlight hero). */
 export function useItemDetail(id: string | undefined) {
-  return useQuery({
-    queryKey: ["item", id],
-    enabled: !!id,
-    queryFn: () => apiJson<TitleDetail>(`/items/${id}`),
-  });
+  return useQuery({ ...itemDetailOptions(id ?? ""), enabled: !!id });
 }

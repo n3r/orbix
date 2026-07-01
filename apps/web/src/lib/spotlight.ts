@@ -14,13 +14,11 @@ export function progressPct(positionSec: number, durationSec: number): number {
   return Math.min(100, Math.round((positionSec / durationSec) * 100));
 }
 
-/** "10m left" / "1h 5m left"; "" when duration is not positive. */
-export function timeLeftLabel(positionSec: number, durationSec: number): string {
-  if (durationSec <= 0) return "";
+/** Remaining time split into hours/minutes; null when duration is not positive. */
+export function timeLeftParts(positionSec: number, durationSec: number): { h: number; m: number } | null {
+  if (durationSec <= 0) return null;
   const leftMin = Math.max(0, Math.round((durationSec - positionSec) / 60));
-  const h = Math.floor(leftMin / 60);
-  const m = leftMin % 60;
-  return h > 0 ? `${h}h ${m}m left` : `${m}m left`;
+  return { h: Math.floor(leftMin / 60), m: leftMin % 60 };
 }
 
 /** "S3 E4 · Old Friends" / "S1 E2"; null for a movie (null/undefined resume). */

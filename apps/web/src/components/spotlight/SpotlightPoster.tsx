@@ -1,4 +1,5 @@
 import { Link } from "react-router";
+import { useTranslation } from "react-i18next";
 import { cn } from "@orbix/ui";
 import type { HomeCard } from "@/lib/types";
 import { isNew, progressPct } from "@/lib/spotlight";
@@ -17,6 +18,7 @@ export default function SpotlightPoster({
   active: boolean;
   onPromote: () => void;
 }) {
+  const { t } = useTranslation();
   const showImg =
     item.posterPath &&
     (item.matchState == null || item.matchState === "matched" || item.matchState === "manual");
@@ -48,7 +50,7 @@ export default function SpotlightPoster({
       </div>
       {isNew(item.addedAt, new Date()) && (
         <span className="absolute left-1 top-1 rounded bg-[var(--accent)] px-1 py-0.5 text-[10px] font-semibold text-white">
-          NEW
+          {t("catalog:spotlight.new")}
         </span>
       )}
       {pct > 0 && (
