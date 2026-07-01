@@ -112,6 +112,37 @@ describe("buildHlsArgs", () => {
     expect(args[idx + 1]).toBe("h264_qsv");
   });
 
+  it("transcode: vaapi uploads to the GPU (device before -i, hwupload filter, no libx264 flags)", () => {
+    const args = buildHlsArgs({ ...BASE_TRANSCODE, encoder: "vaapi", vaapiDevice: "/dev/dri/renderD200" });
+    // device init must precede the input
+    expect(args.indexOf("-vaapi_device")).toBeGreaterThan(-1);
+    expect(args[args.indexOf("-vaapi_device") + 1]).toBe("/dev/dri/renderD200");
+    expect(args.indexOf("-vaapi_device")).toBeLessThan(args.indexOf("-i"));
+    // frames uploaded to the GPU before the hw encoder
+    expect(args.indexOf("-vf")).toBeGreaterThan(-1);
+    expect(args[args.indexOf("-vf") + 1]).toContain("hwupload");
+    // libx264-only rate control must not leak into the VAAPI command
+    expect(args).not.toContain("-crf");
+    expect(args).not.toContain("veryfast");
+  });
+
+  it("transcode: vaapi defaults to /dev/dri/renderD128", () => {
+    const args = buildHlsArgs({ ...BASE_TRANSCODE, encoder: "vaapi" });
+    expect(args[args.indexOf("-vaapi_device") + 1]).toBe("/dev/dri/renderD128");
+  });
+
+  it("transcode: qsv uploads to the GPU (hwupload=qsv filter)", () => {
+    const args = buildHlsArgs({ ...BASE_TRANSCODE, encoder: "qsv" });
+    expect(args[args.indexOf("-vf") + 1]).toContain("format=qsv");
+    expect(args).not.toContain("-crf");
+  });
+
+  it("transcode: software keeps no -vaapi_device", () => {
+    const args = buildHlsArgs({ ...BASE_TRANSCODE, encoder: "software" });
+    expect(args).not.toContain("-vaapi_device");
+    expect(args).not.toContain("-vf");
+  });
+
   it("transcode: no encoder → defaults to libx264", () => {
     const args = buildHlsArgs(BASE_TRANSCODE); // no encoder field
     const idx = args.indexOf("-c:v");

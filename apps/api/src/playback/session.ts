@@ -202,6 +202,7 @@ export class SessionManager {
       mode,
       audioAction,
       encoder: encoder as "software" | "vaapi" | "qsv" | "nvenc" | undefined,
+      vaapiDevice: process.env.VAAPI_DEVICE || "/dev/dri/renderD128",
     });
 
     const proc = this.spawnFn("ffmpeg", args, { stdio: "ignore" });
