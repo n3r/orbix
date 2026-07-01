@@ -751,18 +751,23 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
 
               // TVDB first (when configured); fall back to TMDB on no match.
               if (tvdb) {
-                result = await enrichSeriesTvdb(
-                  { id: item.id, title: item.title, year: item.year ?? undefined, tvdbId: item.tvdbId ?? undefined },
-                  {
-                    client: tvdb,
-                    cacheImageUrl: boundCacheImageUrl,
-                    saveSeries,
-                    resolveLogo: resolveLogoTv,
-                    fetchRatings,
-                    localSeasonNumbers,
-                    translateClients: tvdbTranslateClients,
-                  },
-                );
+                try {
+                  result = await enrichSeriesTvdb(
+                    { id: item.id, title: item.title, year: item.year ?? undefined, tvdbId: item.tvdbId ?? undefined },
+                    {
+                      client: tvdb,
+                      cacheImageUrl: boundCacheImageUrl,
+                      saveSeries,
+                      resolveLogo: resolveLogoTv,
+                      fetchRatings,
+                      localSeasonNumbers,
+                      translateClients: tvdbTranslateClients,
+                    },
+                  );
+                } catch (err) {
+                  app.log.warn({ err, itemId: item.id }, "TVDB enrichment failed — falling back to TMDB");
+                  result = { matched: false };
+                }
               } else {
                 result = { matched: false };
               }
