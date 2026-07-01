@@ -68,6 +68,9 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
       API_PORT: "1061"
+      # WEB_PORT is validated by loadEnv() (required int) even though the API binds
+      # API_PORT; pass it into the container to match the published host port.
+      WEB_PORT: "${WEB_PORT:-8080}"
       WEB_ORIGIN: ${WEB_ORIGIN}
       SESSION_SECRET: ${SESSION_SECRET}
       METADATA_DIR: /data/metadata
