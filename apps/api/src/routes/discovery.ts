@@ -87,6 +87,7 @@ export default async function discoveryRoute(app: FastifyInstance) {
         title: true,
         year: true,
         posterPath: true,
+        addedAt: true,
         translations: { where: { language: lang }, select: { title: true } },
         genres: {
           select: { genre: { select: { name: true } } },
@@ -122,6 +123,7 @@ export default async function discoveryRoute(app: FastifyInstance) {
           where: { profileId },
           select: {
             mediaItemId: true,
+            episodeId: true,
             positionSec: true,
             durationSec: true,
             finished: true,
@@ -196,6 +198,37 @@ export default async function discoveryRoute(app: FastifyInstance) {
       // ── 4. Continue Watching ─────────────────────────────────────────────────
       const cwList = continueWatching(allStates);
 
+      // Map mediaItemId → its newest in-progress state (progress + resume source).
+      const cwByItem = new Map<
+        string,
+        { positionSec: number; durationSec: number; episodeId: string }
+      >();
+      for (const c of cwList) {
+        if (!cwByItem.has(c.mediaItemId)) {
+          cwByItem.set(c.mediaItemId, {
+            positionSec: c.positionSec,
+            durationSec: c.durationSec,
+            episodeId: c.episodeId,
+          });
+        }
+      }
+      // Resolve S/E/title for series continue items (episodeId "" = movie → skip).
+      const episodeIds = [
+        ...new Set([...cwByItem.values()].map((c) => c.episodeId).filter((id) => id !== "")),
+      ];
+      const episodes = episodeIds.length
+        ? await app.prisma.episode.findMany({
+            where: { id: { in: episodeIds } },
+            select: {
+              id: true,
+              episodeNumber: true,
+              title: true,
+              season: { select: { seasonNumber: true } },
+            },
+          })
+        : [];
+      const epById = new Map(episodes.map((e) => [e.id, e]));
+
       // ── 5. History ───────────────────────────────────────────────────────────
       // Dedup: keep first occurrence (newest) per mediaItemId.
       // itemById now covers all must-include items so no anchor is lost.
@@ -226,11 +259,24 @@ export default async function discoveryRoute(app: FastifyInstance) {
             .map((id) => {
               const item = itemById.get(id);
               if (!item) return null;
+              const cw = cwByItem.get(item.id);
+              const ep = cw && cw.episodeId ? epById.get(cw.episodeId) : undefined;
               return {
                 id: item.id,
                 title: locTitle(item),
                 year: item.year,
                 posterPath: item.posterPath,
+                addedAt: item.addedAt.toISOString(),
+                progress: cw
+                  ? { positionSec: cw.positionSec, durationSec: cw.durationSec }
+                  : null,
+                resume: ep
+                  ? {
+                      seasonNumber: ep.season.seasonNumber,
+                      episodeNumber: ep.episodeNumber,
+                      episodeTitle: ep.title,
+                    }
+                  : null,
               };
             })
             .filter((x): x is NonNullable<typeof x> => x !== null);

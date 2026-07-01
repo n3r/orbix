@@ -52,3 +52,74 @@ describe("GET /search — ratingMax constraint", () => {
     await app.close();
   });
 });
+
+describe("GET /home/rows — continue-watching enrichment", () => {
+  function authed(app: any, profile: unknown = { id: "p1", name: "A", avatar: null, kind: "standard", maturityCap: null }) {
+    app.prisma.session = {
+      findUnique: async () => ({ id: "s1", accountId: "a1", expiresAt: new Date(Date.now() + 3_600_000) }),
+    };
+    app.prisma.profile = { findUnique: async () => profile };
+  }
+
+  const cookies = { orbix_session: "s1", orbix_profile: "p1" };
+
+  const seriesItem = {
+    id: "series-1", title: "The Series", year: 2011, posterPath: "poster/s.jpg",
+    addedAt: new Date("2026-06-30T00:00:00Z"),
+    translations: [], genres: [], keywords: [], credits: [],
+  };
+  const movieItem = {
+    id: "movie-1", title: "The Movie", year: 2020, posterPath: "poster/m.jpg",
+    addedAt: new Date("2020-01-01T00:00:00Z"),
+    translations: [], genres: [], keywords: [], credits: [],
+  };
+
+  it("adds progress + resume (S/E/title) to a series continue item and addedAt to all items", async () => {
+    const app = await buildApp(env);
+    authed(app as any);
+    (app as any).prisma.mediaItem = { findMany: async () => [seriesItem] };
+    (app as any).prisma.playbackState = {
+      findMany: async () => [
+        { mediaItemId: "series-1", episodeId: "ep-1", positionSec: 600, durationSec: 1200, finished: false, updatedAt: new Date() },
+      ],
+    };
+    (app as any).prisma.playEvent = { findMany: async () => [] };
+    (app as any).prisma.episode = {
+      findMany: async () => [{ id: "ep-1", episodeNumber: 4, title: "Old Friends", season: { seasonNumber: 3 } }],
+    };
+
+    const res = await app.inject({ method: "GET", url: "/api/home/rows", cookies });
+    expect(res.statusCode).toBe(200);
+    const cont = res.json().rows.find((r: any) => r.key === "continue");
+    expect(cont.items[0]).toMatchObject({
+      id: "series-1",
+      addedAt: "2026-06-30T00:00:00.000Z",
+      progress: { positionSec: 600, durationSec: 1200 },
+      resume: { seasonNumber: 3, episodeNumber: 4, episodeTitle: "Old Friends" },
+    });
+    await app.close();
+  });
+
+  it("gives a movie continue item progress but resume=null (empty episodeId)", async () => {
+    const app = await buildApp(env);
+    authed(app as any);
+    (app as any).prisma.mediaItem = { findMany: async () => [movieItem] };
+    (app as any).prisma.playbackState = {
+      findMany: async () => [
+        { mediaItemId: "movie-1", episodeId: "", positionSec: 300, durationSec: 6000, finished: false, updatedAt: new Date() },
+      ],
+    };
+    (app as any).prisma.playEvent = { findMany: async () => [] };
+    (app as any).prisma.episode = { findMany: async () => [] };
+
+    const res = await app.inject({ method: "GET", url: "/api/home/rows", cookies });
+    expect(res.statusCode).toBe(200);
+    const cont = res.json().rows.find((r: any) => r.key === "continue");
+    expect(cont.items[0]).toMatchObject({
+      id: "movie-1",
+      progress: { positionSec: 300, durationSec: 6000 },
+      resume: null,
+    });
+    await app.close();
+  });
+});

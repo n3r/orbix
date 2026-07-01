@@ -118,6 +118,7 @@ export default async function playstateRoute(app: FastifyInstance) {
         where: { profileId },
         select: {
           mediaItemId: true,
+          episodeId: true,
           positionSec: true,
           durationSec: true,
           finished: true,
