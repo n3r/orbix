@@ -41,6 +41,21 @@
       "vaapi": "VA-API (h264_vaapi)",
       "qsv": "Intel QSV (h264_qsv)",
       "nvenc": "NVIDIA NVENC (h264_nvenc)"
+    },
+    "capabilities": {
+      "testButton": "Протестировать кодировщики",
+      "testing": "Тестирование…",
+      "available": "Доступно",
+      "unavailable": "Недоступно",
+      "current": "текущий",
+      "toolsFound": "ffmpeg {{ffmpeg}} · ffprobe {{ffprobe}} · найдены в PATH",
+      "toolsMissing": "ffmpeg или ffprobe не найдены на PATH сервера.",
+      "error": "Не удалось запустить тест кодировщика.",
+      "reasons": {
+        "not_built_in": "Не встроено в ffmpeg на этом сервере",
+        "test_failed": "Ошибка теста кодирования",
+        "ffmpeg_not_found": "ffmpeg не найден"
+      }
     }
   },
   "library": {

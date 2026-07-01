@@ -21,6 +21,7 @@ export * from "./metadata/refresh";
 export * from "./playback/strategy";
 export * from "./playback/playlist";
 export * from "./playback/ffargs";
+export * from "./playback/capabilities";
 export * from "./playback/resume";
 export * from "./playback/subs";
 export * from "./discovery/similarity";
