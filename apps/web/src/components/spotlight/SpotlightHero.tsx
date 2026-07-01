@@ -15,13 +15,14 @@ export default function SpotlightHero({
 }) {
   const { t } = useTranslation();
 
+  const isContinue = !!(card.resume || card.progress);
   const resume = resumeLabel(card.resume);
   const pct = card.progress ? progressPct(card.progress.positionSec, card.progress.durationSec) : 0;
   const timeLeft = card.progress
     ? timeLeftLabel(card.progress.positionSec, card.progress.durationSec)
     : null;
 
-  const metaLine = card.resume
+  const metaLine = isContinue
     ? null
     : [
         detail?.genres?.[0],
@@ -63,15 +64,17 @@ export default function SpotlightHero({
               <h2 className="text-2xl font-bold text-[var(--text)] md:text-4xl">{card.title}</h2>
             )}
 
-            {resume ? (
+            {isContinue ? (
               <div className="flex max-w-xl flex-col gap-1">
-                <span className="text-sm text-[var(--text-dim)]">{resume}</span>
-                <div className="flex items-center gap-3">
-                  <span className="h-1 w-40 overflow-hidden rounded bg-[var(--surface-2)]">
-                    <span className="block h-full bg-[var(--accent)]" style={{ width: `${pct}%` }} />
-                  </span>
-                  {timeLeft && <span className="text-xs text-[var(--text-dim)]">{timeLeft}</span>}
-                </div>
+                {resume && <span className="text-sm text-[var(--text-dim)]">{resume}</span>}
+                {card.progress && (
+                  <div className="flex items-center gap-3">
+                    <span className="h-1 w-40 overflow-hidden rounded bg-[var(--surface-2)]">
+                      <span className="block h-full bg-[var(--accent)]" style={{ width: `${pct}%` }} />
+                    </span>
+                    {timeLeft && <span className="text-xs text-[var(--text-dim)]">{timeLeft}</span>}
+                  </div>
+                )}
               </div>
             ) : (
               <>

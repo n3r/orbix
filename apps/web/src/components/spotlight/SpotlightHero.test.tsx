@@ -60,4 +60,24 @@ describe("SpotlightHero", () => {
     renderHero({ id: "s1", title: "The Series", year: 2011, posterPath: "poster/s.jpg" }, undefined);
     expect(screen.queryByRole("heading", { name: "The Series" })).toBeNull();
   });
+
+  it("shows progress (no S/E line) for a continue movie with resume: null", () => {
+    const movieDetail: TitleDetail = {
+      id: "m1", kind: "movie", title: "Movie M", year: 2020,
+      overview: "SHOULD NOT SHOW", tagline: null,
+      runtimeSec: null, rating: "PG-13", posterPath: "poster/m.jpg",
+      backdropPath: "backdrop/m.jpg", logoPath: null, status: null, matchState: "matched",
+      genres: ["Action"], cast: [], director: null, files: [],
+    };
+    renderHero(
+      {
+        id: "m1", title: "Movie M", year: 2020, posterPath: "poster/m.jpg",
+        progress: { positionSec: 600, durationSec: 1200 },
+        resume: null,
+      },
+      movieDetail,
+    );
+    expect(screen.getByText("10m left")).toBeTruthy();
+    expect(screen.queryByText(/SHOULD NOT SHOW/)).toBeNull();
+  });
 });
