@@ -61,3 +61,67 @@ describe("buildEncoderTestArgs", () => {
     expect(ENCODER_ORDER).toEqual(["software", "vaapi", "qsv", "nvenc"]);
   });
 });
+
+import { detectCapabilities, type CapabilityDeps } from "./capabilities";
+
+function deps(over: Partial<CapabilityDeps> = {}): CapabilityDeps {
+  return {
+    runVersion: async (bin) => ({ present: true, version: bin === "ffmpeg" ? "6.1" : "6.1" }),
+    runEncoderList: async () => "Encoders:\n ------\n V....D libx264 x\n V....D h264_nvenc x\n",
+    runEncodeTest: async () => ({ ok: true }),
+    ...over,
+  };
+}
+
+describe("detectCapabilities", () => {
+  it("marks ffmpeg/ffprobe absent and skips all encoders when ffmpeg is missing", async () => {
+    const report = await detectCapabilities(
+      deps({ runVersion: async (bin) => ({ present: bin === "ffprobe" }) }),
+    );
+    expect(report.ffmpeg.present).toBe(false);
+    expect(report.encoders).toHaveLength(4);
+    for (const e of report.encoders) {
+      expect(e.available).toBe(false);
+      expect(e.listed).toBe(false);
+      expect(e.reasonCode).toBe("ffmpeg_not_found");
+    }
+  });
+
+  it("reports a listed encoder that passes its test as available", async () => {
+    const report = await detectCapabilities(deps());
+    const sw = report.encoders.find((e) => e.key === "software")!;
+    expect(sw.listed).toBe(true);
+    expect(sw.available).toBe(true);
+    expect(sw.reasonCode).toBeUndefined();
+  });
+
+  it("reports an unlisted encoder as not_built_in without running a test", async () => {
+    let tested = false;
+    const report = await detectCapabilities(
+      deps({ runEncodeTest: async () => { tested = true; return { ok: true }; } }),
+    );
+    const qsv = report.encoders.find((e) => e.key === "qsv")!; // not in the sample list
+    expect(qsv.listed).toBe(false);
+    expect(qsv.available).toBe(false);
+    expect(qsv.reasonCode).toBe("not_built_in");
+    // software+nvenc are listed → tested; qsv/vaapi are not → the flag proves
+    // at least the listed ones ran, and unlisted ones are skipped by branch.
+    expect(tested).toBe(true);
+  });
+
+  it("carries the failure reason through when a listed encoder's test fails", async () => {
+    const report = await detectCapabilities(
+      deps({ runEncodeTest: async () => ({ ok: false, reason: "device not found" }) }),
+    );
+    const nvenc = report.encoders.find((e) => e.key === "nvenc")!;
+    expect(nvenc.listed).toBe(true);
+    expect(nvenc.available).toBe(false);
+    expect(nvenc.reasonCode).toBe("test_failed");
+    expect(nvenc.reason).toBe("device not found");
+  });
+
+  it("always returns encoders in ENCODER_ORDER", async () => {
+    const report = await detectCapabilities(deps());
+    expect(report.encoders.map((e) => e.key)).toEqual(["software", "vaapi", "qsv", "nvenc"]);
+  });
+});

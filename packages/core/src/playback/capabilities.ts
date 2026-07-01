@@ -1,4 +1,5 @@
 import type { EncoderSetting } from "./ffargs";
+import { ENCODER_MAP } from "./ffargs";
 
 /** Encoder settings in the same order as the Settings dropdown. */
 export const ENCODER_ORDER: EncoderSetting[] = ["software", "vaapi", "qsv", "nvenc"];
@@ -66,4 +67,68 @@ export function buildEncoderTestArgs(
         ...NULL_OUT,
       ];
   }
+}
+
+export type ReasonCode = "ffmpeg_not_found" | "not_built_in" | "test_failed";
+
+export interface EncoderCapability {
+  key: EncoderSetting;
+  codec: string;
+  listed: boolean;
+  available: boolean;
+  reason?: string;       // English/stderr detail (not localized)
+  reasonCode?: ReasonCode; // present when !available; frontend localizes
+}
+
+export interface CapabilityReport {
+  ffmpeg: { present: boolean; version?: string };
+  ffprobe: { present: boolean; version?: string };
+  encoders: EncoderCapability[];
+}
+
+export interface CapabilityDeps {
+  runVersion: (bin: "ffmpeg" | "ffprobe") => Promise<{ present: boolean; version?: string }>;
+  runEncoderList: () => Promise<string>;
+  runEncodeTest: (encoder: EncoderSetting) => Promise<{ ok: boolean; reason?: string }>;
+}
+
+/**
+ * Layered detection: probe ffmpeg/ffprobe; if ffmpeg is present, parse its
+ * encoder list, then real-test-encode each listed encoder. An encoder is
+ * `available` only when listed AND its test-encode succeeds.
+ */
+export async function detectCapabilities(deps: CapabilityDeps): Promise<CapabilityReport> {
+  const [ffmpeg, ffprobe] = await Promise.all([
+    deps.runVersion("ffmpeg"),
+    deps.runVersion("ffprobe"),
+  ]);
+
+  const encoders: EncoderCapability[] = [];
+
+  if (!ffmpeg.present) {
+    for (const key of ENCODER_ORDER) {
+      encoders.push({
+        key, codec: ENCODER_MAP[key], listed: false, available: false,
+        reasonCode: "ffmpeg_not_found",
+      });
+    }
+    return { ffmpeg, ffprobe, encoders };
+  }
+
+  const listed = parseEncoderList(await deps.runEncoderList());
+
+  for (const key of ENCODER_ORDER) {
+    const codec = ENCODER_MAP[key];
+    if (!listed.has(codec)) {
+      encoders.push({ key, codec, listed: false, available: false, reasonCode: "not_built_in" });
+      continue;
+    }
+    const test = await deps.runEncodeTest(key);
+    encoders.push({
+      key, codec, listed: true, available: test.ok,
+      ...(test.ok ? {} : { reasonCode: "test_failed" as const, reason: test.reason }),
+    });
+  }
+
+  return { ffmpeg, ffprobe, encoders };
 }
