@@ -259,10 +259,18 @@ export class TmdbClient {
   }
 
   async searchMovie(title: string, year?: number): Promise<TmdbSearchResult | null> {
-    let url = `${BASE}/search/movie?query=${encodeURIComponent(title)}`;
-    if (year != null) url += `&year=${year}`;
-
-    const data = await this.get<{ results: RawSearchResult[] }>(this.withLang(url));
+    const base = `${BASE}/search/movie?query=${encodeURIComponent(title)}`;
+    // primary_release_year matches only the ORIGINAL release year, unlike `year`
+    // which matches any release date (incl. re-releases) — so a popular same-title
+    // film from a different year no longer outranks the correct release. Fall back
+    // to an unfiltered search when the year yields nothing (tolerates
+    // mislabeled/missing TMDB primary years).
+    let data = await this.get<{ results: RawSearchResult[] }>(
+      this.withLang(year != null ? `${base}&primary_release_year=${year}` : base),
+    );
+    if (year != null && data.results.length === 0) {
+      data = await this.get<{ results: RawSearchResult[] }>(this.withLang(base));
+    }
     const first = data.results[0];
     if (!first) return null;
 
@@ -277,10 +285,15 @@ export class TmdbClient {
 
   /** Return the top 8 search results, each including a posterPath for thumbnail display. */
   async searchMovies(query: string, year?: number): Promise<TmdbSearchCandidate[]> {
-    let url = `${BASE}/search/movie?query=${encodeURIComponent(query)}`;
-    if (year != null) url += `&year=${year}`;
-
-    const data = await this.get<{ results: RawSearchResult[] }>(this.withLang(url));
+    const base = `${BASE}/search/movie?query=${encodeURIComponent(query)}`;
+    // See searchMovie: primary_release_year (original release only), with an
+    // unfiltered fallback so the candidate list is never needlessly empty.
+    let data = await this.get<{ results: RawSearchResult[] }>(
+      this.withLang(year != null ? `${base}&primary_release_year=${year}` : base),
+    );
+    if (year != null && data.results.length === 0) {
+      data = await this.get<{ results: RawSearchResult[] }>(this.withLang(base));
+    }
     return data.results.slice(0, 8).map((r) => ({
       tmdbId: r.id,
       title: r.title,
