@@ -913,6 +913,18 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
 
       const client = new TmdbClient(token, undefined, tag);
 
+      const tvdbApiKey = await getSetting<string>("tvdbApiKey", {
+        fallback: "",
+        read: (k) => prisma.setting.findUnique({ where: { key: k } }),
+      });
+      const tvdbPin = await getSetting<string>("tvdbPin", {
+        fallback: "",
+        read: (k) => prisma.setting.findUnique({ where: { key: k } }),
+      });
+      const tvdbClient = tvdbApiKey
+        ? new TvdbClient(tvdbApiKey, fetch, tvdbPin || undefined, tvdbLanguageTag(language))
+        : null;
+
       // Localized genre names (fixed TMDB list per language).
       try {
         for (const kind of ["movie", "tv"] as const) {
@@ -986,19 +998,51 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
         }
       }
 
+      // Backfill a TVDB-sourced series: localized title/overview (series) and
+      // episode titles/overviews — matched to local rows by season/episode number.
+      async function translateSeriesTvdb(seriesId: string, tvdbId: number): Promise<void> {
+        if (!tvdbClient) return;
+        const tr = await tvdbClient.seriesTranslated(tvdbId);
+        if (tr.title) {
+          await prisma.mediaItemTranslation.upsert({
+            where: { mediaItemId_language: { mediaItemId: seriesId, language } },
+            create: { mediaItemId: seriesId, language, title: tr.title, overview: tr.overview ?? null },
+            update: { title: tr.title, overview: tr.overview ?? null },
+          });
+        }
+        const localEpisodes = await prisma.episode.findMany({
+          where: { seriesId },
+          select: { id: true, seasonId: true, episodeNumber: true, season: { select: { seasonNumber: true } } },
+        });
+        for (const le of localEpisodes) {
+          const t = tr.episodes.get(`${le.season.seasonNumber}:${le.episodeNumber}`);
+          if (!t || (t.title == null && t.overview == null)) continue;
+          await prisma.episodeTranslation.upsert({
+            where: { episodeId_language: { episodeId: le.id, language } },
+            create: { episodeId: le.id, language, title: t.title ?? null, overview: t.overview ?? null },
+            update: { title: t.title ?? null, overview: t.overview ?? null },
+          });
+        }
+      }
+
       // Per-item localized text for every matched item (movie or series).
       const items = await prisma.mediaItem.findMany({
-        where: { tmdbId: { not: null }, matchState: { not: "unmatched" } },
-        select: { id: true, kind: true, tmdbId: true },
+        where: {
+          matchState: { not: "unmatched" },
+          OR: [{ tmdbId: { not: null } }, { tvdbId: { not: null } }],
+        },
+        select: { id: true, kind: true, tmdbId: true, tvdbId: true, metadataSource: true },
       });
 
       let processed = 0;
       for (const item of items) {
         try {
-          if (item.kind === "series") {
-            await translateSeries(item.id, item.tmdbId!);
-          } else {
-            const m = await client.movie(item.tmdbId!);
+          if (item.kind === "series" && (item.metadataSource === "tvdb" || (item.tvdbId != null && item.tmdbId == null))) {
+            await translateSeriesTvdb(item.id, item.tvdbId!);
+          } else if (item.kind === "series" && item.tmdbId != null) {
+            await translateSeries(item.id, item.tmdbId);
+          } else if (item.tmdbId != null) {
+            const m = await client.movie(item.tmdbId);
             await prisma.mediaItemTranslation.upsert({
               where: { mediaItemId_language: { mediaItemId: item.id, language } },
               create: { mediaItemId: item.id, language, title: m.title, overview: m.overview ?? null },
