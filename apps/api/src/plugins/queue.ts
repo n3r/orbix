@@ -576,7 +576,9 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
               status: input.status ?? null,
               posterPath: input.posterPath ?? null,
               imdbId: input.imdbId ?? null,
-              tmdbId: input.tmdbId,
+              tmdbId: input.tmdbId ?? null,
+              tvdbId: input.tvdbId ?? null,
+              metadataSource: input.metadataSource ?? "tmdb",
               tmdbScore: input.tmdbScore ?? null,
               matchState: "matched",
               rating: input.rating ?? null,
@@ -627,6 +629,7 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
               posterPath: s.posterPath ?? null,
               airYear: s.airYear ?? null,
               tmdbSeasonId: s.tmdbSeasonId ?? null,
+              tvdbSeasonId: s.tvdbSeasonId ?? null,
             };
             const season = await prisma.season.upsert({
               where: {
@@ -653,6 +656,7 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
                 runtimeSec: e.runtimeSec ?? null,
                 airDate: e.airDate ? new Date(e.airDate) : null,
                 tmdbEpisodeId: e.tmdbEpisodeId ?? null,
+                tvdbEpisodeId: e.tvdbEpisodeId ?? null,
               };
               const episode = await prisma.episode.upsert({
                 where: {
