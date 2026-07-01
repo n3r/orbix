@@ -12,6 +12,8 @@ export * from "./metadata/images";
 export * from "./metadata/localize";
 export * from "./metadata/enrich";
 export * from "./metadata/enrich-series";
+export * from "./metadata/tvdb";
+export * from "./metadata/enrich-series-tvdb";
 export * from "./metadata/omdb";
 export * from "./metadata/fanart";
 export * from "./metadata/frame-fallback";
