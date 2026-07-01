@@ -23,6 +23,10 @@ import {
   TmdbClient,
   tmdbLanguageTag,
   getSetting,
+  TvdbClient,
+  enrichSeriesTvdb,
+  tvdbLanguageTag,
+  type EnrichResult,
   type MediaFileTechnical,
   type ImageKind,
   type SaveMetadataInput,
@@ -417,6 +421,26 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
         const boundCacheImage = (tmdbPath: string, kind: ImageKind): Promise<string> =>
           cacheImage(tmdbPath, kind, imageIo);
 
+        // TVDB is optional; when configured, series enrich TVDB-first.
+        const tvdbApiKey = await getSetting<string>("tvdbApiKey", {
+          fallback: "",
+          read: (k) => prisma.setting.findUnique({ where: { key: k } }),
+        });
+        const tvdbPin = await getSetting<string>("tvdbPin", {
+          fallback: "",
+          read: (k) => prisma.setting.findUnique({ where: { key: k } }),
+        });
+        const tvdb = tvdbApiKey ? new TvdbClient(tvdbApiKey, fetch, tvdbPin || undefined) : null;
+        const tvdbTranslateClients = new Map<string, TvdbClient>();
+        if (tvdbApiKey) {
+          for (const lang of activeLanguages) {
+            tvdbTranslateClients.set(lang, new TvdbClient(tvdbApiKey, fetch, tvdbPin || undefined, tvdbLanguageTag(lang)));
+          }
+        }
+
+        const boundCacheImageUrl = (url: string, kind: ImageKind): Promise<string> =>
+          cacheImageFromUrl(url, kind, imageIo);
+
         // Resolve a hero logo: fanart.tv (transparent PNG, by likes) first, then
         // TMDB's own logo art. Returns a metadata-relative path or undefined.
         const resolveLogo = async (id: {
@@ -432,13 +456,18 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
           return undefined;
         };
 
-        // TV logo: fanart.tv's TV endpoint needs a TheTVDB id we don't have, so
-        // use TMDB's own logo art for series.
+        // TV logo: prefer the TVDB clearlogo art (absolute URL) when present,
+        // else TMDB's own logo art keyed by the cross-referenced tmdbId.
         const resolveLogoTv = async (id: {
-          tmdbId: number;
+          tvdbId?: number;
+          tmdbId?: number;
+          logoUrl?: string;
         }): Promise<string | undefined> => {
-          const tmdbLogo = await client.tvLogoPath(id.tmdbId);
-          if (tmdbLogo) return boundCacheImage(tmdbLogo, "logo");
+          if (id.logoUrl) return cacheImageFromUrl(id.logoUrl, "logo", imageIo);
+          if (id.tmdbId != null) {
+            const tmdbLogo = await client.tvLogoPath(id.tmdbId);
+            if (tmdbLogo) return boundCacheImage(tmdbLogo, "logo");
+          }
           return undefined;
         };
 
@@ -698,7 +727,7 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
           const itemId = enrichIdsArr[i]!;
           const item = await prisma.mediaItem.findUnique({
             where: { id: itemId },
-            select: { id: true, kind: true, title: true, year: true, tmdbId: true, matchState: true },
+            select: { id: true, kind: true, title: true, year: true, tmdbId: true, tvdbId: true, matchState: true },
           });
           if (!item) continue;
 
@@ -712,21 +741,43 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
               year: item.year ?? undefined,
               tmdbId: item.tmdbId ?? undefined,
             };
-            let result;
+            let result: EnrichResult;
             if (item.kind === "series") {
               const localSeasons = await prisma.season.findMany({
                 where: { seriesId: item.id },
                 select: { seasonNumber: true },
               });
-              result = await enrichSeries(base, {
-                client,
-                cacheImage: boundCacheImage,
-                saveSeries,
-                resolveLogo: resolveLogoTv,
-                fetchRatings,
-                localSeasonNumbers: localSeasons.map((s) => s.seasonNumber),
-                translateClients,
-              });
+              const localSeasonNumbers = localSeasons.map((s) => s.seasonNumber);
+
+              // TVDB first (when configured); fall back to TMDB on no match.
+              if (tvdb) {
+                result = await enrichSeriesTvdb(
+                  { id: item.id, title: item.title, year: item.year ?? undefined, tvdbId: item.tvdbId ?? undefined },
+                  {
+                    client: tvdb,
+                    cacheImageUrl: boundCacheImageUrl,
+                    saveSeries,
+                    resolveLogo: resolveLogoTv,
+                    fetchRatings,
+                    localSeasonNumbers,
+                    translateClients: tvdbTranslateClients,
+                  },
+                );
+              } else {
+                result = { matched: false };
+              }
+
+              if (!result.matched) {
+                result = await enrichSeries(base, {
+                  client,
+                  cacheImage: boundCacheImage,
+                  saveSeries,
+                  resolveLogo: resolveLogoTv,
+                  fetchRatings,
+                  localSeasonNumbers,
+                  translateClients,
+                });
+              }
             } else {
               result = await enrichItem(base, {
                 client,
