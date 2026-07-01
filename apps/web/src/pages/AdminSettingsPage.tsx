@@ -4,6 +4,8 @@ import { useTranslation } from "react-i18next";
 import { Button, Card, Input } from "@orbix/ui";
 import { apiFetch } from "@/lib/api";
 import { errorMessage } from "@/lib/i18n/tError";
+import type { CapabilityReport } from "@orbix/core";
+import EncoderCapabilityList from "@/components/settings/EncoderCapabilityList";
 
 type EncoderValue = "software" | "vaapi" | "qsv" | "nvenc";
 
@@ -39,6 +41,11 @@ export default function AdminSettingsPage() {
   // Rebuild-metadata action (independent of the settings form)
   const [rebuilding, setRebuilding] = useState(false);
   const [rebuildMsg, setRebuildMsg] = useState<string | null>(null);
+
+  // Encoder capability test (independent of the settings form)
+  const [testing, setTesting] = useState(false);
+  const [capabilities, setCapabilities] = useState<CapabilityReport | null>(null);
+  const [testError, setTestError] = useState<string | null>(null);
 
   useEffect(() => {
     void loadSettings();
@@ -126,6 +133,23 @@ export default function AdminSettingsPage() {
       setRebuildMsg(t("settings:maintenance.networkError"));
     } finally {
       setRebuilding(false);
+    }
+  }
+
+  async function handleTestEncoders() {
+    setTesting(true);
+    setTestError(null);
+    try {
+      const res = await apiFetch("/transcode/test", { method: "POST" });
+      if (!res.ok) {
+        setTestError(t("settings:transcode.capabilities.error"));
+        return;
+      }
+      setCapabilities((await res.json()) as CapabilityReport);
+    } catch {
+      setTestError(t("errors:network"));
+    } finally {
+      setTesting(false);
     }
   }
 
@@ -242,6 +266,23 @@ export default function AdminSettingsPage() {
                 </option>
               ))}
             </select>
+          </div>
+
+          <div className="mt-4">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={handleTestEncoders}
+              disabled={testing}
+            >
+              {testing
+                ? t("settings:transcode.capabilities.testing")
+                : t("settings:transcode.capabilities.testButton")}
+            </Button>
+            {testError && <p className="mt-2 text-sm text-red-400">{testError}</p>}
+            {capabilities && (
+              <EncoderCapabilityList report={capabilities} current={encoder} />
+            )}
           </div>
         </Card>
 
