@@ -133,9 +133,6 @@ Create `packages/core/src/playback/capabilities.ts`:
 
 ```typescript
 import type { EncoderSetting } from "./ffargs";
-import { ENCODER_MAP } from "./ffargs";
-
-export { ENCODER_MAP };
 
 /** Encoder settings in the same order as the Settings dropdown. */
 export const ENCODER_ORDER: EncoderSetting[] = ["software", "vaapi", "qsv", "nvenc"];
@@ -313,7 +310,14 @@ Expected: FAIL — `detectCapabilities is not a function` / not exported.
 
 - [ ] **Step 3: Implement the orchestrator (append to `capabilities.ts`)**
 
-Append to `packages/core/src/playback/capabilities.ts`:
+First, add the `ENCODER_MAP` value import to the top of `packages/core/src/playback/capabilities.ts` (the `detectCapabilities` orchestrator uses it; Task 1 imported only the type). Change the top import to:
+
+```typescript
+import type { EncoderSetting } from "./ffargs";
+import { ENCODER_MAP } from "./ffargs";
+```
+
+Then append the orchestrator and types to `packages/core/src/playback/capabilities.ts`:
 
 ```typescript
 export type ReasonCode = "ffmpeg_not_found" | "not_built_in" | "test_failed";
