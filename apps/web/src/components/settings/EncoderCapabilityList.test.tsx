@@ -17,31 +17,35 @@ const report: CapabilityReport = {
 describe("EncoderCapabilityList", () => {
   it("renders a status for every encoder and marks the current one", () => {
     render(<EncoderCapabilityList report={report} current="nvenc" />);
-    expect(screen.getByText("Software (libx264)")).toBeInTheDocument();
-    // two available, two unavailable
+    expect(screen.getByText("Software (libx264)")).toBeTruthy();
     expect(screen.getAllByText("Available")).toHaveLength(2);
     expect(screen.getAllByText("Unavailable")).toHaveLength(2);
-    // current marker appears once, on the nvenc row
-    expect(screen.getByText(/current/)).toBeInTheDocument();
+    expect(screen.getByText(/current/)).toBeTruthy();
   });
 
   it("shows the localized reason and the stderr detail on failures", () => {
     render(<EncoderCapabilityList report={report} current="software" />);
-    expect(screen.getByText("Not built into ffmpeg on this server")).toBeInTheDocument();
-    expect(screen.getByText(/qsv device missing/)).toBeInTheDocument();
+    expect(screen.getByText("Not built into ffmpeg on this server")).toBeTruthy();
+    expect(screen.getByText(/qsv device missing/)).toBeTruthy();
   });
 
   it("shows the ffmpeg/ffprobe footer when both are present", () => {
     render(<EncoderCapabilityList report={report} current="software" />);
-    expect(screen.getByText(/ffmpeg 6\.1/)).toBeInTheDocument();
+    expect(screen.getByText(/ffmpeg 6\.1/)).toBeTruthy();
   });
 
   it("warns when ffmpeg is missing", () => {
     const missing: CapabilityReport = {
-      ffmpeg: { present: false }, ffprobe: { present: false },
-      encoders: report.encoders.map((e) => ({ ...e, available: false, listed: false, reasonCode: "ffmpeg_not_found" as const })),
+      ffmpeg: { present: false },
+      ffprobe: { present: false },
+      encoders: report.encoders.map((e) => ({
+        ...e,
+        available: false,
+        listed: false,
+        reasonCode: "ffmpeg_not_found" as const,
+      })),
     };
     render(<EncoderCapabilityList report={missing} current="software" />);
-    expect(screen.getByText(/was not found on the server PATH/)).toBeInTheDocument();
+    expect(screen.getByText(/was not found on the server PATH/)).toBeTruthy();
   });
 });
