@@ -29,6 +29,7 @@ export interface SaveSeriesEpisode {
   runtimeSec?: number;
   airDate?: string;
   tmdbEpisodeId?: number;
+  tvdbEpisodeId?: number;
   translations?: { language: string; title?: string; overview?: string }[];
 }
 
@@ -39,13 +40,16 @@ export interface SaveSeriesSeason {
   posterPath?: string;
   airYear?: number;
   tmdbSeasonId?: number;
+  tvdbSeasonId?: number;
   episodes: SaveSeriesEpisode[];
   translations?: { language: string; name?: string; overview?: string }[];
 }
 
 export interface SaveSeriesInput {
   itemId: string;
-  tmdbId: number;
+  tmdbId?: number;
+  tvdbId?: number;
+  metadataSource?: "tvdb" | "tmdb";
   title: string;
   year?: number;
   overview?: string;
@@ -216,6 +220,7 @@ export async function enrichSeries(
   await deps.saveSeries({
     itemId: item.id,
     tmdbId,
+    metadataSource: "tmdb",
     title: tv.title,
     year: tv.year,
     overview: tv.overview,

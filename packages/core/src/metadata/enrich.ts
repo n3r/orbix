@@ -56,6 +56,7 @@ export type TranslateClient = Pick<TmdbLike, "movie">;
 export interface EnrichResult {
   matched: boolean;
   tmdbId?: number;
+  tvdbId?: number;
 }
 
 // ---------------------------------------------------------------------------

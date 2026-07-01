@@ -81,6 +81,8 @@ describe("enrichSeries", () => {
     expect(client.seasonCalls).toEqual([1]);
 
     const saved = calls[0];
+    expect(saved.metadataSource).toBe("tmdb");
+    expect(saved.tmdbId).toBe(ARCANE);
     expect(saved.title).toBe("Arcane");
     expect(saved.status).toBe("Returning Series");
     expect(saved.tmdbScore).toBe(8.7);
