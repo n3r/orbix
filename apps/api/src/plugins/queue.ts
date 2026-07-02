@@ -27,6 +27,7 @@ import {
   TvdbClient,
   enrichSeriesTvdb,
   tvdbLanguageTag,
+  planTmdbDedup,
   type EnrichResult,
   type MediaFileTechnical,
   type ImageKind,
@@ -481,6 +482,66 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
           // interactive transaction can exceed Prisma's 5s default on a slow
           // NAS, aborting enrichment. Raise the window generously.
           await prisma.$transaction(async (tx) => {
+            // Duplicate reconciliation. The scan creates one MediaItem per file,
+            // keyed on the parsed filename, so a movie that exists as several
+            // files (different naming, missing year, or a foreign-language copy)
+            // becomes multiple items. Enrichment is the first point we know their
+            // shared TMDB identity — collapse the collision onto one canonical
+            // item (earliest-added), reattaching the others' files. Reaping the
+            // duplicate before writing the tmdbId also keeps the partial-unique
+            // index on (libraryId, kind, tmdbId) satisfied.
+            const cur = await tx.mediaItem.findUnique({
+              where: { id: input.itemId },
+              select: { libraryId: true, kind: true, addedAt: true },
+            });
+            if (cur) {
+              const siblings = await tx.mediaItem.findMany({
+                where: {
+                  libraryId: cur.libraryId,
+                  kind: cur.kind,
+                  tmdbId: input.tmdbId,
+                  id: { not: input.itemId },
+                },
+                select: { id: true, libraryId: true, kind: true, tmdbId: true, addedAt: true },
+              });
+              const plan = planTmdbDedup(
+                {
+                  id: input.itemId,
+                  libraryId: cur.libraryId,
+                  kind: cur.kind,
+                  tmdbId: input.tmdbId,
+                  addedAt: cur.addedAt.getTime(),
+                },
+                siblings.map((s) => ({
+                  id: s.id,
+                  libraryId: s.libraryId,
+                  kind: s.kind,
+                  tmdbId: s.tmdbId,
+                  addedAt: s.addedAt.getTime(),
+                })),
+              );
+              if (plan.action === "merge") {
+                for (const obsoleteId of plan.obsoleteIds) {
+                  // Reattach files to the survivor; drop rows that reference the
+                  // duplicate but have no FK cascade (playback state, play
+                  // events, embedding). The item delete cascades the rest.
+                  await tx.mediaFile.updateMany({
+                    where: { mediaItemId: obsoleteId },
+                    data: { mediaItemId: plan.canonicalId },
+                  });
+                  await tx.playbackState.deleteMany({ where: { mediaItemId: obsoleteId } });
+                  await tx.playEvent.deleteMany({ where: { mediaItemId: obsoleteId } });
+                  await tx.embedding.deleteMany({ where: { mediaItemId: obsoleteId } });
+                  await tx.mediaItem.delete({ where: { id: obsoleteId } });
+                }
+                if (plan.canonicalId !== input.itemId) {
+                  // This item was folded into an existing canonical entry whose
+                  // metadata is already written — nothing left to do.
+                  return;
+                }
+              }
+            }
+
             // Update MediaItem scalars. Optional artwork/ratings are only written
             // when present so a run without an OMDb/fanart key (or a TMDB backdrop)
             // never clobbers data a previous run cached — including frame backdrops.

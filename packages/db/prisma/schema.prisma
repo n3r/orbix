@@ -82,6 +82,11 @@ model ProfileMenuEntry {
   @@index([profileId])
 }
 
+// NOTE: a partial UNIQUE index `MediaItem_libraryId_tmdbId_movie_key` on
+// (libraryId, tmdbId) WHERE kind = 'movie' AND tmdbId IS NOT NULL exists in the
+// database (migration 20260702000000_movie_tmdb_dedupe). Prisma cannot express a
+// partial index, so it is not declared here — do not "fix" the resulting drift by
+// dropping it. It enforces one matched movie per (library, tmdbId).
 model MediaItem {
   id             String                 @id @default(cuid())
   libraryId      String
