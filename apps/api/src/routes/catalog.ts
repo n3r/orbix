@@ -134,6 +134,13 @@ export default async function catalogRoute(app: FastifyInstance) {
                 durationSec: true,
                 size: true,
               },
+              // Best copy first: a movie with several files (e.g. a 1080p and a
+              // 4K remux merged onto one item) should default to the highest
+              // resolution, since the UI plays files[0].
+              orderBy: [
+                { height: { sort: "desc", nulls: "last" } },
+                { bitrate: { sort: "desc", nulls: "last" } },
+              ],
             },
           },
         }),
