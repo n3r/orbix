@@ -293,3 +293,84 @@ describe("parseMediaPath", () => {
     });
   });
 });
+
+describe("real-world season layouts", () => {
+  it("recognizes a season folder with junk suffix and a parenthetical", () => {
+    const r = parseMediaPath(
+      "/media/Series/Лексс (LEXX)/Сезон 4 (Season 4) 2001-2002/1. Маленькая голубая планета (Little Blue Planet).mkv",
+    );
+    expect(r.title).toBe("Лексс");
+    expect(r.seasonNumber).toBe(4);
+    expect(r.episodeNumber).toBe(1);
+  });
+
+  it("recognizes 'Season NN (junk)' and a leading-number episode", () => {
+    const r = parseMediaPath("/media/Series/Family Guy/Family Guy Season 11 (WEB-DL 1080p)/05. Joe's Revenge.mkv");
+    expect(r.title).toBe("Family Guy");
+    expect(r.seasonNumber).toBe(11);
+    expect(r.episodeNumber).toBe(5);
+  });
+
+  it("recognizes a number-first '(3 season)' pack and decodes a combined 305 episode", () => {
+    const r = parseMediaPath(
+      "/media/Series/Rick and Morty/Rick and Morty (3 season) [Blu-ray Remux 1080p]/Rick and Morty - 305 - The Whirly Dirly Conspiracy.mkv",
+    );
+    expect(r.title).toBe("Rick and Morty");
+    expect(r.seasonNumber).toBe(3);
+    expect(r.episodeNumber).toBe(5); // 305 = S03E05 under a season-3 folder
+  });
+
+  it("parses S05_15-style markers (underscore, no E)", () => {
+    const r = parseMediaPath(
+      "/media/Series/Друзья/Сезон 5/S05_15. Эпизод с драчливой подругой Джо ( The One with the Girl Who Hits Joey).mkv",
+    );
+    expect(r.title).toBe("Друзья");
+    expect(r.seasonNumber).toBe(5);
+    expect(r.episodeNumber).toBe(15);
+  });
+
+  it("parses an SS-EE episode pair when the folder carries a bare season number", () => {
+    const r = parseMediaPath("/media/Series/Greys Anatomy/Greys Anatomy 8 FOX Life 720p/Greys Anatomy 08-06 FOX.mkv");
+    expect(r.seasonNumber).toBe(8);
+    expect(r.episodeNumber).toBe(6);
+    expect(r.title).toBe("Greys Anatomy");
+  });
+
+  it("parses transliterated 'N.sezon' + 'NN.serija' names", () => {
+    const r = parseMediaPath(
+      "/media/Series/Family Guy/Family Guy-Season. 1-3/Season.2/Griffini.2.sezon.09.serija.iz.21.1999-2000.XviD.DVDRip.avi",
+    );
+    expect(r.seasonNumber).toBe(2);
+    expect(r.episodeNumber).toBe(9);
+  });
+
+  it("treats a season-pack folder (Show S04 BDRemux) as the season, titling from the episode file", () => {
+    const r = parseMediaPath("/media/Series/Friends S04 BDRemux/Friends.S04E07.1080p.BluRay.mkv");
+    expect(r.title).toBe("Friends");
+    expect(r.seasonNumber).toBe(4);
+    expect(r.episodeNumber).toBe(7);
+  });
+
+  it("titles a season-pack from the PARENT folder when one exists", () => {
+    const r = parseMediaPath(
+      "/media/Series/Altered Carbon/Altered.Carbon.S01.2160p.NF.WEB-DL.DDP5.1.Atmos.DoVi.HEVC.by.DVT/Altered.Carbon.S01E04.Force.of.Evil.2160p.mp4",
+    );
+    expect(r.title).toBe("Altered Carbon");
+    expect(r.seasonNumber).toBe(1);
+    expect(r.episodeNumber).toBe(4);
+  });
+
+  it("groups 'Show N сезон' packs under one series title", () => {
+    const r = parseMediaPath("/media/Series/Большое Шоу/Большое Шоу 7 сезон/Большое шоу 7 сезон 3 серия.avi");
+    expect(r.title).toBe("Большое Шоу");
+    expect(r.seasonNumber).toBe(7);
+    expect(r.episodeNumber).toBe(3);
+  });
+
+  it("does not misread a movie edition tag as a season pack", () => {
+    // "S" tokens in movie names must not flip movies into episodes.
+    const r = parseMediaPath("/media/Films/Superman (1978)/Superman.1978.BluRay.mkv");
+    expect(r.seasonNumber).toBeUndefined();
+    expect(r.title).toBe("Superman");
+  });
+});
