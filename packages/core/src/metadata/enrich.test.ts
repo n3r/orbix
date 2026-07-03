@@ -45,11 +45,14 @@ function makeFakeClient(
     certification?: string | null;
     certThrows?: boolean;
     /** Per-query candidate override for the query-ladder resolver. */
-    searchMovies?: (query: string, year?: number) => TmdbSearchCandidate[];
+    searchMovies?: (query: string, year?: number, language?: string) => TmdbSearchCandidate[];
+    /** Per-id title list for the deep-check phase (default: none known). */
+    allTitles?: (id: number) => string[];
   } = {},
-): TmdbLike & { searchCalls: number; searchMoviesCalls: number } {
+): TmdbLike & { searchCalls: number; searchMoviesCalls: number; allTitlesCalls: number } {
   let searchCalls = 0;
   let searchMoviesCalls = 0;
+  let allTitlesCalls = 0;
   // Default: one candidate mirroring searchResult (a strong string match for the
   // existing "The Matrix" tests), or none when searchResult is null.
   const defaultCandidates: TmdbSearchCandidate[] = searchResult
@@ -62,13 +65,20 @@ function makeFakeClient(
     get searchMoviesCalls() {
       return searchMoviesCalls;
     },
+    get allTitlesCalls() {
+      return allTitlesCalls;
+    },
     async searchMovie(_title: string, _year?: number): Promise<TmdbSearchResult | null> {
       searchCalls++;
       return searchResult;
     },
-    async searchMovies(query: string, year?: number): Promise<TmdbSearchCandidate[]> {
+    async searchMovies(query: string, year?: number, language?: string): Promise<TmdbSearchCandidate[]> {
       searchMoviesCalls++;
-      return options.searchMovies ? options.searchMovies(query, year) : defaultCandidates;
+      return options.searchMovies ? options.searchMovies(query, year, language) : defaultCandidates;
+    },
+    async allTitles(id: number): Promise<string[]> {
+      allTitlesCalls++;
+      return options.allTitles ? options.allTitles(id) : [];
     },
     async movie(_id: number): Promise<TmdbMovie> {
       return fakeMovie;
@@ -463,5 +473,223 @@ describe("enrichItem", () => {
 
     expect(result.matched).toBe(true);
     expect(result.tmdbId).toBe(TAXI_ID);
+  });
+
+  it("Test 17: deep check — Cyrillic query verified against the candidate's alternative titles", async () => {
+    // TMDB's search index finds Shawshank for "Побег из Шоушенка" but returns the
+    // ENGLISH display title, so the cheap gate can't verify it. The deep check
+    // fetches every known title and finds the exact RU alternative title.
+    const SHAWSHANK = 278;
+    const client = makeFakeClient(null, {
+      searchMovies: (query) =>
+        query === "Побег из Шоушенка"
+          ? [
+              {
+                tmdbId: SHAWSHANK,
+                title: "The Shawshank Redemption",
+                originalTitle: "The Shawshank Redemption",
+                year: 1994,
+                voteCount: 28000,
+              },
+            ]
+          : [],
+      allTitles: (id) =>
+        id === SHAWSHANK
+          ? ["The Shawshank Redemption", "Побег из Шоушенка", "Um Sonho de Liberdade"]
+          : [],
+    });
+    const { cacheImage } = makeCacheImageSpy();
+    const { saveMetadata } = makeSaveMetadataSpy();
+
+    const result = await enrichItem(
+      { id: "item-17", title: "Побег из Шоушенка", year: 1994 },
+      { client, cacheImage, saveMetadata },
+    );
+
+    expect(result.matched).toBe(true);
+    expect(result.tmdbId).toBe(SHAWSHANK);
+    expect(client.allTitlesCalls).toBe(1);
+  });
+
+  it("Test 18: deep check rejects a candidate whose known titles do not match", async () => {
+    const client = makeFakeClient(null, {
+      searchMovies: (query) =>
+        query === "Побег из Шоушенка"
+          ? [{ tmdbId: 999, title: "Some Random Film", year: 1994, voteCount: 5000 }]
+          : [],
+      allTitles: () => ["Some Random Film", "Ein Zufälliger Film"],
+    });
+    const { cacheImage } = makeCacheImageSpy();
+    const { saveMetadata, calls: saveCalls } = makeSaveMetadataSpy();
+
+    const result = await enrichItem(
+      { id: "item-18", title: "Побег из Шоушенка", year: 1994 },
+      { client, cacheImage, saveMetadata },
+    );
+
+    expect(result.matched).toBe(false);
+    expect(saveCalls).toHaveLength(0);
+  });
+
+  it("Test 19: deep check matches an abbreviated subtitle via the acronym rule", async () => {
+    const HAT_ID = 493529;
+    const client = makeFakeClient(null, {
+      searchMovies: (query) =>
+        query === "Dungeons and Dragons"
+          ? [
+              {
+                tmdbId: HAT_ID,
+                title: "Dungeons & Dragons: Honor Among Thieves",
+                year: 2023,
+                voteCount: 5000,
+              },
+            ]
+          : [],
+      allTitles: (id) => (id === HAT_ID ? ["Dungeons & Dragons: Honor Among Thieves"] : []),
+    });
+    const { cacheImage } = makeCacheImageSpy();
+    const { saveMetadata } = makeSaveMetadataSpy();
+
+    const result = await enrichItem(
+      { id: "item-19", title: "Dungeons and Dragons H.A.T.", year: 2023 },
+      { client, cacheImage, saveMetadata },
+    );
+
+    expect(result.matched).toBe(true);
+    expect(result.tmdbId).toBe(HAT_ID);
+  });
+
+  it("Test 19b: deep check never verifies a TRUNCATED query — decoy with the truncation as an alt title loses to the acronym match", async () => {
+    // Regression: the 2000 "Dungeons & Dragons" film carries the alt title
+    // "Dungeons and Dragons", which exactly equals the first-3-tokens query of
+    // "Dungeons and Dragons H.A.T.". A truncated query match proves nothing —
+    // only faithful queries may verify a candidate in the deep check.
+    const OLD_ID = 11849;
+    const HAT_ID = 493529;
+    const client = makeFakeClient(null, {
+      searchMovies: (query) =>
+        query === "Dungeons and Dragons"
+          ? [
+              { tmdbId: OLD_ID, title: "Dungeons & Dragons", year: 2000, voteCount: 900 },
+              { tmdbId: HAT_ID, title: "Dungeons & Dragons: Honor Among Thieves", year: 2023, voteCount: 5000 },
+            ]
+          : [],
+      allTitles: (id) =>
+        id === OLD_ID
+          ? ["Dungeons & Dragons", "Dungeons and Dragons"] // decoy alt title
+          : ["Dungeons & Dragons: Honor Among Thieves"],
+    });
+    const { cacheImage } = makeCacheImageSpy();
+    const { saveMetadata } = makeSaveMetadataSpy();
+
+    const result = await enrichItem(
+      { id: "item-19b", title: "Dungeons and Dragons H.A.T.", year: 2023 },
+      { client, cacheImage, saveMetadata },
+    );
+
+    expect(result.matched).toBe(true);
+    expect(result.tmdbId).toBe(HAT_ID); // not the 2000 decoy
+  });
+
+  it("Test 19c: a derived attempt can only SURFACE candidates, never accept one", async () => {
+    // "1 Братство кольца" (disc 1, no year): the derived token "Братство"
+    // returns the 2001 horror "Братство" at sim 1.0 — against the DERIVED
+    // query. That must not be a match; the full query verifies nothing here.
+    const client = makeFakeClient(null, {
+      searchMovies: (query) =>
+        query === "Братство"
+          ? [{ tmdbId: 28933, title: "Братство", year: 2001, voteCount: 300 }]
+          : [],
+      allTitles: () => ["Братство", "The Brotherhood"],
+    });
+    const { cacheImage } = makeCacheImageSpy();
+    const { saveMetadata, calls: saveCalls } = makeSaveMetadataSpy();
+
+    const result = await enrichItem(
+      { id: "item-19c", title: "1 Братство кольца" },
+      { client, cacheImage, saveMetadata },
+    );
+
+    expect(result.matched).toBe(false);
+    expect(saveCalls).toHaveLength(0);
+  });
+
+  it("Test 19d: deep check verifies exact-year candidates before higher-ranked off-year ones", async () => {
+    // Franchise pollution: the popular 2006 sequel carries the 2003 opener's
+    // title among its alternative titles. The 2003 candidate must be verified
+    // first because the item's year says 2003.
+    const SEQUEL = 58; // 2006, more popular
+    const OPENER = 22; // 2003, exact year
+    const client = makeFakeClient(null, {
+      searchMovies: (query) =>
+        query === "Проклятие Черной жемчужины"
+          ? [
+              { tmdbId: SEQUEL, title: "Сундук мертвеца", year: 2006, voteCount: 20000 },
+              { tmdbId: OPENER, title: "Пираты: Проклятие", year: 2003, voteCount: 15000 },
+            ]
+          : [],
+      allTitles: (id) =>
+        id === SEQUEL
+          ? ["Сундук мертвеца", "Проклятие Чёрной жемчужины"] // polluted alt data
+          : ["Проклятие Чёрной жемчужины"],
+    });
+    const { cacheImage } = makeCacheImageSpy();
+    const { saveMetadata } = makeSaveMetadataSpy();
+
+    const result = await enrichItem(
+      { id: "item-19d", title: "Проклятие Черной жемчужины", year: 2003 },
+      { client, cacheImage, saveMetadata },
+    );
+
+    expect(result.matched).toBe(true);
+    expect(result.tmdbId).toBe(OPENER);
+  });
+
+  it("Test 19e: an exact-year acceptance beats a later strong-sim wrong-year one", async () => {
+    // "Хроники Нарнии" (2005): the year-filtered attempt accepts the 2005 film
+    // via the prefix rescue; the unfiltered attempt then returns an unreleased
+    // reboot whose display title is literally the query (sim 1.0, wrong year).
+    // Year agreement must win.
+    const FILM_2005 = 411;
+    const REBOOT_2027 = 1147572;
+    const client = makeFakeClient(null, {
+      searchMovies: (query, yr) => {
+        if (query !== "Хроники Нарнии") return [];
+        return yr === 2005
+          ? [
+              {
+                tmdbId: FILM_2005,
+                title: "Хроники Нарнии: Лев, колдунья и волшебный шкаф",
+                year: 2005,
+                voteCount: 11000,
+              },
+            ]
+          : [{ tmdbId: REBOOT_2027, title: "Хроники Нарнии", year: 2027, voteCount: 250 }];
+      },
+    });
+    const { cacheImage } = makeCacheImageSpy();
+    const { saveMetadata } = makeSaveMetadataSpy();
+
+    const result = await enrichItem(
+      { id: "item-19e", title: "Хроники Нарнии", year: 2005 },
+      { client, cacheImage, saveMetadata },
+    );
+
+    expect(result.matched).toBe(true);
+    expect(result.tmdbId).toBe(FILM_2005);
+  });
+
+  it("Test 20: deep check is skipped entirely when the cheap gate already matched", async () => {
+    const client = makeFakeClient(); // default: exact "The Matrix" candidate
+    const { cacheImage } = makeCacheImageSpy();
+    const { saveMetadata } = makeSaveMetadataSpy();
+
+    const result = await enrichItem(
+      { id: "item-20", title: "The Matrix", year: 1999 },
+      { client, cacheImage, saveMetadata },
+    );
+
+    expect(result.matched).toBe(true);
+    expect(client.allTitlesCalls).toBe(0);
   });
 });

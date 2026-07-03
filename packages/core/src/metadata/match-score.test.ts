@@ -5,6 +5,7 @@ import {
   titleSimilarity,
   scoreCandidate,
   isAcceptable,
+  acronymMatches,
   TITLE_STRONG,
 } from "./match-score";
 
@@ -15,6 +16,34 @@ describe("normalizeForMatch", () => {
 
   it("keeps Cyrillic script intact", () => {
     expect(normalizeForMatch("Горько! 2")).toBe("горько 2");
+  });
+
+  it("folds fullwidth characters (common in CJK filenames)", () => {
+    expect(normalizeForMatch("Ｇｏｄｚｉｌｌａ！ ２０１４")).toBe("godzilla 2014");
+  });
+});
+
+describe("acronymMatches", () => {
+  const HAT = "Dungeons & Dragons: Honor Among Thieves";
+
+  it("matches trailing initials against the candidate's subtitle words", () => {
+    expect(acronymMatches("Dungeons and Dragons H A T", HAT)).toBe(true);
+  });
+
+  it("does not fire without initials", () => {
+    expect(acronymMatches("Dungeons and Dragons", HAT)).toBe(false);
+  });
+
+  it("does not fire when an initial mismatches", () => {
+    expect(acronymMatches("Dungeons and Dragons H A X", HAT)).toBe(false);
+  });
+
+  it("requires all remaining candidate words to be consumed by initials", () => {
+    expect(acronymMatches("Dungeons and Dragons H A", HAT)).toBe(false);
+  });
+
+  it("requires at least one word token before the initials", () => {
+    expect(acronymMatches("H A T", HAT)).toBe(false);
   });
 });
 
@@ -54,6 +83,20 @@ describe("titleSimilarity", () => {
 
   it("does NOT boost when the query lacks the sequel number", () => {
     expect(titleSimilarity("Step Up", { title: "Step Up 2: The Streets" })).toBeLessThan(TITLE_STRONG);
+  });
+
+  it("caps similarity when the query's leading disc/part number is absent from the candidate", () => {
+    // "3 Возвращение Короля" is disc 3 of a trilogy folder — the bare-titled
+    // 1980 animated "Возвращение Короля" must NOT be a confident match.
+    expect(
+      titleSimilarity("3 Возвращение Короля", { title: "Возвращение Короля" }),
+    ).toBeLessThan(TITLE_STRONG);
+  });
+
+  it("does not cap when the candidate carries the same leading number", () => {
+    expect(
+      titleSimilarity("12 разгневанных мужчин", { title: "12 разгневанных мужчин" }),
+    ).toBe(1);
   });
 });
 

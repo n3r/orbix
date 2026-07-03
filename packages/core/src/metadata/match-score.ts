@@ -21,12 +21,13 @@ export const TITLE_STRONG = 0.85;
 export const TITLE_WEAK = 0.55;
 
 /**
- * Fold accents, lowercase, and reduce runs of non-alphanumerics to single
- * spaces. Cyrillic is not decomposed by NFD, so it survives intact.
+ * Fold accents and fullwidth forms (NFKD also maps \uff21\uff22\uff23\u2192ABC, common in CJK
+ * filenames), lowercase, and reduce runs of non-alphanumerics to single
+ * spaces. Cyrillic/CJK letters are not decomposed, so they survive intact.
  */
 export function normalizeForMatch(s: string): string {
   return s
-    .normalize("NFD")
+    .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^\p{L}\p{N}]+/gu, " ")
@@ -90,10 +91,18 @@ function tokenDice(a: string, b: string): number {
   return (2 * inter) / (A.size + B.size);
 }
 
+/** Cap applied when the query's leading disc/part number is absent from the target. */
+const MISSING_LEAD_NUMBER_CAP = 0.8;
+
 /**
  * Similarity in [0,1] between a query and a candidate, taking the best of
  * edit-distance ratio and token-set overlap, across both the candidate's
  * display title and its original title.
+ *
+ * A query that STARTS with a standalone 1-2 digit number ("3 Возвращение
+ * Короля" — disc 3 of a trilogy folder) is only a confident match for targets
+ * that carry the same number; otherwise similarity is capped below the
+ * rule-A threshold so an exact-but-numberless title can't win on fuzz alone.
  */
 export function titleSimilarity(query: string, candidate: ScoreCandidate): number {
   const q = normalizeForMatch(query);
@@ -102,11 +111,18 @@ export function titleSimilarity(query: string, candidate: ScoreCandidate): numbe
     .map(normalizeForMatch);
 
   const qTokens = q.split(" ").filter(Boolean);
+  const leadNumber =
+    qTokens.length >= 2 && /^\d{1,2}$/.test(qTokens[0]!) ? qTokens[0]! : undefined;
+
   let best = 0;
   for (const t of targets) {
+    const tTokens = t.split(" ").filter(Boolean);
     let s = Math.max(levRatio(q, t), tokenDice(q, t));
-    if (isNumberedSequelPrefix(qTokens, t.split(" ").filter(Boolean))) {
+    if (isNumberedSequelPrefix(qTokens, tTokens)) {
       s = Math.max(s, SEQUEL_PREFIX_SCORE);
+    }
+    if (leadNumber && !tTokens.includes(leadNumber)) {
+      s = Math.min(s, MISSING_LEAD_NUMBER_CAP);
     }
     if (s > best) best = s;
   }
@@ -137,6 +153,42 @@ export function scoreCandidate(
 
 /** Minimum votes for the long-official-title prefix rescue (rule D). */
 export const PREFIX_VOTE_FLOOR = 100;
+
+/** Connector words ignored when aligning word-prefixes and acronyms. */
+const STOPWORDS = new Set(["a", "an", "the", "and", "of"]);
+
+/**
+ * True when the query is a word-prefix of the candidate followed by initials of
+ * the candidate's remaining words — "Dungeons and Dragons H A T" matches
+ * "Dungeons & Dragons: Honor Among Thieves". Connector words (and/the/of) are
+ * ignored on both sides, initials must consume ALL remaining candidate words,
+ * and at least one real word + two initials are required, so ordinary titles
+ * can never trip this.
+ */
+export function acronymMatches(query: string, candidateTitle: string): boolean {
+  const qNorm = normalizeForMatch(query).split(" ").filter(Boolean);
+
+  // Split the query into leading words and trailing single-letter initials
+  // BEFORE stopword stripping — "a" in "H A T" is an initial, not a stopword.
+  let split = qNorm.length;
+  while (split > 0 && qNorm[split - 1]!.length === 1) split--;
+  const initials = qNorm.slice(split);
+  const words = qNorm.slice(0, split).filter((t) => !STOPWORDS.has(t));
+  if (words.length < 1 || initials.length < 2) return false;
+
+  // Leading words must be a prefix of the candidate (skipping its connector words)...
+  const tNorm = normalizeForMatch(candidateTitle).split(" ").filter(Boolean);
+  let ti = 0;
+  for (const w of words) {
+    while (ti < tNorm.length && STOPWORDS.has(tNorm[ti]!)) ti++;
+    if (ti >= tNorm.length || tNorm[ti] !== w) return false;
+    ti++;
+  }
+  // ...and the initials must consume ALL remaining candidate words, in order.
+  const rest = tNorm.slice(ti);
+  if (rest.length !== initials.length) return false;
+  return initials.every((ini, i) => rest[i]!.startsWith(ini!));
+}
 
 /** True when qTokens is a strict token-prefix of the candidate's title or original title. */
 function isStrictTitlePrefix(qTokens: string[], candidate: ScoreCandidate): boolean {
