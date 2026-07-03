@@ -10,14 +10,14 @@ import type { SessionManager } from "../playback/session";
 interface SubTrackJson { index: number; codec?: string; language?: string }
 
 function isStringArray(v: unknown): v is string[] {
-  return Array.isArray(v) && v.every((x) => typeof x === "string");
+  return Array.isArray(v) && v.every((x) => typeof x === "string" && x.length > 0);
 }
 
 function parseCapabilities(v: unknown): ClientCapabilities | null {
   if (typeof v !== "object" || v === null) return null;
   const o = v as Record<string, unknown>;
   if (!isStringArray(o.containers) || !isStringArray(o.videoCodecs) || !isStringArray(o.audioCodecs)) return null;
-  if (typeof o.maxAudioChannels !== "number" || o.maxAudioChannels < 1) return null;
+  if (typeof o.maxAudioChannels !== "number" || !Number.isInteger(o.maxAudioChannels) || o.maxAudioChannels < 1) return null;
   return {
     containers: o.containers,
     videoCodecs: o.videoCodecs,
@@ -61,6 +61,9 @@ export default function playbackRoute(deps: { registry: PlaySessionRegistry; man
         }
 
         const audioTracks = ((file.audioTracks as AudioTrack[] | null) ?? []);
+        if (audioTrackIndex > 0 && audioTrackIndex >= audioTracks.length) {
+          return reply.code(400).send({ error: "invalid" });
+        }
         const plan = decidePlayback(
           { container: file.container ?? undefined, videoCodec: file.videoCodec ?? undefined, audioTracks },
           caps,
@@ -78,10 +81,22 @@ export default function playbackRoute(deps: { registry: PlaySessionRegistry; man
           plan,
         });
 
-        const streamUrl =
+        let streamUrl =
           plan.mode === "direct"
             ? `/api/play/${file.id}/direct`
             : `/api/play/${file.id}/master.m3u8?playSessionId=${entry.playSessionId}`;
+
+        // Device clients authenticate this negotiation with a bearer token (or
+        // ?token=) but the returned URL is followed verbatim by a native
+        // player with no header/cookie support — embed the token so the
+        // subsequent master.m3u8 / direct fetch doesn't 401.
+        if (req.deviceId) {
+          const auth = req.headers.authorization;
+          const raw = auth?.startsWith("Bearer ") ? auth.slice(7) : (req.query as { token?: string } | undefined)?.token;
+          if (typeof raw === "string" && raw.length > 0) {
+            streamUrl += plan.mode === "direct" ? `?token=${encodeURIComponent(raw)}` : `&token=${encodeURIComponent(raw)}`;
+          }
+        }
 
         const subs = ((file.subtitleTracks as SubTrackJson[] | null) ?? []).map((t) => {
           const available = !IMAGE_CODECS.has(t.codec ?? "");

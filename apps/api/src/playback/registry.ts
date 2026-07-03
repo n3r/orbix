@@ -52,8 +52,8 @@ export class PlaySessionRegistry {
     }
     const nowMs = this.now();
     const entry: PlaySessionEntry = {
-      playSessionId: randomUUID(),
       ...input,
+      playSessionId: randomUUID(),
       createdAtMs: nowMs,
       lastAccessMs: nowMs,
     };

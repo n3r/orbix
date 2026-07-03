@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildApp } from "../app";
+import { hashDeviceToken } from "@orbix/core";
 import type { Env } from "@orbix/config";
 
 const env: Env = {
@@ -20,6 +21,25 @@ function stubAuth(app: unknown, profile: Record<string, unknown> | null = null) 
   };
   (app as any).prisma.account = { findUnique: async () => ({ isAdmin: true }), findFirst: async () => ({ id: "a1" }) };
   (app as any).prisma.profile = { findUnique: async () => profile };
+}
+
+const RAW_DEVICE_TOKEN = "orb_pb-token";
+const DEVICE_HASH = hashDeviceToken(RAW_DEVICE_TOKEN);
+
+// Mirrors the stub pattern in ../plugins/session.test.ts, extended to also
+// match deviceToken.findUnique by id (activeProfile's lookup for bearer
+// requests), as in stream.token.test.ts.
+function stubDeviceAuth(app: unknown) {
+  const device = {
+    id: "dev1", tokenHash: DEVICE_HASH, name: "TV", platform: "tvos",
+    activeProfileId: null, lastSeenAt: new Date(), createdAt: new Date(), revokedAt: null,
+  };
+  (app as any).prisma.deviceToken = {
+    findUnique: async ({ where }: any) =>
+      where.tokenHash === DEVICE_HASH || where.id === device.id ? device : null,
+    update: async () => device,
+  };
+  (app as any).prisma.account = { findFirst: async () => ({ id: "a1" }), findUnique: async () => ({ isAdmin: true }) };
 }
 
 function stubFile(app: unknown, overrides: Record<string, unknown> = {}) {
@@ -54,6 +74,7 @@ describe("POST /api/playback/info", () => {
     expect(body.mode).toBe("remux");
     expect(body.playSessionId).toMatch(/[0-9a-f-]{36}/);
     expect(body.streamUrl).toBe(`/api/play/f1/master.m3u8?playSessionId=${body.playSessionId}`);
+    expect(body.streamUrl).not.toContain("token="); // cookie negotiations stay bare
     expect(body.audioTracks).toEqual([
       { index: 0, codec: "ac3", channels: 6, language: "ru", selected: true },
     ]);
@@ -77,6 +98,37 @@ describe("POST /api/playback/info", () => {
     });
     expect(res.json().mode).toBe("direct");
     expect(res.json().streamUrl).toBe("/api/play/f1/direct");
+    await app.close();
+  });
+
+  it("bearer negotiation embeds the device token in the HLS streamUrl", async () => {
+    const app = await buildApp(env);
+    stubDeviceAuth(app);
+    stubFile(app);
+    const res = await app.inject({
+      method: "POST", url: "/api/playback/info",
+      headers: { authorization: `Bearer ${RAW_DEVICE_TOKEN}` },
+      payload: { fileId: "f1", capabilities: WEB_CAPS },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().streamUrl).toMatch(/master\.m3u8\?playSessionId=.+&token=orb_/);
+    await app.close();
+  });
+
+  it("bearer negotiation in direct mode appends ?token= to the direct URL", async () => {
+    const app = await buildApp(env);
+    stubDeviceAuth(app);
+    stubFile(app, {
+      container: "mov,mp4,m4a,3gp,3g2,mj2", videoCodec: "h264",
+      audioTracks: [{ index: 1, codec: "aac", channels: 2 }],
+    });
+    const res = await app.inject({
+      method: "POST", url: "/api/playback/info",
+      headers: { authorization: `Bearer ${RAW_DEVICE_TOKEN}` },
+      payload: { fileId: "f1", capabilities: WEB_CAPS },
+    });
+    expect(res.json().mode).toBe("direct");
+    expect(res.json().streamUrl).toBe(`/api/play/f1/direct?token=${RAW_DEVICE_TOKEN}`);
     await app.close();
   });
 
@@ -115,6 +167,12 @@ describe("POST /api/playback/info", () => {
       { fileId: "f1" },
       { fileId: "f1", capabilities: { containers: "mp4" } },
       { fileId: "f1", capabilities: WEB_CAPS, audioTrackIndex: -1 },
+      // audioTrackIndex out of range for the single-track stub (length 1)
+      { fileId: "f1", capabilities: WEB_CAPS, audioTrackIndex: 5 },
+      // maxAudioChannels must be a positive integer, not just >= 1
+      { fileId: "f1", capabilities: { ...WEB_CAPS, maxAudioChannels: 2.5 } },
+      // string-array capability fields must contain only non-empty strings
+      { fileId: "f1", capabilities: { ...WEB_CAPS, containers: [""] } },
     ]) {
       const res = await app.inject({ method: "POST", url: "/api/playback/info", cookies, payload });
       expect(res.statusCode).toBe(400);

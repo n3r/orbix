@@ -55,9 +55,9 @@ export default async function playstateRoute(app: FastifyInstance) {
         update: { positionSec: positionSecInt, durationSec: durationSecInt, finished },
       });
 
-      // Liveness heartbeat: progress reports keep the play session (and its
-      // ffmpeg) from idle-reaping. Unknown/missing ids are fine — progress
-      // must never fail on session state.
+      // Liveness touch for the registry entry's 24h TTL (renegotiation window).
+      // ffmpeg idle-reaping is driven by segment fetches, not this.
+      // Unknown/missing ids are fine — progress must never fail on session state.
       if (typeof body.playSessionId === "string") {
         app.playSessions?.get(body.playSessionId);
       }
