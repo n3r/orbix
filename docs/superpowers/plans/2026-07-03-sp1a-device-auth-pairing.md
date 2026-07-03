@@ -1394,6 +1394,21 @@ describe("query-token auth on /play/*", () => {
     });
   });
 
+  it("an invalid bearer header never falls back to a valid cookie (device semantics)", async () => {
+    const app = await buildApp(env);
+    stubAuth(app);
+    (app as any).prisma.session = {
+      findUnique: async () => ({ id: "s1", accountId: "a1", expiresAt: new Date(Date.now() + 3_600_000) }),
+    };
+    const res = await app.inject({
+      method: "GET", url: "/api/auth/me",
+      headers: { authorization: "Bearer orb_wrong" },
+      cookies: { orbix_session: "s1" },
+    });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
   it("subtitle listing accepts ?token= too", async () => {
     const app = await buildApp(env);
     stubAuth(app);
