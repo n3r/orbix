@@ -40,6 +40,21 @@ describe("titleSimilarity", () => {
   it("scores an unrelated title low", () => {
     expect(titleSimilarity("16 Blocks", { title: "Blocks" })).toBeLessThan(TITLE_STRONG);
   });
+
+  it("boosts a numbered sequel that is a prefix of the candidate's subtitle", () => {
+    // "Step Up 2" ⊂ "Step Up 2: The Streets", last query token is the sequel number
+    expect(titleSimilarity("Step Up 2", { title: "Step Up 2: The Streets" })).toBeGreaterThanOrEqual(
+      TITLE_STRONG,
+    );
+  });
+
+  it("does NOT boost a non-numbered prefix (guards against Matrix → Matrix Reloaded)", () => {
+    expect(titleSimilarity("The Matrix", { title: "The Matrix Reloaded" })).toBeLessThan(TITLE_STRONG);
+  });
+
+  it("does NOT boost when the query lacks the sequel number", () => {
+    expect(titleSimilarity("Step Up", { title: "Step Up 2: The Streets" })).toBeLessThan(TITLE_STRONG);
+  });
 });
 
 describe("scoreCandidate", () => {

@@ -402,4 +402,26 @@ describe("enrichItem", () => {
     expect(result.matched).toBe(false);
     expect(saveCalls).toHaveLength(0);
   });
+
+  it("Test 14: matches via a parenthetical original-title variant", async () => {
+    // "Экзистенция (eXistenZ) (BDRemux)" — only the (eXistenZ) parenthetical is
+    // searchable; the ladder tries it as its own query.
+    const EXISTENZ_ID = 1876;
+    const client = makeFakeClient(null, {
+      searchMovies: (query) =>
+        query === "eXistenZ"
+          ? [{ tmdbId: EXISTENZ_ID, title: "eXistenZ", originalTitle: "eXistenZ", year: 1999, voteCount: 900 }]
+          : [],
+    });
+    const { cacheImage } = makeCacheImageSpy();
+    const { saveMetadata } = makeSaveMetadataSpy();
+
+    const result = await enrichItem(
+      { id: "item-14", title: "Экзистенция (eXistenZ) (BDRemux)" },
+      { client, cacheImage, saveMetadata },
+    );
+
+    expect(result.matched).toBe(true);
+    expect(result.tmdbId).toBe(EXISTENZ_ID);
+  });
 });

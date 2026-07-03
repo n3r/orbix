@@ -30,7 +30,7 @@ const NOISE_WORDS = new Set([
   // audio
   "DTS", "DTSHD", "AC3", "EAC3", "DDP", "DD", "AAC", "FLAC", "TRUEHD", "ATMOS", "MP3",
   // edition
-  "UNRATED", "UNCUT", "REMASTERED", "EXTENDED", "THEATRICAL", "IMAX",
+  "UNRATED", "UNCUT", "REMASTERED", "REMASTER", "EXTENDED", "THEATRICAL", "IMAX",
   "DIRECTORS", "PROPER", "REPACK", "RERIP", "LIMITED",
 ]);
 
@@ -58,12 +58,12 @@ function isNoise(key: string): boolean {
 }
 
 /**
- * Strip Plex-style release noise from a raw parsed title. Works by finding the
- * first strong-noise token that follows at least one real word and dropping
- * everything from there — so trailing release groups (`_HDCLUB`) fall off for
- * free without needing a group dictionary.
+ * Core noise-stripper. Finds the first strong-noise token that follows at least
+ * one real word and drops everything from there — so trailing release groups
+ * (`_HDCLUB`) fall off for free without needing a group dictionary. Returns an
+ * empty string when the input is pure noise (no real word survives).
  */
-export function cleanSearchTitle(raw: string): string {
+function stripNoise(raw: string): string {
   // 1. Drop bracket segments that are clearly tracker/site tags.
   const debracketed = raw.replace(BRACKET_SEGMENT_RE, (seg) =>
     DOMAIN_RE.test(seg) || TRACKER_WORDS.test(seg) ? " " : seg,
@@ -89,15 +89,44 @@ export function cleanSearchTitle(raw: string): string {
   }
 
   // 6. Trim stray leading/trailing separators; collapse whitespace.
-  const cleaned = kept
+  return kept
     .join(" ")
     .replace(/^[\s([{\-–—:._]+/u, "")
     .replace(/[\s([{\-–—:._]+$/u, "")
     .replace(/\s+/g, " ")
     .trim();
+}
 
-  // 7. Fallback: title was pure noise — return the whitespace-normalized raw.
-  return cleaned || raw.replace(/\s+/g, " ").trim();
+/**
+ * Strip Plex-style release noise from a raw parsed title, producing a search
+ * query. Falls back to the whitespace-normalized raw when the title is pure
+ * noise, so a query is always non-empty.
+ */
+export function cleanSearchTitle(raw: string): string {
+  return stripNoise(raw) || raw.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Alternative queries derived from parenthetical segments. A parenthesized part
+ * is usually an original/alt title (`(eXistenZ)`, `(The Possession)`) or a
+ * director/edition note (`(авторская версия)`) — so both the outside text and
+ * each inner segment make useful independent searches. Pure-noise segments
+ * (`(1080p)`) and empties are dropped.
+ */
+function parentheticalVariants(title: string): string[] {
+  if (!title.includes("(")) return [];
+  const variants: string[] = [];
+
+  const outside = stripNoise(title.replace(/\([^()]*\)/g, " "));
+  if (outside) variants.push(outside);
+
+  const inner = /\(([^()]*)\)/g;
+  let m: RegExpExecArray | null;
+  while ((m = inner.exec(title)) !== null) {
+    const cleaned = stripNoise(m[1]!);
+    if (cleaned) variants.push(cleaned);
+  }
+  return variants;
 }
 
 function firstNTokens(s: string, n: number): string {
@@ -122,12 +151,20 @@ export function buildQueryLadder(input: { title: string; year?: number }): Searc
 
   const raw: SearchAttempt[] = [];
   const yearFiltered = year != null;
-  raw.push(yearFiltered ? { query: clean, year, yearFiltered: true } : { query: clean, yearFiltered: false });
-  raw.push({ query: clean, yearFiltered: false });
-  raw.push(yearFiltered ? { query: title, year, yearFiltered: true } : { query: title, yearFiltered: false });
-  if (tokenCount(clean) > 3) {
-    raw.push({ query: firstNTokens(clean, 3), yearFiltered: false });
+  const add = (query: string, withYear: boolean) => {
+    if (!query) return;
+    raw.push(withYear && yearFiltered ? { query, year, yearFiltered: true } : { query, yearFiltered: false });
+  };
+
+  add(clean, true);
+  add(clean, false);
+  // Parenthetical alternatives (original titles, director/edition notes).
+  for (const variant of parentheticalVariants(title)) {
+    add(variant, true);
+    add(variant, false);
   }
+  add(title, true);
+  if (tokenCount(clean) > 3) add(firstNTokens(clean, 3), false);
 
   const seen = new Set<string>();
   const ladder: SearchAttempt[] = [];
