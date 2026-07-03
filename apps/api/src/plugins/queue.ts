@@ -28,6 +28,10 @@ import {
   enrichSeriesTvdb,
   tvdbLanguageTag,
   planTmdbDedup,
+  planSeriesDedup,
+  parseMediaPath,
+  matchSpecialEpisode,
+  type LocalSeasonShape,
   type EnrichResult,
   type MediaFileTechnical,
   type ImageKind,
@@ -200,6 +204,7 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
           imdbId?: string;
           seasonNumber?: number;
           episodeNumber?: number;
+          episodeTitleHint?: string;
         };
         tech: MediaFileTechnical;
       }): Promise<{ itemId: string; created: boolean }> => {
@@ -237,25 +242,48 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
         // ── TV episode: series → season → episode → file ──────────────────
         if (isEpisode) {
           const seasonNumber = input.parsed.seasonNumber!;
-          const episodeNumber = input.parsed.episodeNumber!;
 
           // Parsed titles are NFC-composed; rows scanned before that change may
           // hold NFD sortTitles (macOS filenames) — match either form so a new
           // episode attaches to the existing series instead of duplicating it.
+          const titleForms = {
+            in: [
+              input.parsed.title.toLowerCase(),
+              input.parsed.title.normalize("NFD").toLowerCase(),
+            ],
+          };
           let series = await prisma.mediaItem.findFirst({
             where: {
               libraryId: input.libraryId,
               kind: "series",
-              sortTitle: {
-                in: [
-                  input.parsed.title.toLowerCase(),
-                  input.parsed.title.normalize("NFD").toLowerCase(),
-                ],
-              },
+              sortTitle: titleForms,
               year: input.parsed.year ?? null,
             },
             select: { id: true },
           });
+          if (!series) {
+            // Sibling-year adoption: packs of one show differ in whether they
+            // carry a year ("Doctor.Who.2005.S01" vs "Doctor Who 14"). Title-
+            // equal rows must converge on one series — a year-less twin would
+            // resolve blind and can land on a namesake (Doctor Who 1963).
+            if (input.parsed.year != null) {
+              const yearless = await prisma.mediaItem.findFirst({
+                where: { libraryId: input.libraryId, kind: "series", sortTitle: titleForms, year: null },
+                orderBy: { addedAt: "asc" },
+                select: { id: true },
+              });
+              if (yearless) {
+                await prisma.mediaItem.update({ where: { id: yearless.id }, data: { year: input.parsed.year } });
+                series = yearless;
+              }
+            } else {
+              series = await prisma.mediaItem.findFirst({
+                where: { libraryId: input.libraryId, kind: "series", sortTitle: titleForms, year: { not: null } },
+                orderBy: { addedAt: "asc" },
+                select: { id: true },
+              });
+            }
+          }
           if (!series) {
             series = await prisma.mediaItem.create({
               data: {
@@ -279,9 +307,32 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
             select: { id: true },
           });
 
+          // Unnumbered specials carry a provisional 900+yy number (enrichment
+          // renumbers them via the provider's specials list). Same-year
+          // specials collide on it — bump past slots held by a DIFFERENT one.
+          let episodeNumber = input.parsed.episodeNumber!;
+          if (seasonNumber === 0 && episodeNumber >= 900) {
+            for (;;) {
+              const occupied = await prisma.episode.findUnique({
+                where: { seasonId_episodeNumber: { seasonId: season.id, episodeNumber } },
+                select: { title: true },
+              });
+              if (!occupied) break;
+              if ((occupied.title ?? "") === (input.parsed.episodeTitleHint ?? "")) break;
+              episodeNumber++;
+            }
+          }
+
           const episode = await prisma.episode.upsert({
             where: { seasonId_episodeNumber: { seasonId: season.id, episodeNumber } },
-            create: { seasonId: season.id, seriesId: series.id, episodeNumber },
+            create: {
+              seasonId: season.id,
+              seriesId: series.id,
+              episodeNumber,
+              // The local name doubles as the display title until enrichment
+              // resolves the real one — and as the title-match hint doing so.
+              ...(input.parsed.episodeTitleHint ? { title: input.parsed.episodeTitleHint } : {}),
+            },
             update: {},
             select: { id: true },
           });
@@ -672,10 +723,124 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
           }, { timeout: 20_000, maxWait: 10_000 });
         };
 
+        /**
+         * Fold an obsolete duplicate series row into the canonical: move each
+         * episode row across (or just its files when the canonical already has
+         * that episode from provider metadata), then delete the husk. Every
+         * file's episodeId must be re-pointed BEFORE the delete — Episode
+         * cascades MediaFile, so a file left on an obsolete episode row would
+         * be lost with it.
+         */
+        const mergeSeriesInto = async (
+          tx: Prisma.TransactionClient,
+          canonicalId: string,
+          obsoleteId: string,
+        ): Promise<void> => {
+          const seasons = await tx.season.findMany({
+            where: { seriesId: obsoleteId },
+            select: {
+              id: true,
+              seasonNumber: true,
+              episodes: { select: { id: true, episodeNumber: true } },
+            },
+          });
+          for (const season of seasons) {
+            if (!season.episodes.length) continue;
+            const target = await tx.season.upsert({
+              where: { seriesId_seasonNumber: { seriesId: canonicalId, seasonNumber: season.seasonNumber } },
+              create: { seriesId: canonicalId, seasonNumber: season.seasonNumber },
+              update: {},
+              select: { id: true },
+            });
+            for (const ep of season.episodes) {
+              const existing = await tx.episode.findUnique({
+                where: { seasonId_episodeNumber: { seasonId: target.id, episodeNumber: ep.episodeNumber } },
+                select: { id: true },
+              });
+              if (existing) {
+                await tx.mediaFile.updateMany({
+                  where: { episodeId: ep.id },
+                  data: { episodeId: existing.id, mediaItemId: canonicalId },
+                });
+              } else {
+                await tx.episode.update({
+                  where: { id: ep.id },
+                  data: { seasonId: target.id, seriesId: canonicalId },
+                });
+                await tx.mediaFile.updateMany({
+                  where: { episodeId: ep.id },
+                  data: { mediaItemId: canonicalId },
+                });
+              }
+            }
+          }
+          await tx.mediaFile.updateMany({
+            where: { mediaItemId: obsoleteId, episodeId: null },
+            data: { mediaItemId: canonicalId },
+          });
+          await tx.playbackState.deleteMany({ where: { mediaItemId: obsoleteId } });
+          await tx.playEvent.deleteMany({ where: { mediaItemId: obsoleteId } });
+          await tx.embedding.deleteMany({ where: { mediaItemId: obsoleteId } });
+          await tx.mediaItem.delete({ where: { id: obsoleteId } });
+        };
+
         const saveSeries = async (input: SaveSeriesInput): Promise<void> => {
           // Series scalars + genres atomically; seasons/episodes are idempotent
           // upserts done after, so a long show doesn't hold one big transaction.
+          let folded = false;
           await prisma.$transaction(async (tx) => {
+            // Duplicate reconciliation, series flavor: season packs of one show
+            // parse to different pre-enrich titles/years, each its own row —
+            // enrichment is the first point their shared provider identity is
+            // known. Collapse onto the earliest-added row (see planSeriesDedup).
+            const cur = await tx.mediaItem.findUnique({
+              where: { id: input.itemId },
+              select: { libraryId: true, addedAt: true },
+            });
+            if (cur && (input.tvdbId != null || input.tmdbId != null)) {
+              const siblings = await tx.mediaItem.findMany({
+                where: {
+                  libraryId: cur.libraryId,
+                  kind: "series",
+                  id: { not: input.itemId },
+                  OR: [
+                    ...(input.tvdbId != null ? [{ tvdbId: input.tvdbId }] : []),
+                    ...(input.tmdbId != null ? [{ tmdbId: input.tmdbId }] : []),
+                  ],
+                },
+                select: { id: true, libraryId: true, tvdbId: true, tmdbId: true, addedAt: true },
+              });
+              const plan = planSeriesDedup(
+                {
+                  id: input.itemId,
+                  libraryId: cur.libraryId,
+                  tvdbId: input.tvdbId ?? null,
+                  tmdbId: input.tmdbId ?? null,
+                  addedAt: cur.addedAt.getTime(),
+                },
+                siblings.map((s) => ({
+                  id: s.id,
+                  libraryId: s.libraryId,
+                  tvdbId: s.tvdbId,
+                  tmdbId: s.tmdbId,
+                  addedAt: s.addedAt.getTime(),
+                })),
+              );
+              if (plan.action === "merge") {
+                for (const obsoleteId of plan.obsoleteIds) {
+                  if (obsoleteId === input.itemId) continue;
+                  await mergeSeriesInto(tx, plan.canonicalId, obsoleteId);
+                }
+                if (plan.canonicalId !== input.itemId) {
+                  // This item folds into an existing canonical whose metadata
+                  // is already written — move its content and stop here.
+                  await mergeSeriesInto(tx, plan.canonicalId, input.itemId);
+                  folded = true;
+                  return;
+                }
+              }
+            }
+
             const data: Prisma.MediaItemUpdateInput = {
               title: input.title,
               sortTitle: input.title.toLowerCase(),
@@ -735,7 +900,8 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
                 },
               });
             }
-          });
+          }, { timeout: 20_000, maxWait: 10_000 });
+          if (folded) return;
 
           for (const s of input.seasons) {
             const seasonData = {
@@ -801,6 +967,46 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
           }
         };
 
+        /**
+         * Move files from provisional (900+) season-0 episode rows onto the
+         * provider's real specials, matched by the local title hint, the
+         * episode's own air year, or a christmas-date tiebreak. Unresolvable
+         * ones keep their provisional number (still browsable/playable).
+         */
+        async function resolveProvisionalSpecials(seriesId: string): Promise<void> {
+          const provisional = await prisma.episode.findMany({
+            where: { seriesId, episodeNumber: { gte: 900 }, season: { seasonNumber: 0 }, files: { some: {} } },
+            select: { id: true, title: true, files: { select: { path: true } } },
+          });
+          if (!provisional.length) return;
+          const official = await prisma.episode.findMany({
+            where: { seriesId, episodeNumber: { lt: 900 }, season: { seasonNumber: 0 } },
+            select: { id: true, episodeNumber: true, title: true, airDate: true },
+          });
+          if (!official.length) return;
+          const candidates = official.map((e) => ({
+            episodeNumber: e.episodeNumber,
+            ...(e.title ? { title: e.title } : {}),
+            ...(e.airDate ? { airDate: e.airDate.toISOString().slice(0, 10) } : {}),
+          }));
+          for (const p of provisional) {
+            const filePath = p.files[0]?.path ?? "";
+            const reparsed = filePath ? parseMediaPath(filePath) : undefined;
+            const n = matchSpecialEpisode(
+              {
+                ...(p.title ? { title: p.title } : {}),
+                ...(reparsed?.episodeYear != null ? { year: reparsed.episodeYear } : {}),
+                christmas: /christmas/i.test(filePath),
+              },
+              candidates,
+            );
+            const target = n != null ? official.find((e) => e.episodeNumber === n) : undefined;
+            if (!target) continue;
+            await prisma.mediaFile.updateMany({ where: { episodeId: p.id }, data: { episodeId: target.id } });
+            await prisma.episode.delete({ where: { id: p.id } });
+          }
+        }
+
         // Build enrichment set: touched items UNION any still-unmatched in this library
         const enrichIds = new Set<string>(allItemIds);
         const unmatchedItems = await prisma.mediaItem.findMany({
@@ -837,17 +1043,58 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
             };
             let result: EnrichResult;
             if (item.kind === "series") {
-              const localSeasons = await prisma.season.findMany({
-                where: { seriesId: item.id },
-                select: { seasonNumber: true },
+              // File-backed local structure only: which seasons the FILES span
+              // and how many episodes each holds. Metadata-only rows (from a
+              // previous enrich) must not count — a wrong earlier match would
+              // poison shape verification and re-fetch phantom seasons.
+              const fileEpisodes = await prisma.episode.findMany({
+                where: { seriesId: item.id, files: { some: {} } },
+                select: { episodeNumber: true, season: { select: { seasonNumber: true } } },
               });
-              const localSeasonNumbers = localSeasons.map((s) => s.seasonNumber);
+              const shapeBySeason = new Map<number, { episodeCount: number; maxEpisode: number }>();
+              for (const e of fileEpisodes) {
+                const n = e.season.seasonNumber;
+                const cur = shapeBySeason.get(n) ?? { episodeCount: 0, maxEpisode: 0 };
+                cur.episodeCount++;
+                // Provisional specials numbers (900+) are not real positions.
+                if (e.episodeNumber < 900 && e.episodeNumber > cur.maxEpisode) cur.maxEpisode = e.episodeNumber;
+                shapeBySeason.set(n, cur);
+              }
+              const localShape: LocalSeasonShape[] = [...shapeBySeason].map(([seasonNumber, v]) => ({
+                seasonNumber,
+                episodeCount: v.episodeCount,
+                maxEpisode: v.maxEpisode || v.episodeCount,
+              }));
+              const localSeasonNumbers = localShape.map((s) => s.seasonNumber);
+
+              // Faithful title variants from the actual file paths — the folder
+              // vs filename vs pack disagreements (umbrella folders, typos)
+              // the parser surfaced. Only consulted while the item is unmatched.
+              let titleVariants: string[] | undefined;
+              const firstFile = await prisma.mediaFile.findFirst({
+                where: { mediaItemId: item.id },
+                orderBy: { path: "asc" },
+                select: { path: true },
+              });
+              if (firstFile) {
+                const reparsed = parseMediaPath(firstFile.path);
+                const extra = [reparsed.title, ...(reparsed.titleVariants ?? [])].filter(
+                  (t) => t && t.toLowerCase() !== item.title.toLowerCase(),
+                );
+                if (extra.length) titleVariants = [...new Set(extra)].slice(0, 3);
+              }
 
               // TVDB first (when configured); fall back to TMDB on no match.
               if (tvdb) {
                 try {
                   result = await enrichSeriesTvdb(
-                    { id: item.id, title: item.title, year: item.year ?? undefined, tvdbId: item.tvdbId ?? undefined },
+                    {
+                      id: item.id,
+                      title: item.title,
+                      year: item.year ?? undefined,
+                      tvdbId: item.tvdbId ?? undefined,
+                      ...(titleVariants ? { titleVariants } : {}),
+                    },
                     {
                       client: tvdb,
                       cacheImageUrl: boundCacheImageUrl,
@@ -855,6 +1102,7 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
                       resolveLogo: resolveLogoTv,
                       fetchRatings,
                       localSeasonNumbers,
+                      localShape,
                       translateClients: tvdbTranslateClients,
                     },
                   );
@@ -867,15 +1115,30 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
               }
 
               if (!result.matched) {
-                result = await enrichSeries(base, {
-                  client,
-                  cacheImage: boundCacheImage,
-                  saveSeries,
-                  resolveLogo: resolveLogoTv,
-                  fetchRatings,
-                  localSeasonNumbers,
-                  translateClients,
-                });
+                result = await enrichSeries(
+                  { ...base, ...(titleVariants ? { titleVariants } : {}) },
+                  {
+                    client,
+                    cacheImage: boundCacheImage,
+                    saveSeries,
+                    resolveLogo: resolveLogoTv,
+                    fetchRatings,
+                    localSeasonNumbers,
+                    localShape,
+                    translateClients,
+                  },
+                );
+              }
+
+              // Unnumbered specials went in with provisional 900+yy numbers —
+              // now that the provider's season-0 list is saved, resolve them
+              // onto the real episodes (title hint → air year → christmas).
+              if (result.matched) {
+                try {
+                  await resolveProvisionalSpecials(item.id);
+                } catch (err) {
+                  app.log.warn({ err, itemId: item.id }, "[scan] specials renumbering failed — provisional numbers kept");
+                }
               }
             } else {
               result = await enrichItem(base, {
