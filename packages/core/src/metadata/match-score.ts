@@ -222,6 +222,11 @@ export function isAcceptable(
   const exactYear = year != null && candidate.year != null && candidate.year === year;
   const votes = candidate.voteCount ?? 0;
 
+  // A 1-2 digit query with no year is stray-file garbage ("01.mkv", an
+  // episode leak), not a searchable title — real short-numeric films ("9",
+  // "10") are only identifiable with a year to corroborate.
+  if (year == null && /^\d{1,2}$/.test(normalizeForMatch(query))) return false;
+
   // Rule A — confident string match, any year.
   if (sim >= TITLE_STRONG) return true;
 
