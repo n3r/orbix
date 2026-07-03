@@ -41,6 +41,15 @@ describe("buildMultivariantPlaylist", () => {
     expect(m).not.toContain("EXT-X-MEDIA");
     expect(m).not.toContain("VIDEO-RANGE");
   });
+
+  it("sanitizes quote/comma injection in subtitle attributes", () => {
+    const m = buildMultivariantPlaylist({
+      mediaUri: "index.m3u8", bandwidth: 1, codecs: [],
+      subtitles: [{ name: 'Foo" ,EVIL="1', language: "en", uri: "s.m3u8" }],
+    });
+    expect(m).toContain('NAME="Foo  EVIL=1"');
+    expect(m).not.toContain('EVIL="1"');
+  });
 });
 
 describe("buildMediaPlaylistFromBoundaries", () => {
@@ -62,6 +71,10 @@ describe("buildMediaPlaylistFromBoundaries", () => {
     expect(p).toContain("#EXTINF:10.010,\nseg1.m4s?playSessionId=S");
     expect(p).toContain("#EXTINF:2.500,\nseg2.m4s?playSessionId=S");
     expect(p.trim().endsWith("#EXT-X-ENDLIST")).toBe(true);
+  });
+
+  it("throws on empty boundaries instead of emitting a broken playlist", () => {
+    expect(() => buildMediaPlaylistFromBoundaries([], "x=1")).toThrow(/empty boundaries/);
   });
 });
 

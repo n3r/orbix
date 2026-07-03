@@ -11,18 +11,24 @@ export interface MultivariantOpts {
   subtitles?: { name: string; language?: string; uri: string; autoselect?: boolean }[];
 }
 
+/** Strip characters that would break out of a quoted HLS attribute value. */
+function attrValue(v: string): string {
+  return v.replace(/["\r\n]/g, "").replace(/,/g, " ");
+}
+
 /** Apple-spec multivariant playlist: one variant + optional subtitle renditions. */
 export function buildMultivariantPlaylist(opts: MultivariantOpts): string {
   const lines = ["#EXTM3U", "#EXT-X-VERSION:7", "#EXT-X-INDEPENDENT-SEGMENTS"];
+  const subtitles = opts.subtitles ?? [];
 
-  for (const s of opts.subtitles ?? []) {
+  for (const s of subtitles) {
     const attrs = [
       "TYPE=SUBTITLES",
       'GROUP-ID="subs"',
-      `NAME="${s.name}"`,
-      ...(s.language ? [`LANGUAGE="${s.language}"`] : []),
+      `NAME="${attrValue(s.name)}"`,
+      ...(s.language ? [`LANGUAGE="${attrValue(s.language)}"`] : []),
       `AUTOSELECT=${s.autoselect === false ? "NO" : "YES"}`,
-      `URI="${s.uri}"`,
+      `URI="${attrValue(s.uri)}"`,
     ];
     lines.push(`#EXT-X-MEDIA:${attrs.join(",")}`);
   }
@@ -35,7 +41,7 @@ export function buildMultivariantPlaylist(opts: MultivariantOpts): string {
   if (opts.resolution) attrs.push(`RESOLUTION=${opts.resolution.width}x${opts.resolution.height}`);
   if (opts.frameRate) attrs.push(`FRAME-RATE=${trimFixed(opts.frameRate)}`);
   if (opts.videoRange === "PQ" || opts.videoRange === "HLG") attrs.push(`VIDEO-RANGE=${opts.videoRange}`);
-  if ((opts.subtitles ?? []).length > 0) attrs.push('SUBTITLES="subs"');
+  if (subtitles.length > 0) attrs.push('SUBTITLES="subs"');
 
   lines.push(`#EXT-X-STREAM-INF:${attrs.join(",")}`, opts.mediaUri);
   return lines.join("\n");
@@ -43,6 +49,7 @@ export function buildMultivariantPlaylist(opts: MultivariantOpts): string {
 
 /** Media playlist whose EXTINFs come from real keyframe-derived boundaries. */
 export function buildMediaPlaylistFromBoundaries(boundaries: SegmentBoundary[], query?: string): string {
+  if (boundaries.length === 0) throw new Error("buildMediaPlaylistFromBoundaries: empty boundaries");
   const suffix = query ? `?${query}` : "";
   const target = Math.ceil(Math.max(...boundaries.map((b) => b.duration)));
   const lines = [
