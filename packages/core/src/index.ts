@@ -37,3 +37,4 @@ export * from "./tv/clean-name";
 export * from "./tv/sync-planner";
 export * from "./tv/numbering";
 export * from "./tv/pick-stream";
+export * from "./tv/proxy";
