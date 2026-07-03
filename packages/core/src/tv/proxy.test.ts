@@ -34,6 +34,22 @@ describe("signProxyPayload / verifyProxyPayload", () => {
     expect(verifyProxyPayload(SECRET, "st1", "http://a/x.m3u8", "short")).toBe(false);
     expect(verifyProxyPayload(SECRET, "st1", "http://a/x.m3u8", "")).toBe(false);
   });
+
+  it("is not forgeable by re-splitting a '|' inside upstreamUrl into the streamId", () => {
+    const streamId = "orig123";
+    const url = "http://cdn.example/live/master.m3u8|http://169.254.169.254/latest/meta-data/";
+    const sig = signProxyPayload(SECRET, streamId, url);
+    expect(verifyProxyPayload(SECRET, streamId, url, sig)).toBe(true);
+
+    // Naive `${streamId}|${url}` concatenation is ambiguous: moving the "|"
+    // boundary reproduces the exact same joined string...
+    const forgedStreamId = `${streamId}|http://cdn.example/live/master.m3u8`;
+    const forgedUrl = "http://169.254.169.254/latest/meta-data/";
+    expect(`${forgedStreamId}|${forgedUrl}`).toBe(`${streamId}|${url}`);
+    // ...but the length-prefixed payload must reject the forged pair against
+    // the original signature.
+    expect(verifyProxyPayload(SECRET, forgedStreamId, forgedUrl, sig)).toBe(false);
+  });
 });
 
 describe("encodeUpstream / decodeUpstream", () => {
@@ -91,6 +107,11 @@ describe("rewritePlaylist", () => {
     expect(out).toContain('BYTERANGE="720@0"');
   });
 
+  it("matches ATTR_URI_TAGS case-insensitively (lowercase/mixed-case tags still get proxied)", () => {
+    const out = rewritePlaylist('#ext-x-key:METHOD=AES-128,URI="key.bin"\n', base, toProxy);
+    expect(out).toContain(`URI="/api/tv/proxy/st1/s?u=${encodeUpstream("http://origin.example/live/key.bin")}"`);
+  });
+
   it("tolerates CRLF input and passes comments/blank lines through", () => {
     const text = "#EXTM3U\r\n#EXT-X-TARGETDURATION:6\r\n\r\nseg1.ts\r\n";
     const out = rewritePlaylist(text, base, toProxy);
@@ -121,5 +142,30 @@ describe("isPrivateHost", () => {
     expect(isPrivateHost("not-an-ip")).toBe(true);
     expect(isPrivateHost("1.2.3")).toBe(true);
     expect(isPrivateHost("999.1.1.1")).toBe(true);
+  });
+
+  it.each([
+    "0:0:0:0:0:0:0:1", // expanded loopback — must match "::1"
+    "::1",
+    "::",
+    "database:5432", // non-IP colon-string — must fail closed, not parse "database" as hex
+    "cafe:1234", // 2 valid hex groups but not a complete/elided v6 address
+    "evil.com", // plain hostname — must fail closed
+    "fc00:0:0:0:0:0:0:1", // expanded ULA
+    "fe80::1",
+    "::ffff:127.0.0.1",
+    "172.16.0.1",
+  ])("blocks (structural v4/v6 validation) %s", (ip) => {
+    expect(isPrivateHost(ip)).toBe(true);
+  });
+
+  it.each([
+    "::ffff:8.8.8.8",
+    "8.8.8.8",
+    "2606:4700:4700::1111", // public v6
+    "172.15.0.1",
+    "172.32.0.1",
+  ])("allows (structural v4/v6 validation) %s", (ip) => {
+    expect(isPrivateHost(ip)).toBe(false);
   });
 });

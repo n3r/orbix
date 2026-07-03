@@ -10,10 +10,23 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  * the proxy only ever fetches URLs the server itself minted (anti-SSRF).
  */
 
-/** b64url(HMAC-SHA256(secret, `${streamId}|${upstreamUrl}`)), first 32 chars. */
+/**
+ * Length-prefix streamId so a "|" inside upstreamUrl can't be re-split into a
+ * forged (streamId, url) pair that serializes to the same string — e.g.
+ * ("a","b|c") and ("a|b","c") would both naively join to "a|b|c".
+ */
+function signingPayload(streamId: string, upstreamUrl: string): string {
+  return `${streamId.length}:${streamId}|${upstreamUrl}`;
+}
+
+/**
+ * b64url(HMAC-SHA256(secret, `${streamId.length}:${streamId}|${upstreamUrl}`)),
+ * first 32 chars. The length prefix makes the streamId/url boundary
+ * unambiguous even when upstreamUrl itself contains "|".
+ */
 export function signProxyPayload(secret: string, streamId: string, upstreamUrl: string): string {
   return createHmac("sha256", secret)
-    .update(`${streamId}|${upstreamUrl}`)
+    .update(signingPayload(streamId, upstreamUrl))
     .digest("base64url")
     .slice(0, 32);
 }
@@ -92,7 +105,12 @@ export function rewritePlaylist(
       const trimmed = line.trim();
       if (trimmed === "") return line;
       if (trimmed.startsWith("#")) {
-        const tag = ATTR_URI_TAGS.find(([prefix]) => trimmed.startsWith(prefix));
+        // Case-insensitive tag match (HLS tags are conventionally uppercase,
+        // but a lowercase/mixed-case tag must still have its URI proxied);
+        // only the match is case-folded — the emitted line keeps its
+        // original casing.
+        const upperTrimmed = trimmed.toUpperCase();
+        const tag = ATTR_URI_TAGS.find(([prefix]) => upperTrimmed.startsWith(prefix));
         if (!tag) return line;
         return line.replace(/URI="([^"]*)"/, (match, uri: string) => {
           let abs: string;
@@ -115,32 +133,98 @@ export function rewritePlaylist(
     .join("\n");
 }
 
-/**
- * True for IPs the proxy must never fetch (SSRF guard): v4 loopback /
- * RFC1918 / link-local / 0.0.0.0/8 and v6 loopback / unspecified /
- * link-local fe80::/10 / ULA fc00::/7, including v4-mapped v6.
- * Unparsable input is treated as private (fail-safe).
- */
-export function isPrivateHost(ip: string): boolean {
-  const s = ip.trim().toLowerCase();
-  const mapped = /^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/.exec(s);
-  if (mapped) return isPrivateHost(mapped[1]!);
-  if (s.includes(":")) {
-    if (s === "::" || s === "::1") return true;
-    const first = Number.parseInt(s.split(":", 1)[0]!, 16);
-    if (Number.isNaN(first)) return true; // "::…" shorthand / junk — fail safe
-    if (first >= 0xfe80 && first <= 0xfebf) return true; // link-local fe80::/10
-    if (first >= 0xfc00 && first <= 0xfdff) return true; // ULA fc00::/7
-    return false;
-  }
+/** Pure decimal IPv4 parser: exactly 4 dot-separated 0-255 integers, else null. */
+function parseIPv4(s: string): [number, number, number, number] | null {
   const parts = s.split(".");
-  if (parts.length !== 4) return true;
+  if (parts.length !== 4) return null;
   const nums = parts.map((p) => (/^\d{1,3}$/.test(p) ? Number(p) : NaN));
-  if (nums.some((n) => Number.isNaN(n) || n > 255)) return true;
-  const [a, b] = nums as [number, number, number, number];
+  if (nums.some((n) => Number.isNaN(n) || n > 255)) return null;
+  return nums as [number, number, number, number];
+}
+
+/** True for IPv4 octets in a range this SSRF guard treats as private/unsafe. */
+function isPrivateIPv4(octets: readonly [number, number, number, number]): boolean {
+  const [a, b] = octets;
   if (a === 0 || a === 10 || a === 127) return true;
   if (a === 172 && b >= 16 && b <= 31) return true;
   if (a === 192 && b === 168) return true;
   if (a === 169 && b === 254) return true;
   return false;
+}
+
+/**
+ * Expand a syntactically valid IPv6 literal into its 8 numeric hextets
+ * (0-0xffff each), compression-agnostic (`::1` and `0:0:0:0:0:0:0:1` both
+ * expand identically). Returns null when the input isn't a valid IPv6
+ * literal: more than one "::", a stray empty group, a group with non-hex or
+ * more than 4 hex digits, or a group count that doesn't resolve to exactly
+ * 8. Pure string logic — no node:net.
+ */
+function expandIPv6(raw: string): number[] | null {
+  const zoneIdx = raw.indexOf("%");
+  const s = zoneIdx === -1 ? raw : raw.slice(0, zoneIdx);
+  if (s.length === 0) return null;
+
+  const halves = s.split("::");
+  if (halves.length > 2) return null; // "::" may appear at most once
+
+  const toGroups = (half: string): string[] => (half === "" ? [] : half.split(":"));
+  const head = toGroups(halves[0]!);
+  const tail = halves.length === 2 ? toGroups(halves[1]!) : [];
+  if (head.some((g) => g === "") || tail.some((g) => g === "")) return null; // stray ":"
+
+  const hexGroup = /^[0-9a-fA-F]{1,4}$/;
+  if (!head.every((g) => hexGroup.test(g)) || !tail.every((g) => hexGroup.test(g))) return null;
+
+  let groups: string[];
+  if (halves.length === 2) {
+    const missing = 8 - head.length - tail.length;
+    if (missing < 1) return null; // "::" must stand in for at least one group
+    groups = [...head, ...Array(missing).fill("0"), ...tail];
+  } else {
+    if (head.length !== 8) return null; // no elision — all 8 groups must be spelled out
+    groups = head;
+  }
+  return groups.map((g) => Number.parseInt(g, 16));
+}
+
+/**
+ * True for hosts the proxy must never fetch directly (SSRF guard):
+ * - IPv4: loopback 127/8, RFC1918 (10/8, 172.16-31/12, 192.168/16),
+ *   link-local 169.254/16, and 0/8.
+ * - IPv6: loopback ::1, unspecified ::, link-local fe80::/10, ULA fc00::/7.
+ * - v4-mapped v6 forms of any of the above, in dotted-quad
+ *   (`::ffff:1.2.3.4`) or hex (`::ffff:AABB:CCDD`) notation.
+ * IPv6 matching is compression-agnostic (`::1` and `0:0:0:0:0:0:0:1` alike).
+ * Anything that isn't a syntactically valid IPv4 or IPv6 literal — including
+ * plain hostnames — is treated as private: this is a security guard, so
+ * unrecognized input must never be read as "public" (fail closed).
+ */
+export function isPrivateHost(ip: string): boolean {
+  const s = ip.trim().toLowerCase();
+
+  const mappedDotted = /^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/.exec(s);
+  if (mappedDotted) return isPrivateHost(mappedDotted[1]!);
+
+  const v4 = parseIPv4(s);
+  if (v4) return isPrivateIPv4(v4);
+
+  const hextets = expandIPv6(s);
+  if (hextets) {
+    // v4-mapped v6 spelled in hex, e.g. ::ffff:a9fe:a9fe === ::ffff:169.254.169.254.
+    if (hextets.slice(0, 5).every((h) => h === 0) && hextets[5] === 0xffff) {
+      const a = hextets[6]! >> 8;
+      const b = hextets[6]! & 0xff;
+      const c = hextets[7]! >> 8;
+      const d = hextets[7]! & 0xff;
+      return isPrivateIPv4([a, b, c, d]);
+    }
+    if (hextets.every((h) => h === 0)) return true; // :: (unspecified)
+    if (hextets.slice(0, 7).every((h) => h === 0) && hextets[7] === 1) return true; // ::1 (loopback)
+    if ((hextets[0]! & 0xffc0) === 0xfe80) return true; // fe80::/10 (link-local)
+    if ((hextets[0]! & 0xfe00) === 0xfc00) return true; // fc00::/7 (ULA)
+    return false;
+  }
+
+  return true; // not a recognizable IP literal — fail closed
 }
