@@ -4,6 +4,8 @@
   "unmatchedNotice": "Metadata not matched yet — scan with a TMDB token to enrich.",
   "fixMatch": "Fix match / poster (admin)",
   "play": "Play",
+  "addToWishlist": "Add to Wishlist",
+  "inWishlist": "In Wishlist",
   "playNoMedia": "Play (no media)",
   "section": {
     "overview": "Overview",
