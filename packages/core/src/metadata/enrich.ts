@@ -88,7 +88,7 @@ async function resolveTmdbId(
     const candidates = await client.searchMovies(attempt.query, attempt.year);
     for (let i = 0; i < candidates.length; i++) {
       const candidate = candidates[i]!;
-      if (!isAcceptable(attempt.query, candidate, attempt.year, i === 0, attempt.yearFiltered)) {
+      if (!isAcceptable(attempt.query, candidate, attempt.year, i === 0)) {
         continue;
       }
       const rank = scoreCandidate(attempt.query, candidate, attempt.year);

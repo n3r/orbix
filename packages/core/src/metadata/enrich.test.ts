@@ -350,9 +350,9 @@ describe("enrichItem", () => {
     expect(result.tmdbId).toBe(253235);
   });
 
-  it("Test 11: transliteration rescued via year-gated rule C", async () => {
-    // "Zheleznyj chelovek 2" shares almost no characters with "Iron Man 2",
-    // but it is the #1 year-filtered hit with an exact year + real votes.
+  it("Test 11: a low-similarity candidate is NOT matched on an exact year alone", async () => {
+    // Regression for the false-positive class (a mangled Cyrillic title matched
+    // to a random same-year film): exact year + votes must NOT be enough.
     const client = makeFakeClient(null, {
       searchMovies: (query) =>
         query === "Zheleznyj chelovek 2"
@@ -360,15 +360,15 @@ describe("enrichItem", () => {
           : [],
     });
     const { cacheImage } = makeCacheImageSpy();
-    const { saveMetadata } = makeSaveMetadataSpy();
+    const { saveMetadata, calls: saveCalls } = makeSaveMetadataSpy();
 
     const result = await enrichItem(
       { id: "item-11", title: "Zheleznyj chelovek 2", year: 2010 },
       { client, cacheImage, saveMetadata },
     );
 
-    expect(result.matched).toBe(true);
-    expect(result.tmdbId).toBe(10138);
+    expect(result.matched).toBe(false);
+    expect(saveCalls).toHaveLength(0);
   });
 
   it("Test 12: a clean common title resolves in a single search call", async () => {
@@ -395,7 +395,7 @@ describe("enrichItem", () => {
     const { saveMetadata, calls: saveCalls } = makeSaveMetadataSpy();
 
     const result = await enrichItem(
-      { id: "item-13", title: "Zheleznyj chelovek 2" }, // no year → rule C cannot fire
+      { id: "item-13", title: "Zheleznyj chelovek 2" }, // no year, low similarity → no match
       { client, cacheImage, saveMetadata },
     );
 
