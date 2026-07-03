@@ -29,6 +29,7 @@ import similarRoute from "./routes/similar";
 import seriesRoute from "./routes/series";
 import { fixRoute } from "./routes/fix";
 import { refreshRoute } from "./routes/refresh";
+import { tvSourcesRoute } from "./routes/tv-sources";
 import { staticWebPlugin } from "./plugins/static-web";
 import { TmdbClient, getSetting } from "@orbix/core";
 import { refreshMetadata } from "./jobs/refresh-metadata.js";
@@ -66,6 +67,7 @@ export async function buildApp(env: Env, overrides?: { mountRuntime?: MountRunti
   await app.register(seriesRoute, { prefix: "/api" });
   await app.register(fixRoute(env), { prefix: "/api" });
   await app.register(refreshRoute(env), { prefix: "/api" });
+  await app.register(tvSourcesRoute(env), { prefix: "/api" });
 
   // ── Periodic metadata refresh (daily; selectStaleItems decides what's stale) ──
   const REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 h
