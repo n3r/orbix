@@ -1,10 +1,11 @@
 import fs from "node:fs";
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import { decideStrategy, getSetting } from "@orbix/core";
+import { decideStrategy } from "@orbix/core";
 import { requireAuth } from "../lib/auth";
 import { queryTokenAuth } from "../lib/device-auth";
 import { activeProfile, profileAllowsItem, assertFileAllowed } from "../lib/catalog-filter";
 import { SessionManager, SegmentTimeoutError } from "../playback/session";
+import type { PlaySessionRegistry } from "../playback/registry";
 
 const DEFAULT_PROFILE = "default";
 const DEFAULT_SEG_SEC = 6;
@@ -81,21 +82,12 @@ async function resolveSession(
   return session;
 }
 
-export default function streamRoute(env: { TRANSCODE_DIR: string; MAX_TRANSCODE_SESSIONS?: number }) {
+export default function streamRoute(
+  env: { TRANSCODE_DIR: string; MAX_TRANSCODE_SESSIONS?: number },
+  deps: { manager: SessionManager; registry: PlaySessionRegistry },
+) {
   return async function (app: FastifyInstance) {
-    const manager = new SessionManager({
-      transcodeDir: env.TRANSCODE_DIR,
-      maxSessions: env.MAX_TRANSCODE_SESSIONS,
-      getEncoder: () =>
-        getSetting<string>("encoder", {
-          fallback: "software",
-          read: (k) => app.prisma.setting.findUnique({ where: { key: k } }),
-        }),
-    });
-
-    app.addHook("onClose", async () => {
-      await manager.closeAll();
-    });
+    const { manager, registry: _registry } = deps;
 
     // ------------------------------------------------------------------
     // GET /play/:fileId/decision

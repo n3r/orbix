@@ -9,7 +9,7 @@ import { assertFileAllowed } from "../lib/catalog-filter";
 const execFileAsync = promisify(execFile);
 
 /** Codecs that produce image-based subtitle bitmaps (cannot be served as VTT). */
-const IMAGE_CODECS = new Set([
+export const IMAGE_CODECS = new Set([
   "hdmv_pgs_subtitle",
   "pgssub",
   "pgs",
