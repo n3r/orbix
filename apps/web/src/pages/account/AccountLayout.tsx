@@ -22,7 +22,7 @@ export default function AccountLayout() {
 
   // Guard the admin tabs: a non-admin who deep-links to /account/library|settings
   // is bounced to the overview. Wait for the queries to settle first.
-  const onAdminTab = pathname.startsWith("/account/library") || pathname.startsWith("/account/settings");
+  const onAdminTab = pathname.startsWith("/account/library") || pathname.startsWith("/account/settings") || pathname.startsWith("/account/devices");
   if (onAdminTab && !me.isLoading && !profile.isLoading && !isAdmin) {
     return <Navigate to="/account" replace />;
   }
@@ -35,6 +35,7 @@ export default function AccountLayout() {
         <NavLink to="/account/menu" className={tab}>{t("account:tabs.menu")}</NavLink>
         {isAdmin && <NavLink to="/account/library" className={tab}>{t("nav:library")}</NavLink>}
         {isAdmin && <NavLink to="/account/settings" className={tab}>{t("nav:settings")}</NavLink>}
+        {isAdmin && <NavLink to="/account/devices" className={tab}>{t("account:tabs.devices")}</NavLink>}
       </nav>
       <div className="pt-6">
         <Outlet />
