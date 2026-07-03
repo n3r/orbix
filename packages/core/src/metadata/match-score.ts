@@ -137,22 +137,38 @@ export function scoreCandidate(
   return sim + 0.12 * yearBonus + 0.05 * popNorm;
 }
 
+/** Minimum votes for the long-official-title prefix rescue (rule D). */
+export const PREFIX_VOTE_FLOOR = 100;
+
+/** True when qTokens is a strict token-prefix of the candidate's title or original title. */
+function isStrictTitlePrefix(qTokens: string[], candidate: ScoreCandidate): boolean {
+  for (const title of [candidate.title, candidate.originalTitle]) {
+    if (title == null) continue;
+    const tTokens = normalizeForMatch(title).split(" ").filter(Boolean);
+    if (tTokens.length <= qTokens.length) continue;
+    if (qTokens.every((tok, i) => tok === tTokens[i])) return true;
+  }
+  return false;
+}
+
 /**
  * Acceptance gate — decides whether a scored candidate is trustworthy enough
  * to auto-match. Kept separate from ranking so a popular-but-wrong film can
  * never sneak in on its popularity tie-breaker.
  *
- * @param isTopOfYearFilteredAttempt true only for the #1 result of a search
- *   that sent TMDB's year filter — required for the transliteration rescue.
+ * @param isTopResult  true for the #1 result of the current search attempt.
+ * @param yearFiltered true when the attempt sent TMDB's year filter.
  */
 export function isAcceptable(
-  sim: number,
+  query: string,
   candidate: ScoreCandidate,
   year: number | undefined,
-  isTopOfYearFilteredAttempt: boolean,
+  isTopResult: boolean,
+  yearFiltered: boolean,
 ): boolean {
-  const exactYear =
-    year != null && candidate.year != null && candidate.year === year;
+  const sim = titleSimilarity(query, candidate);
+  const exactYear = year != null && candidate.year != null && candidate.year === year;
+  const votes = candidate.voteCount ?? 0;
 
   // Rule A — confident string match, any year.
   if (sim >= TITLE_STRONG) return true;
@@ -163,7 +179,15 @@ export function isAcceptable(
   // Rule C — transliteration rescue: little string overlap, but TMDB returned
   // this as the top hit of a year-filtered query, the year is exact, and the
   // film has a real vote count. Strictly tighter than a blind results[0].
-  if (exactYear && isTopOfYearFilteredAttempt && (candidate.voteCount ?? 0) >= VOTE_FLOOR) {
+  if (exactYear && isTopResult && yearFiltered && votes >= VOTE_FLOOR) return true;
+
+  // Rule D — prefix rescue: the query is the whole distinctive head of a much
+  // longer official title ("The French Dispatch" ⊂ "The French Dispatch of the
+  // Liberty, Kansas Evening Sun"). Trusted only as TMDB's #1 hit, with real
+  // votes and ≥2 query tokens. When an exact title exists TMDB returns it #1
+  // instead, so it wins via rule A and this never fires.
+  const qTokens = normalizeForMatch(query).split(" ").filter(Boolean);
+  if (isTopResult && qTokens.length >= 2 && votes >= PREFIX_VOTE_FLOOR && isStrictTitlePrefix(qTokens, candidate)) {
     return true;
   }
 

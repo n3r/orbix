@@ -95,4 +95,25 @@ describe("buildQueryLadder", () => {
     expect(q).not.toContain("1080p");
     expect(q).not.toContain("");
   });
+
+  // ── In-title year (last-resort) ───────────────────────────────────────────
+  it("adds a year-stripped attempt when the title ends in a plausible year", () => {
+    const ladder = buildQueryLadder({ title: "Taxi 1998" });
+    expect(ladder).toContainEqual({ query: "Taxi", year: 1998, yearFiltered: true });
+    // ...but the full title is still tried first (so an in-title number matches first)
+    expect(ladder[0]!.query).toBe("Taxi 1998");
+  });
+
+  it("keeps a sci-fi in-title number as the first attempt (Blade Runner 2049)", () => {
+    const ladder = buildQueryLadder({ title: "Blade Runner 2049" });
+    expect(ladder[0]!.query).toBe("Blade Runner 2049");
+    // the year-stripped variant, if present, is the LAST attempt (last resort)
+    const stripped = ladder.find((a) => a.query === "Blade Runner");
+    if (stripped) expect(ladder[ladder.length - 1]).toBe(stripped);
+  });
+
+  it("does not invent a year for a title without a trailing 4-digit year", () => {
+    const ladder = buildQueryLadder({ title: "16 Blocks" });
+    expect(ladder.every((a) => a.year === undefined)).toBe(true);
+  });
 });

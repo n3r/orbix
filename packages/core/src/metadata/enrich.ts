@@ -3,7 +3,7 @@ import type { ImageKind } from "./images";
 import type { ExternalRatings } from "./omdb";
 import { isRealTranslation } from "./localize";
 import { buildQueryLadder } from "./search-title";
-import { titleSimilarity, scoreCandidate, isAcceptable, TITLE_STRONG } from "./match-score";
+import { scoreCandidate, isAcceptable, TITLE_STRONG } from "./match-score";
 
 // ---------------------------------------------------------------------------
 // Structural interface — real TmdbClient satisfies this.
@@ -88,8 +88,7 @@ async function resolveTmdbId(
     const candidates = await client.searchMovies(attempt.query, attempt.year);
     for (let i = 0; i < candidates.length; i++) {
       const candidate = candidates[i]!;
-      const sim = titleSimilarity(attempt.query, candidate);
-      if (!isAcceptable(sim, candidate, attempt.year, i === 0 && attempt.yearFiltered)) {
+      if (!isAcceptable(attempt.query, candidate, attempt.year, i === 0, attempt.yearFiltered)) {
         continue;
       }
       const rank = scoreCandidate(attempt.query, candidate, attempt.year);

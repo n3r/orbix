@@ -424,4 +424,44 @@ describe("enrichItem", () => {
     expect(result.matched).toBe(true);
     expect(result.tmdbId).toBe(EXISTENZ_ID);
   });
+
+  it("Test 15: matches a long official title via the prefix rescue", async () => {
+    const FD_ID = 542178;
+    const client = makeFakeClient(null, {
+      searchMovies: (query) =>
+        query === "The French Dispatch"
+          ? [{ tmdbId: FD_ID, title: "The French Dispatch of the Liberty, Kansas Evening Sun", voteCount: 2000 }]
+          : [],
+    });
+    const { cacheImage } = makeCacheImageSpy();
+    const { saveMetadata } = makeSaveMetadataSpy();
+
+    const result = await enrichItem(
+      { id: "item-15", title: "The French Dispatch BDRemux" },
+      { client, cacheImage, saveMetadata },
+    );
+
+    expect(result.matched).toBe(true);
+    expect(result.tmdbId).toBe(FD_ID);
+  });
+
+  it("Test 16: matches via an in-title year used as a last-resort filter", async () => {
+    const TAXI_ID = 2377;
+    const client = makeFakeClient(null, {
+      searchMovies: (query, year) =>
+        query === "Taxi" && year === 1998
+          ? [{ tmdbId: TAXI_ID, title: "Taxi", year: 1998, voteCount: 500 }]
+          : [],
+    });
+    const { cacheImage } = makeCacheImageSpy();
+    const { saveMetadata } = makeSaveMetadataSpy();
+
+    const result = await enrichItem(
+      { id: "item-16", title: "Taxi 1998" },
+      { client, cacheImage, saveMetadata },
+    );
+
+    expect(result.matched).toBe(true);
+    expect(result.tmdbId).toBe(TAXI_ID);
+  });
 });
