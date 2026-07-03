@@ -45,6 +45,19 @@ function stubDirectFile(app: unknown) {
   };
 }
 
+/** Same as stubAll's file (remux-eligible mkv/h264/aac) but rated R, for the kids-gate re-check test. */
+function stubRRatedFile(app: unknown) {
+  (app as any).prisma.mediaFile = {
+    findUnique: async () => ({
+      id: "f1", path: "/media/movie.mkv", container: "matroska,webm", videoCodec: "h264",
+      audioCodecs: ["aac"], durationSec: 30,
+      audioTracks: [{ index: 1, codec: "aac", channels: 2 }],
+      subtitleTracks: [],
+      mediaItem: { rating: "R" },
+    }),
+  };
+}
+
 async function negotiate(app: any): Promise<string> {
   const res = await app.inject({
     method: "POST", url: "/api/playback/info", cookies,
@@ -135,6 +148,27 @@ describe("session-aware HLS routes", () => {
     const res = await app.inject({ method: "GET", url: `/api/play/f1/master.m3u8?playSessionId=${sid}`, cookies });
     expect(res.statusCode).toBe(404);
     expect(res.json()).toEqual({ error: "session_expired" });
+    await app.close();
+  });
+
+  it("kids gate is re-checked per-request on the session-aware index route", async () => {
+    const app = await buildApp(env);
+    stubAll(app);
+    stubRRatedFile(app);
+    // Negotiate with a standard/no profile (allowed — R is fine for an unrestricted viewer).
+    const sid = await negotiate(app);
+
+    // Flip the active profile to a kids profile capped below R (mid-session profile switch).
+    (app as any).prisma.profile = {
+      findUnique: async () => ({ id: "p_kid", name: "Kid", avatar: null, kind: "kids", maturityCap: 0, language: "en" }),
+    };
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/play/f1/index.m3u8?playSessionId=${sid}`,
+      cookies: { ...cookies, orbix_profile: "p_kid" },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toEqual({ error: "blocked_by_rating" });
     await app.close();
   });
 });

@@ -150,6 +150,29 @@ describe("SessionManager", () => {
     await manager.closeAll();
   });
 
+  it("plumbs audioTrackIndex/audioChannels/audioAction from the plan into the ffmpeg args", async () => {
+    const { spawn, calls } = makeFakeSpawn();
+    const manager = new SessionManager({ transcodeDir: testDir, spawn });
+
+    const session = await manager.getOrCreate("file-audio:default", {
+      inputPath: "/fake/video.mkv",
+      plan: { mode: "remux", audioAction: "aac", audioTrackIndex: 2, audioChannels: 6 },
+      durationSec: 120,
+      segSec: 6,
+    });
+
+    await manager.ensureSegment(session, 0);
+
+    expect(calls).toHaveLength(1);
+    const { args } = calls[0];
+    expect(args).toContain("0:a:2?");
+    expect(args).toContain("-ac");
+    expect(args[args.indexOf("-ac") + 1]).toBe("6");
+    expect(args).toContain("384k");
+
+    await manager.closeAll();
+  });
+
   it("ensureSegment(200) triggers kill+restart with start_number=200 (far-ahead seek)", async () => {
     const { spawn, calls } = makeFakeSpawn();
     const manager = new SessionManager({ transcodeDir: testDir, spawn });

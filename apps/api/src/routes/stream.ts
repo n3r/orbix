@@ -98,7 +98,13 @@ function tokenSuffix(req: FastifyRequest): string {
  * playlist.
  */
 function isPlayableEntry(entry: PlaySessionEntry | null, fileId: string): entry is PlaySessionEntry {
-  return !!entry && entry.fileId === fileId && entry.plan.mode !== "direct" && entry.durationSec > 0;
+  return (
+    !!entry &&
+    entry.fileId === fileId &&
+    entry.plan.mode !== "direct" &&
+    // durationSec backstop: unreachable via /playback/info today (it 409s first); guards future callers.
+    entry.durationSec > 0
+  );
 }
 
 /**
@@ -112,8 +118,14 @@ async function resolveByPlaySession(
   deps: { manager: SessionManager; registry: PlaySessionRegistry },
   fileId: string,
   playSessionId: string,
+  req: FastifyRequest,
   reply: { code: (n: number) => { send: (b: unknown) => unknown } },
 ) {
+  // Kids-safety gate: re-checked on every index/init/seg request (not just at
+  // negotiation time) so a profile switch mid-playback can't keep streaming
+  // blocked content off a still-valid playSessionId.
+  if (!(await assertFileAllowed(app, req, fileId, reply))) return null;
+
   const entry = deps.registry.get(playSessionId);
   if (!isPlayableEntry(entry, fileId)) {
     reply.code(404).send({ error: "session_expired" });
@@ -322,7 +334,7 @@ export default function streamRoute(
         const playSessionId = (req.query as { playSessionId?: string }).playSessionId;
 
         if (playSessionId) {
-          const session = await resolveByPlaySession(app, { manager, registry }, fileId, playSessionId, reply);
+          const session = await resolveByPlaySession(app, { manager, registry }, fileId, playSessionId, req, reply);
           if (!session) return;
 
           return reply
@@ -357,7 +369,7 @@ export default function streamRoute(
         const { fileId } = req.params;
         const playSessionId = (req.query as { playSessionId?: string }).playSessionId;
         const session = playSessionId
-          ? await resolveByPlaySession(app, { manager, registry }, fileId, playSessionId, reply)
+          ? await resolveByPlaySession(app, { manager, registry }, fileId, playSessionId, req, reply)
           : await resolveSession(app, manager, fileId, req, reply);
         if (!session) return;
 
@@ -393,7 +405,7 @@ export default function streamRoute(
 
         const playSessionId = (req.query as { playSessionId?: string }).playSessionId;
         const session = playSessionId
-          ? await resolveByPlaySession(app, { manager, registry }, fileId, playSessionId, reply)
+          ? await resolveByPlaySession(app, { manager, registry }, fileId, playSessionId, req, reply)
           : await resolveSession(app, manager, fileId, req, reply);
         if (!session) return;
 

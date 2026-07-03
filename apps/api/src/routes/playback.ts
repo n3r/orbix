@@ -116,6 +116,7 @@ export default function playbackRoute(deps: { registry: PlaySessionRegistry; man
     // POST /playback/:playSessionId/stop — tear down a play session early.
     // Idempotent (navigator.sendBeacon retries, and the player may call this
     // more than once) and accepts an empty body (sendBeacon sends none).
+    // Any authenticated household caller may stop a session; playSessionIds are unguessable UUIDs (single-household trust model).
     // ------------------------------------------------------------------
     app.post<{ Params: { playSessionId: string } }>(
       "/playback/:playSessionId/stop",
