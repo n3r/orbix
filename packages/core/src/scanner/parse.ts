@@ -59,7 +59,7 @@ function extractEpisodeNum(s: string): number | undefined {
     /(?:^|[\s._-])сери[ияюей][\s._-]*(\d{1,3})/i.exec(s) ?? //  "серия 5"
     /(\d{1,3})[\s._-]*сери[ияюей]/i.exec(s) ?? //              "5 серия"
     /^(\d{1,3})[.)\s_-]/.exec(s) ?? //                         leading "100. Title"
-    /-[\s._]*(\d{1,3})(?:[\s._)\]-]|$)/.exec(s);
+    /[-–—][\s._]*(\d{1,3})(?:[\s._)\]-]|$)/.exec(s);
   return m ? parseInt(m[1], 10) : undefined;
 }
 
@@ -76,9 +76,67 @@ function seriyaEpisode(s: string): number | undefined {
   return m ? parseInt(m[1], 10) : undefined;
 }
 
+// ── Anime-style episodes (no season folder) ──────────────────────────────────
+// Canonical fansub layouts number episodes absolutely, directly in the show
+// folder: "[SubsPlease] Attack on Titan - 05 (1080p).mkv". Two rules, lowest
+// precedence (checked next to the Серия rule) so explicit SxxExx / 1x02 /
+// season-folder markers always win.
+
+// Trailing "- NN" episode marker: an episode dash (-, – or —) + 1-3 digits,
+// then only version/quality junk ("v2", "(1080p)", "[F00F]") up to the end.
+// \d{1,3} plus the junk-only anchored tail means a 4-digit "- 2049" can never
+// match — no partial-digit split survives the tail.
+const ANIME_EP_TAIL_RE = /[-–—][\s._]*(\d{1,3})(?:\s*v\d+)?(?:[\s._]*[([][^()[\]]*[)\]])*[\s._]*$/i;
+
+// Leading "[Group]" fansub tag.
+const GROUP_TAG_RE = /^\[([^\]]+)\]\s*/;
+
+// Bracket contents that are a tracker/release-site tag, not a fansub group
+// ("[BDRemux Rutracker.org]"). Same idea as metadata/search-title.ts, kept
+// local: scanner/ and metadata/ deliberately don't import from each other.
+const TRACKER_TAG_RE = /rutracker|nnmclub|kinozal|rarbg|hdclub|rutor|torrent/i;
+const DOMAIN_TAG_RE = /[\w-]+\.(?:org|com|net|to|se|me|tv|info)\b/i;
+
+/** Case- and separator-insensitive key for the folder-echo comparison. */
+function echoKey(s: string): string {
+  return s.replace(/[\s._]+/g, " ").trim().toLowerCase();
+}
+
+/**
+ * RULE 1 — fansub bracket-group: "[Group] Title - NN [junk]" → season 1,
+ * episode NN (absolute numbering). A tracker/site bracket tag is not a fansub
+ * group — those wrap movies ("[Taxi 1998] [BDRemux Rutracker.org]").
+ * RULE 2 — folder-echo: the filename is "<Folder> - NN" inside <Folder> →
+ * season 1, episode NN.
+ */
+function detectAnimeEpisode(filenameNoExt: string, folder: string): EpisodeMarker | null {
+  const tail = ANIME_EP_TAIL_RE.exec(filenameNoExt);
+  if (!tail) return null;
+  const episodeNumber = parseInt(tail[1], 10);
+
+  const groupTag = GROUP_TAG_RE.exec(filenameNoExt);
+  if (groupTag) {
+    if (TRACKER_TAG_RE.test(groupTag[1]) || DOMAIN_TAG_RE.test(groupTag[1])) return null;
+    // Fallback series title: the text between the group tag and the "- NN".
+    // The caller still prefers the show folder (stable across episodes).
+    const between = filenameNoExt.slice(groupTag[0].length, tail.index).replace(/[._]+/g, " ").trim();
+    const marker: EpisodeMarker = { seasonNumber: 1, episodeNumber };
+    if (between) marker.seriesTitleHint = between;
+    return marker;
+  }
+
+  // Folder-echo needs a real folder to vouch for the series — a missing/root
+  // folder can't, and a non-echoing one ("Movies/Heat - 2.mkv") must not.
+  const folderKey = echoKey(folder);
+  if (!folderKey || echoKey(filenameNoExt.slice(0, tail.index)) !== folderKey) return null;
+  return { seasonNumber: 1, episodeNumber };
+}
+
 interface EpisodeMarker {
   seasonNumber: number;
   episodeNumber: number;
+  /** Fansub fallback title: filename text between the [Group] tag and "- NN". */
+  seriesTitleHint?: string;
 }
 
 /** Detect TV season/episode from the filename and its folder, or null for movies. */
@@ -99,6 +157,11 @@ function detectEpisode(filenameNoExt: string, folder: string): EpisodeMarker | n
     const ep = extractEpisodeNum(filenameNoExt);
     if (ep !== undefined) return { seasonNumber: 0, episodeNumber: ep };
   }
+
+  // Anime layouts without a season folder: "[Group] Title - NN" (fansub) or
+  // "<Folder> - NN" (folder-echo). Lowest precedence, beside the Серия rule.
+  const anime = detectAnimeEpisode(filenameNoExt, folder);
+  if (anime) return anime;
 
   // Bare mini-series with no season folder: "Title. Серия 3" → season 1, ep 3.
   // Lowest precedence, so an explicit SxxExx / season folder always wins.
@@ -147,7 +210,7 @@ export function parseMediaPath(fullPath: string): ParsedMediaPath {
     const isSeasonFolder = SEASON_FOLDER_RE.test(folder) || SPECIALS_FOLDER_RE.test(folder);
     const showFolder = isSeasonFolder ? basename(dirname(dirname(fullPath))).normalize("NFC") : folder;
 
-    let folderTitle = filenameParse(showFolder, false).title?.trim() || "";
+    let folderTitle = showFolder ? filenameParse(showFolder, false).title?.trim() || "" : "";
     // Same library mangling as the movie branch: a multi-word Cyrillic show
     // folder with a year collapses to its first letter — recover from the raw name.
     if (alnumLen(folderTitle) <= 2) {
@@ -155,8 +218,9 @@ export function parseMediaPath(fullPath: string): ParsedMediaPath {
       if (recovered && alnumLen(recovered) >= alnumLen(folderTitle)) folderTitle = recovered;
     }
     const tvTitle = filenameParse(filenameNoExt, true).title?.trim() || "";
-    // Prefer the show-folder title (stable across all episodes of the series).
-    const rawSeriesTitle = folderTitle || tvTitle || showFolder;
+    // Prefer the show-folder title (stable across all episodes of the series),
+    // then a fansub-rule hint (text between the [Group] tag and the "- NN").
+    const rawSeriesTitle = folderTitle || episode.seriesTitleHint || tvTitle || showFolder;
     // Show folders often carry a release year/range ("Show Name 2010-2019 WEBRip")
     // that the filename parser leaves as a trailing year — drop it so the series
     // matches cleanly. Only a *trailing* year, so titles like "2012" are kept.

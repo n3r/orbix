@@ -162,6 +162,17 @@ interface RawTvSearchResult {
   first_air_date?: string;
 }
 
+interface RawTvSearchCandidate {
+  id: number;
+  name: string;
+  original_name?: string;
+  original_language?: string;
+  first_air_date?: string;
+  poster_path?: string | null;
+  popularity?: number;
+  vote_count?: number;
+}
+
 interface RawTv {
   id: number;
   name: string;
@@ -394,6 +405,56 @@ export class TmdbClient {
       title: first.name,
       ...(first.first_air_date ? { year: Number(first.first_air_date.slice(0, 4)) } : {}),
     };
+  }
+
+  /**
+   * Top 8 TV search candidates for the resolver — mirrors searchMovies: a
+   * first_air_date_year filter with an unfiltered fallback, and a per-call
+   * `language` that localizes the RETURNED names (the match set is
+   * language-independent).
+   */
+  async searchTvs(query: string, year?: number, language?: string): Promise<TmdbSearchCandidate[]> {
+    const base = `${BASE}/search/tv?query=${encodeURIComponent(query)}`;
+    let data = await this.get<{ results: RawTvSearchCandidate[] }>(
+      this.withLang(year != null ? `${base}&first_air_date_year=${year}` : base, language),
+    );
+    if (year != null && data.results.length === 0) {
+      data = await this.get<{ results: RawTvSearchCandidate[] }>(this.withLang(base, language));
+    }
+    return data.results.slice(0, 8).map((r) => ({
+      tmdbId: r.id,
+      title: r.name,
+      ...(r.first_air_date ? { year: Number(r.first_air_date.slice(0, 4)) } : {}),
+      ...(r.poster_path != null ? { posterPath: r.poster_path } : {}),
+      ...(r.original_name != null ? { originalTitle: r.original_name } : {}),
+      ...(r.original_language != null ? { originalLanguage: r.original_language } : {}),
+      ...(r.popularity != null ? { popularity: r.popularity } : {}),
+      ...(r.vote_count != null ? { voteCount: r.vote_count } : {}),
+    }));
+  }
+
+  /**
+   * Every known name for a TV series in one call. TV differs from movies in
+   * the raw shapes: alternative_titles nests under `results` (not `titles`)
+   * and translations carry `data.name` (not `data.title`).
+   */
+  async allTvTitles(id: number): Promise<string[]> {
+    const raw = await this.get<{
+      name?: string;
+      original_name?: string;
+      alternative_titles?: { results?: { title?: string }[] };
+      translations?: { translations?: { data?: { name?: string } }[] };
+    }>(`${BASE}/tv/${id}?append_to_response=alternative_titles,translations`);
+
+    const titles = new Set<string>();
+    const add = (t: string | undefined | null) => {
+      if (t && t.trim().length > 0) titles.add(t.trim());
+    };
+    add(raw.name);
+    add(raw.original_name);
+    for (const alt of raw.alternative_titles?.results ?? []) add(alt.title);
+    for (const tr of raw.translations?.translations ?? []) add(tr.data?.name);
+    return [...titles];
   }
 
   async tv(id: number): Promise<TmdbTv> {

@@ -189,4 +189,107 @@ describe("parseMediaPath", () => {
       expect(r.episodeNumber).toBeUndefined();
     });
   });
+
+  describe("anime episodes", () => {
+    it("parses a fansub '[Group] Title - NN (quality)' file, titling from the show folder", () => {
+      const r = parseMediaPath(
+        "/media/Anime/Attack on Titan/[SubsPlease] Attack on Titan - 05 (1080p).mkv",
+      );
+      expect(r.title).toBe("Attack on Titan");
+      expect(r.seasonNumber).toBe(1);
+      expect(r.episodeNumber).toBe(5);
+    });
+
+    it("accepts absolute episode numbers above 99", () => {
+      const r = parseMediaPath(
+        "/media/Anime/Attack on Titan/[SubsPlease] Attack on Titan - 137 (1080p).mkv",
+      );
+      expect(r.title).toBe("Attack on Titan");
+      expect(r.seasonNumber).toBe(1);
+      expect(r.episodeNumber).toBe(137);
+    });
+
+    it("supports an en-dash episode marker and a bracketed v2 tag", () => {
+      const r = parseMediaPath("/media/Anime/Frieren/[Erai-raws] Frieren – 12 [v2].mkv");
+      expect(r.title).toBe("Frieren");
+      expect(r.seasonNumber).toBe(1);
+      expect(r.episodeNumber).toBe(12);
+    });
+
+    it("tolerates a bare vN suffix glued to the episode number", () => {
+      const r = parseMediaPath("/media/Anime/Frieren/[SubsPlease] Frieren - 03v2 (720p).mkv");
+      expect(r.seasonNumber).toBe(1);
+      expect(r.episodeNumber).toBe(3);
+    });
+
+    it("detects a folder-echo episode with dot separators (no group tag)", () => {
+      const r = parseMediaPath("/a/Vinland Saga/Vinland.Saga.-.03.mkv");
+      expect(r.title).toBe("Vinland Saga");
+      expect(r.seasonNumber).toBe(1);
+      expect(r.episodeNumber).toBe(3);
+    });
+
+    it("detects the canonical no-group anime layout '<Folder>/<Folder> - NN'", () => {
+      const r = parseMediaPath("/media/Anime/Attack on Titan/Attack on Titan - 05.mkv");
+      expect(r.title).toBe("Attack on Titan");
+      expect(r.seasonNumber).toBe(1);
+      expect(r.episodeNumber).toBe(5);
+    });
+
+    it("falls back to the filename text between the group tag and the marker when no folder exists", () => {
+      const r = parseMediaPath("/[SubsPlease] Neon Genesis - 07.mkv");
+      expect(r.title).toBe("Neon Genesis");
+      expect(r.seasonNumber).toBe(1);
+      expect(r.episodeNumber).toBe(7);
+    });
+
+    it("does not treat a tracker/site bracket tag as a fansub group", () => {
+      const r = parseMediaPath("/m/Films/[Taxi 1998] [BDRemux Rutracker.org].mkv");
+      expect(r.seasonNumber).toBeUndefined();
+      expect(r.episodeNumber).toBeUndefined();
+    });
+
+    it("ignores a '- NN' marker behind a leading tracker/domain tag", () => {
+      const r = parseMediaPath("/m/Downloads/[Rutracker.org] Taxi - 98.mkv");
+      expect(r.seasonNumber).toBeUndefined();
+      expect(r.episodeNumber).toBeUndefined();
+    });
+
+    it("keeps a plain movie without any episode marker a movie", () => {
+      const r = parseMediaPath("/m/Heat (1995)/Heat.mkv");
+      expect(r.seasonNumber).toBeUndefined();
+      expect(r.episodeNumber).toBeUndefined();
+    });
+
+    it("does not fire folder-echo when the folder does not echo the filename", () => {
+      const r = parseMediaPath("/m/Movies/Heat - 2.mkv");
+      expect(r.seasonNumber).toBeUndefined();
+      expect(r.episodeNumber).toBeUndefined();
+    });
+
+    it("keeps a year-titled movie a movie (no '- NN' marker at all)", () => {
+      const r = parseMediaPath("/m/Blade Runner 2049/Blade Runner 2049.mkv");
+      expect(r.seasonNumber).toBeUndefined();
+      expect(r.episodeNumber).toBeUndefined();
+    });
+
+    it("treats a trailing 4-digit '- NNNN' as a year, never an episode", () => {
+      const r = parseMediaPath("/m/Blade Runner/Blade Runner - 2049.mkv");
+      expect(r.seasonNumber).toBeUndefined();
+      expect(r.episodeNumber).toBeUndefined();
+    });
+
+    it("lets an explicit SxxExx win over the fansub rule", () => {
+      const r = parseMediaPath("/tv/Show/[Group] Show S02E05.mkv");
+      expect(r.title).toBe("Show");
+      expect(r.seasonNumber).toBe(2);
+      expect(r.episodeNumber).toBe(5);
+    });
+
+    it("lets a Season folder win over the fansub rule (en-dash episode included)", () => {
+      const r = parseMediaPath("/tv/Frieren (2023)/Season 02/[Erai-raws] Frieren – 12.mkv");
+      expect(r.seasonNumber).toBe(2);
+      expect(r.episodeNumber).toBe(12);
+    });
+  });
 });
