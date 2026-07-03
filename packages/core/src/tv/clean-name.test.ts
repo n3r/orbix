@@ -40,4 +40,12 @@ describe("cleanChannelName", () => {
   it("falls back to the raw name when cleaning would empty it", () => {
     expect(cleanChannelName("HD").name).toBe("HD");
   });
+
+  it('cleanChannelName("") returns default "Channel"', () => {
+    expect(cleanChannelName("")).toEqual({ name: "Channel", quality: null, label: null });
+  });
+
+  it('cleanChannelName("   ") returns default "Channel"', () => {
+    expect(cleanChannelName("   ")).toEqual({ name: "Channel", quality: null, label: null });
+  });
 });

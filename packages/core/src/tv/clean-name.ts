@@ -29,7 +29,7 @@ export function cleanChannelName(raw: string): CleanedChannelName {
 
   s = s.replace(BRACKET_RE, (_m: string, inner: string) => {
     const trimmed = inner.trim();
-    if (trimmed && label == null) label = trimmed; // first bracket wins
+    if (trimmed && label == null) label = trimmed; // first non-empty bracket wins
     return " ";
   });
 
@@ -49,5 +49,5 @@ export function cleanChannelName(raw: string): CleanedChannelName {
   s = s.replace(/\s{2,}/g, " ").trim();
   s = s.replace(/[\s\-–—|]+$/g, "").trim(); // trailing separators
 
-  return { name: s.length > 0 ? s : raw.trim(), quality, label };
+  return { name: s.length > 0 ? s : (raw.trim() || "Channel"), quality, label };
 }
