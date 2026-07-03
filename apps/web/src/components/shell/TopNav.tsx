@@ -82,7 +82,17 @@ export default function TopNav({ profile }: { profile: Profile | null }) {
 
         {/* Right: heart · search · avatar */}
         <div className="flex shrink-0 items-center gap-4">
-          <Placeholder label={t("nav:myList")} comingSoon={t("nav:comingSoon")}><HeartIcon /></Placeholder>
+          <Link
+            to="/wishlist"
+            aria-label={t("nav:wishlist")}
+            aria-current={pathname === "/wishlist" ? "page" : undefined}
+            className={cn(
+              "transition-colors",
+              pathname === "/wishlist" ? "text-[var(--accent)]" : "text-[var(--text)] hover:text-[var(--text-dim)]",
+            )}
+          >
+            <HeartIcon />
+          </Link>
           <Link to="/search" aria-label={t("nav:search")} className="text-[var(--text)] hover:text-[var(--text-dim)] transition-colors">
             <SearchIcon />
           </Link>
