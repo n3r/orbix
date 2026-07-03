@@ -374,3 +374,251 @@ describe("real-world season layouts", () => {
     expect(r.title).toBe("Superman");
   });
 });
+
+// ─── Library-audit real-world cases (fix/tv-recognition-v2) ──────────────────
+// Every path below is verbatim from the NAS library that produced wrong
+// matches, episode-as-movie leaks, or junk series titles.
+
+describe("NxMM season folders (Farmacia de Guardia layout)", () => {
+  it("treats '1x52 (1991)' as a season folder, titling from the pack above", () => {
+    const r = parseMediaPath(
+      "/media/Series/Dezhurnaja.apteka.5.sezonov.iz.5.1991-1995.XviD.SATRip/1x52 (1991)/Farmacia de Guardia - 001 - 1x01 - Farmacia de guardia [Дежурная аптека].avi",
+    );
+    expect(r.seasonNumber).toBe(1);
+    expect(r.episodeNumber).toBe(1);
+    expect(r.title).toBe("Dezhurnaja apteka");
+    expect(r.titleVariants).toContain("Farmacia de Guardia");
+  });
+
+  it("keeps the file's own NxMM season when the folder pair agrees", () => {
+    const r = parseMediaPath(
+      "/media/Series/Dezhurnaja.apteka.5.sezonov.iz.5.1991-1995.XviD.SATRip/3x41 (1993)/Farmacia de Guardia - 107 - 3x31 - Postales para Fani [Открытки для Фани].avi",
+    );
+    expect(r.seasonNumber).toBe(3);
+    expect(r.episodeNumber).toBe(31);
+    expect(r.title).toBe("Dezhurnaja apteka");
+  });
+});
+
+describe("bare eNN / Exx episode markers", () => {
+  it("parses '.e01.' as an episode in an unmarked pack (season 1)", () => {
+    const r = parseMediaPath(
+      "/media/Series/Epidemia/Epidemia.2019.WEB-DL.(1080p).Getty/Epidemia.e01.2019.WEB-DL.(1080p).Getty.mkv",
+    );
+    expect(r.seasonNumber).toBe(1);
+    expect(r.episodeNumber).toBe(1);
+    expect(r.title).toBe("Epidemia");
+    expect(r.year).toBe(2019);
+  });
+
+  it("parses '.E01.' in a root pack, titling from the file prefix", () => {
+    const r = parseMediaPath(
+      "/media/Series/The.Pillars.of.the.Earth.2010.720p.BluRay.x264-CtrlHD/The.Pillars.of.the.Earth.E01.Anarchy.2010.720p.BluRay.x264-CtrlHD.mkv",
+    );
+    expect(r.seasonNumber).toBe(1);
+    expect(r.episodeNumber).toBe(1);
+    expect(r.title).toBe("The Pillars of the Earth");
+    expect(r.year).toBe(2010);
+  });
+
+  it("does not misread Wall-E or E.T. as episodes", () => {
+    expect(parseMediaPath("/media/Films/WALL-E.2008.1080p.mkv").episodeNumber).toBeUndefined();
+    expect(parseMediaPath("/media/Films/E.T.the.Extra-Terrestrial.1982.mkv").episodeNumber).toBeUndefined();
+  });
+});
+
+describe("leading NN. episode with folder echo (Batya layout)", () => {
+  it("parses '01.<pack name>.mkv' inside its pack as S1E01", () => {
+    const r = parseMediaPath(
+      "/media/Series/Batya.2021.WEB-DL.1080p/01.Batya.2021.WEB-DL.1080p.mkv",
+    );
+    expect(r.seasonNumber).toBe(1);
+    expect(r.episodeNumber).toBe(1);
+    expect(r.title).toBe("Batya");
+    expect(r.year).toBe(2021);
+  });
+
+  it("keeps a numbered disc file with a DIFFERENT tail a movie (trilogy folder)", () => {
+    const r = parseMediaPath("/media/Films/Властелин колец (2001)/1 Братство кольца.mkv");
+    expect(r.seasonNumber).toBeUndefined();
+  });
+});
+
+describe("trailing (NN) episode with season-numbered folder echo (OITNB layout)", () => {
+  it("parses 'OITNB 5 (01).mkv' in folder 'OITNB 5' as S5E01 of the show above", () => {
+    const r = parseMediaPath(
+      "/media/Series/Orange is the new Black/OITNB 5/OITNB 5 (01).mkv",
+    );
+    expect(r.seasonNumber).toBe(5);
+    expect(r.episodeNumber).toBe(1);
+    expect(r.title).toBe("Orange is the new Black");
+    expect(r.titleVariants).toContain("OITNB");
+  });
+
+  it("does not turn a parenthesized-year movie into an episode", () => {
+    const r = parseMediaPath("/media/Films/Heat (1995)/Heat (1995).mkv");
+    expect(r.seasonNumber).toBeUndefined();
+  });
+});
+
+describe("series-title junk stripping", () => {
+  it("strips a 'Season. 1-3' range from the show title", () => {
+    const r = parseMediaPath(
+      "/media/Series/Family Guy/Family Guy-Season. 1-3/Season.2/Griffini.2.sezon.02.serija.iz.21.1999-2000.XviD.DVDRip.avi",
+    );
+    expect(r.seasonNumber).toBe(2);
+    expect(r.episodeNumber).toBe(2);
+    expect(r.title).toBe("Family Guy");
+  });
+
+  it("strips 'The Complete Series' and release junk from a root pack", () => {
+    const r = parseMediaPath(
+      "/media/Series/House.of.Cards.US.The.Complete.Series.1080p.BDRemux.2xRus.Eng.TeamHD/House.of.Cards.US.S01.1080p.BDRemux.2xRus.Eng.TeamHD/House.of.Cards.US.S01E01.1080p.BDRemux.2xRus.Eng.TeamHD.mkv",
+    );
+    expect(r.seasonNumber).toBe(1);
+    expect(r.episodeNumber).toBe(1);
+    expect(r.title).toBe("House of Cards US");
+  });
+});
+
+describe("degenerate Cyrillic recovery in the TV branch", () => {
+  it("recovers a Cyrillic series title from a root pack with an S01 marker", () => {
+    const r = parseMediaPath(
+      "/media/Series/Не сработало.S01.WEB-DL.2160p.HDR/Не сработало.S01E01.WEB-DL.2160p.mkv",
+    );
+    expect(r.seasonNumber).toBe(1);
+    expect(r.episodeNumber).toBe(1);
+    expect(r.title).toBe("Не сработало");
+  });
+});
+
+describe("episode-filename title variants (umbrella folders / folder typos)", () => {
+  it("prefers the longer file prefix over an umbrella folder (Dune → Dune Prophecy)", () => {
+    const r = parseMediaPath(
+      "/media/Series/Dune/Dune.Prophecy.S01.MAX.DV.HDR.WEB-DL.2160p.by.AKTEP/Dune.Prophecy.S01E01.The.Hidden.Hand.MAX.DV.HDR.WEB-DL.2160p.by.AKTEP.mkv",
+    );
+    expect(r.title).toBe("Dune Prophecy");
+    expect(r.titleVariants).toContain("Dune");
+    expect(r.seasonNumber).toBe(1);
+    expect(r.episodeNumber).toBe(1);
+  });
+
+  it("keeps the folder title primary but offers the differing file prefix as a variant", () => {
+    const r = parseMediaPath(
+      "/media/Series/House of Dragons/House.of.the.Dragon.S01.WEB-DL.2160p.HMAX/House.of.the.Dragon.S01E01.WEB-DL.2160p.RGzsRutracker.mkv",
+    );
+    expect(r.title).toBe("House of Dragons");
+    expect(r.titleVariants).toContain("House of the Dragon");
+  });
+
+  it("offers no variant when the file prefix equals the folder title", () => {
+    const r = parseMediaPath(
+      "/media/Series/Billions/Billions.2016.S04.1080p.AMZN.WEB-DL.H.264.RUS.LF.DDP5.1.SRT-EniaHD/Billions.2016.S04E01.1080p.AMZN.WEB-DL.mkv",
+    );
+    expect(r.title).toBe("Billions");
+    expect(r.year).toBe(2016);
+    expect(r.titleVariants ?? []).toHaveLength(0);
+  });
+
+  it("does not shorten the title when the file prefix is lazier than the folder", () => {
+    const r = parseMediaPath(
+      "/media/Series/Dune Prophecy/Dune.S01E01.WEB-DL.mkv",
+    );
+    expect(r.title).toBe("Dune Prophecy");
+    expect(r.titleVariants).toContain("Dune");
+  });
+});
+
+describe("extras skipping", () => {
+  it("skips files inside a Promos folder within a season pack", () => {
+    const r = parseMediaPath(
+      "/media/Series/Family Guy/1 Season (SerGoLeOne)/FOX.com Promos/Don't Vote.mkv",
+    );
+    expect(r.skip).toBe(true);
+  });
+
+  it("skips files inside a Special Feature folder", () => {
+    const r = parseMediaPath(
+      "/media/Series/Family Guy/Family Guy Season 11 (WEB-DL 1080p)/Special Feature/Family Guy 200 Episodes Later.mkv",
+    );
+    expect(r.skip).toBe(true);
+  });
+
+  it("skips a Deleted Scenes file sitting directly in a season pack", () => {
+    const r = parseMediaPath(
+      "/media/Series/Family Guy/Family Guy - Season 5/Family.Guy.Deleted.Scenes.[filiza.ru].mkv",
+    );
+    expect(r.skip).toBe(true);
+  });
+
+  it("never skips a movie just because its name mentions a trailer-ish word", () => {
+    const r = parseMediaPath("/media/Films/The Sample (2022)/The Sample (2022).mkv");
+    expect(r.skip).toBeUndefined();
+    expect(r.title).toBe("The Sample");
+  });
+});
+
+describe("specials routed to season 0 with a title hint", () => {
+  it("maps a Specials-folder file under a season pack to S0 of the show", () => {
+    const r = parseMediaPath(
+      "/media/Series/Doctor Who/Doctor.Who.2005.S07.1080p.BluRay.x264.Rus.Eng/Specials/The.Day.Of.The.Doctor.2013.1080p.BluRay.x264-WiKi.mkv",
+    );
+    expect(r.title).toBe("Doctor Who");
+    expect(r.year).toBe(2005);
+    expect(r.seasonNumber).toBe(0);
+    expect(r.episodeNumber).toBeGreaterThanOrEqual(900);
+    expect(r.episodeTitleHint).toBe("The Day Of The Doctor");
+    expect(r.episodeYear).toBe(2013);
+  });
+
+  it("routes an in-pack 'christmas special' file to S0 with the subtitle as hint", () => {
+    const r = parseMediaPath(
+      "/media/Series/Doctor Who/Doctor.Who.2005.S07.1080p.BluRay.x264.Rus.Eng/Specials/doctor.who.2005.christmas.special.the.snowmen.2012.1080p.bluray.x264-shortbrehd.mkv",
+    );
+    expect(r.title).toBe("Doctor Who");
+    expect(r.seasonNumber).toBe(0);
+    expect(r.episodeTitleHint).toBe("the snowmen");
+    expect(r.episodeYear).toBe(2012);
+  });
+
+  it("routes a subtitle-less christmas special inside a season pack to S0 on year alone", () => {
+    const r = parseMediaPath(
+      "/media/Series/Doctor Who/Doctor.Who.2005.S03.1080p.BluRay.x264-SHORTBREHD/doctor.who.2005.christmas.special.2006.1080p.bluray.x264-shortbrehd.mkv",
+    );
+    expect(r.title).toBe("Doctor Who");
+    expect(r.seasonNumber).toBe(0);
+    expect(r.episodeTitleHint).toBeUndefined();
+    expect(r.episodeYear).toBe(2006);
+  });
+
+  it("keeps a movie with 'special' in its name a movie outside series context", () => {
+    const r = parseMediaPath("/media/Films/The Special (2020)/The Special (2020).mkv");
+    expect(r.seasonNumber).toBeUndefined();
+  });
+});
+
+describe("series year from unparenthesized folder names", () => {
+  it("takes a bare year from the season pack for the series", () => {
+    const r = parseMediaPath(
+      "/media/Series/Doctor Who/Doctor.Who.2005.S01.1080p.BluRay.x264-SHORTBREHD/Doctor.Who.2005.S01E01.1080p.BluRay.mkv",
+    );
+    expect(r.title).toBe("Doctor Who");
+    expect(r.year).toBe(2005);
+  });
+
+  it("never mistakes a 2160p resolution for a year", () => {
+    const r = parseMediaPath(
+      "/media/Series/Paradise.S01.2160p.DSNP.WEB-DL.DV.HDR.H.265/Paradise.S01E01.2160p.mkv",
+    );
+    expect(r.title).toBe("Paradise");
+    expect(r.year).toBeUndefined();
+  });
+
+  it("takes the first year of a trailing year-range", () => {
+    const r = parseMediaPath(
+      "/media/Series/Sliders.1995-2000.dvdrip_[teko]/Season 1/Sliders.1x01.mkv",
+    );
+    expect(r.title).toBe("Sliders");
+    expect(r.year).toBe(1995);
+  });
+});

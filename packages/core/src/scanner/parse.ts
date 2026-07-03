@@ -9,6 +9,17 @@ export interface ParsedMediaPath {
   /** Present (with episodeNumber) when the file is a TV episode. */
   seasonNumber?: number;
   episodeNumber?: number;
+  /**
+   * Additional faithful series-title candidates (episode-filename prefix, pack
+   * title, umbrella folder) for the matcher's query ladder. Never derived junk.
+   */
+  titleVariants?: string[];
+  /** Specials (S0): the local episode title, for provider title-matching. */
+  episodeTitleHint?: string;
+  /** Specials (S0): the episode's own air year (≠ the series year). */
+  episodeYear?: number;
+  /** Extras/trailers/samples — the scanner must not ingest this file. */
+  skip?: boolean;
 }
 
 const YEAR_RE = /\((\d{4})\)/;
@@ -24,7 +35,11 @@ const S_SEP_RE = /[sS](\d{1,2})[._](\d{1,3})(?=\D|$)/; // S05_15 / S05.15 (no E)
 // exactly 2 digits and separator-delimited, so year ranges ("1999-2000") and
 // single digits ("9-11") never match; season capped at a sane 40.
 const SS_EE_RE = /(?:^|[\s._-])(\d{2})[-–](\d{2})(?=[\s._-]|$)/;
+// Bare episode tag without a season: ".e01." / " E05 " (digits required, both
+// sides separator-delimited, so "WALL-E", "E.T." and hex tags never match).
+const BARE_E_RE = /(?:^|[\s._-])[eE](\d{1,3})(?=[\s._-]|$)/;
 const SPECIALS_FOLDER_RE = /^(?:specials|спецвыпуски)$/i;
+const SPECIAL_KEYWORD_RE = /(?:^|[\s._-])specials?(?=[\s._-]|$)/i;
 
 // Library-root-ish folder names that can never be a show title — used when a
 // season pack sits directly under the library root and has no show parent.
@@ -38,6 +53,7 @@ const SEASON_MARKER_RES: RegExp[] = [
   /(?:^|[\s._([-])(?:season|сезон|sezon)[\s._#№-]*(\d{1,2})(?=\D|$)/iu, // word-first
   /(?:^|[\s._([-])(\d{1,2})[\s._-]*(?:season|сезон|sezon)(?=\W|$)/iu, //  number-first
   /(?:^|[\s._([-])[sS](\d{1,2})(?=[\s._)\]-]|$)/, //                      bare pack token "S04"
+  /^(\d{1,2})x\d{2,3}(?=[\s._-]|$)/, //                                   "1x52 (1991)" — season x episode-count
 ];
 
 /** Season number from a season marker anywhere in a folder name, if present. */
@@ -53,6 +69,29 @@ function extractYear(s: string): number | undefined {
   const m = YEAR_RE.exec(s);
   return m ? parseInt(m[1], 10) : undefined;
 }
+
+// Unparenthesized year in a folder/prefix ("Doctor.Who.2005.S01", "Sliders.1995-2000").
+// 19xx/20xx only, separator-delimited, so resolutions ("2160p") never match.
+const BARE_YEAR_RE = /(?:^|[\s._([-])((?:19|20)\d{2})(?=[\s._)\]-]|$)/;
+
+function extractBareYear(s: string): number | undefined {
+  const m = BARE_YEAR_RE.exec(s);
+  return m ? parseInt(m[1], 10) : undefined;
+}
+
+// ── Extras (never library items) ─────────────────────────────────────────────
+// Plex-style skip folders: bonus material shipped inside show/movie folders.
+const EXTRAS_FOLDER_RE =
+  /^(?:extras?|featurettes?|behind[\s._-]+the[\s._-]+scenes?|deleted[\s._-]+(?:and[\s._-]+alternate[\s._-]+)?scenes?|interviews?|samples?|shorts?|trailers?|bonus(?:es)?|special[\s._-]+features?|other)$/i;
+const PROMO_FOLDER_RE = /(?:^|[\s._-])promos?$/i;
+
+function isExtrasFolder(name: string): boolean {
+  return EXTRAS_FOLDER_RE.test(name) || PROMO_FOLDER_RE.test(name);
+}
+
+// File-level extras keywords — only consulted for marker-less files inside a
+// season pack, so a real episode titled "…Sample…" can never be skipped.
+const EXTRAS_FILE_RE = /deleted[\s._-]*scenes?|featurettes?|(?:^|[\s._-])(?:sample|trailer)(?=[\s._-]|$)/i;
 
 function extractTmdbId(s: string): number | undefined {
   const m = TMDB_BRACKET_RE.exec(s) ?? TMDB_BRACE_RE.exec(s);
@@ -157,6 +196,125 @@ interface EpisodeMarker {
   episodeNumber: number;
   /** Fansub fallback title: filename text between the [Group] tag and "- NN". */
   seriesTitleHint?: string;
+  /** Specials: local episode title for provider title-matching at enrich. */
+  episodeTitleHint?: string;
+  /** Specials: the episode's own air year. */
+  episodeYear?: number;
+}
+
+/**
+ * Unnumbered special episode: a file in a Specials folder, or a file carrying
+ * the "special" keyword inside a season pack ("doctor.who.2005.christmas.
+ * special.the.snowmen.2012…"). Mapped to season 0 with a provisional number
+ * (900 + air-year, so re-scans are stable); enrichment renumbers it by
+ * matching the title hint / air year against the provider's specials list.
+ */
+function detectSpecial(filenameNoExt: string, folder: string): EpisodeMarker | null {
+  const inSpecialsFolder = SPECIALS_FOLDER_RE.test(folder);
+  const kw = SPECIAL_KEYWORD_RE.exec(filenameNoExt);
+  if (!inSpecialsFolder && !(kw && folderSeasonNumber(folder) != null)) return null;
+
+  const years = [...filenameNoExt.matchAll(new RegExp(BARE_YEAR_RE, "g"))].map((m) => parseInt(m[1]!, 10));
+  const episodeYear = years.at(-1);
+
+  let hint: string | undefined;
+  if (kw) {
+    // The subtitle lives between the keyword and the episode's year.
+    let tail = filenameNoExt.slice(kw.index + kw[0].length);
+    const yIdx = tail.search(BARE_YEAR_RE);
+    if (yIdx >= 0) tail = tail.slice(0, yIdx);
+    hint = tail.replace(/[._]+/g, " ").replace(/[\s\-–—:,([]+$/u, "").trim() || undefined;
+  } else {
+    hint = titleBeforeYear(filenameNoExt) || undefined;
+  }
+
+  return {
+    seasonNumber: 0,
+    episodeNumber: 900 + (episodeYear != null ? episodeYear % 100 : 99),
+    ...(hint ? { episodeTitleHint: hint } : {}),
+    ...(episodeYear != null ? { episodeYear } : {}),
+  };
+}
+
+// ── Series-title derivation helpers ──────────────────────────────────────────
+
+// Episode markers usable as a "cut here" point when deriving the series title
+// from an episode filename ("Farmacia de Guardia - 001 - 1x01 - …" → text
+// before the 1x01). Keyword rules included; bare-number rules excluded (their
+// index is not a reliable title boundary).
+const PREFIX_MARKER_RES: RegExp[] = [
+  SE_RE,
+  X_RE,
+  S_SEP_RE,
+  BARE_E_RE,
+  SS_EE_RE,
+  /\(\s*\d{1,3}\s*\)\s*$/, //                     trailing "(NN)" episode
+  /(?:^|[\s._-])ep(?:isode)?[\s._-]*\d{1,3}/i,
+  /(?:^|[\s._-])сери[ияюей][\s._-]*\d{1,3}/i,
+  /\d{1,3}[\s._-]*сери[ияюей]/i,
+  /\d{1,3}[\s._-]*serij/i,
+];
+
+/**
+ * Series title embedded in an episode filename: the text before the first
+ * episode marker, minus trailing separators, an absolute episode number
+ * ("- 001") and a release year ("Billions.2016"). The most specific local
+ * name we have — release files repeat the real title where folders are often
+ * hand-typed (typos) or franchise umbrellas.
+ */
+function episodePrefixTitle(filenameNoExt: string): { title: string; year?: number } | undefined {
+  let cut = -1;
+  for (const re of PREFIX_MARKER_RES) {
+    const m = re.exec(filenameNoExt);
+    if (m && (cut < 0 || m.index < cut)) cut = m.index;
+  }
+  if (cut <= 0) return undefined;
+  let s = filenameNoExt.slice(0, cut).replace(/[._]+/g, " ").trim();
+  s = s.replace(/[\s\-–—:,([]+$/u, "").trim();
+  const noAbs = s.replace(/[\s\-–—]+\d{1,3}$/u, "").trim();
+  if (noAbs) s = noAbs;
+  const year = extractBareYear(s);
+  const noYear = s.replace(/[\s]+(?:19|20)\d{2}$/u, "").trim();
+  if (noYear) s = noYear;
+  if (!s) return undefined;
+  return { title: s, ...(year != null ? { year } : {}) };
+}
+
+/**
+ * Strip season-pack phrasing from a would-be series title: "Season. 1-3",
+ * "5 sezonov iz 5", "The Complete Series", trailing year ranges. Applied to
+ * every series-title candidate; falls back to the input when it would empty it.
+ */
+function cleanSeriesTitle(raw: string): string {
+  if (!raw) return raw;
+  let s = raw;
+  s = s.replace(/(?:^|[\s._-])(?:the[\s._-]+)?complete[\s._-]+(?:series|collection|edition|seasons?)(?=[\s._-]|$)/gi, " ");
+  s = s.replace(/(?:^|[\s._-])(?:seasons?|сезоны?|sezony?)[\s.]*\d{1,2}(?:[\s._-]*[-–][\s._-]*\d{1,2})?(?=[\s._-]|$)/gi, " ");
+  s = s.replace(/(?:^|[\s._-])\d{1,2}[\s._-]*(?:seasons?|сезон(?:а|ов)?|sezon(?:a|ov)?)(?:[\s._-]*(?:iz|из)[\s._-]*\d{1,2})?(?=[\s._-]|$)/giu, " ");
+  s = s.replace(/(?:^|[\s._-])(?:19|20)\d{2}[\s._-]*[-–][\s._-]*(?:19|20)\d{2}(?=[\s._-]|$)/g, " ");
+  s = s.replace(/\s{2,}/g, " ").replace(/^[\s._-]+/u, "").replace(/[\s._-]+$/u, "").trim();
+  return s || raw.trim();
+}
+
+/** Folder text before its first season marker ("Не сработало.S01.WEB-DL…" → "Не сработало"). */
+function titleBeforeSeasonMarker(name: string): string {
+  let cut = -1;
+  for (const re of SEASON_MARKER_RES) {
+    const m = re.exec(name);
+    if (m && (cut < 0 || m.index < cut)) cut = m.index;
+  }
+  if (cut <= 0) return "";
+  return name.slice(0, cut).replace(/[._]+/g, " ").replace(/[\s\-–—:,([]+$/u, "").trim();
+}
+
+const normTitleKey = (s: string): string => s.toLowerCase().replace(/[\s._-]+/g, " ").trim();
+
+/** True when `longer` starts with every token of `shorter` and adds more. */
+function tokenExtends(longer: string, shorter: string): boolean {
+  const a = normTitleKey(longer).split(" ").filter(Boolean);
+  const b = normTitleKey(shorter).split(" ").filter(Boolean);
+  if (!b.length || a.length <= b.length) return false;
+  return b.every((t, i) => a[i] === t);
 }
 
 /** Detect TV season/episode from the filename and its folder, or null for movies. */
@@ -170,6 +328,14 @@ function detectEpisode(filenameNoExt: string, folder: string): EpisodeMarker | n
   // "S05_15" — season+episode with a separator instead of E.
   const su = S_SEP_RE.exec(filenameNoExt);
   if (su) return { seasonNumber: parseInt(su[1], 10), episodeNumber: parseInt(su[2], 10) };
+
+  // Bare ".e01." / " E05 " — an episode tag without a season ("Epidemia.e01.2019",
+  // "The.Pillars.of.the.Earth.E01.Anarchy"). Season from the folder, else 1 —
+  // the Plex/Jellyfin convention for season-less markers.
+  const bareE = BARE_E_RE.exec(filenameNoExt);
+  if (bareE) {
+    return { seasonNumber: folderSeasonNumber(folder) ?? 1, episodeNumber: parseInt(bareE[1], 10) };
+  }
 
   // "08-06" — a two-digit pair reads as S08E06 (season sanity-capped).
   const pair = SS_EE_RE.exec(filenameNoExt);
@@ -192,6 +358,28 @@ function detectEpisode(filenameNoExt: string, folder: string): EpisodeMarker | n
   if (SPECIALS_FOLDER_RE.test(folder)) {
     const ep = extractEpisodeNum(filenameNoExt);
     if (ep !== undefined) return { seasonNumber: 0, episodeNumber: ep };
+  }
+
+  // "01.<pack name>.mkv" inside <pack name> — numbered mini-series parts
+  // ("Batya.2021…/01.Batya.2021….mkv"). The echo requirement keeps numbered
+  // discs with their own titles ("1 Братство кольца.mkv") movies.
+  const lead = /^(\d{1,2})[.)\s_-]+/.exec(filenameNoExt);
+  if (lead) {
+    const rest = filenameNoExt.slice(lead[0].length);
+    if (echoKey(rest) && echoKey(rest) === echoKey(folder)) {
+      return { seasonNumber: 1, episodeNumber: parseInt(lead[1], 10) };
+    }
+  }
+
+  // "<title> <season> (NN).mkv" echoing a "<title> <season>" folder
+  // ("OITNB 5/OITNB 5 (01).mkv" → S5E01). The 1-3 digit cap keeps a
+  // parenthesized year ("Heat (1995).mkv") a movie.
+  const trailParen = /^(.*?)[\s._-]*\((\d{1,3})\)\s*$/.exec(filenameNoExt);
+  if (trailParen && echoKey(trailParen[1]!) && echoKey(trailParen[1]!) === echoKey(folder)) {
+    const seasonTail = /(?:^|\s)(\d{1,2})$/.exec(folder.replace(/[._]+/g, " ").trim());
+    if (seasonTail) {
+      return { seasonNumber: parseInt(seasonTail[1], 10), episodeNumber: parseInt(trailParen[2]!, 10) };
+    }
   }
 
   // Anime layouts without a season folder: "[Group] Title - NN" (fansub) or
@@ -237,48 +425,98 @@ export function parseMediaPath(fullPath: string): ParsedMediaPath {
   // Strip extension from filename for the library parser
   const filenameNoExt = filename.replace(/\.[^.]+$/, "");
 
-  const episode = detectEpisode(filenameNoExt, folder);
+  // Extras/bonus folders are never library items, whatever they contain.
+  const grandparent = basename(dirname(dirname(fullPath))).normalize("NFC");
+  if (isExtrasFolder(folder) || isExtrasFolder(grandparent)) {
+    return { title: filenameNoExt, skip: true };
+  }
+
+  const episode = detectEpisode(filenameNoExt, folder) ?? detectSpecial(filenameNoExt, folder);
+
+  // Marker-less extras files inside a season pack ("Family.Guy.Deleted.Scenes…").
+  if (!episode && EXTRAS_FILE_RE.test(filenameNoExt) && folderSeasonNumber(folder) != null) {
+    return { title: filenameNoExt, skip: true };
+  }
 
   // ── TV episode ────────────────────────────────────────────────────────────
   if (episode) {
-    // The "show folder" is the series root: skip a season/pack/Specials folder.
-    // A folder is a season pack when it carries a season marker anywhere
-    // ("Friends S04 BDRemux", "Сезон 4 (Season 4) 2001-2002") — or, once the
-    // filename itself supplied the season, when the folder merely mentions that
-    // season as a standalone number ("Greys Anatomy 8 FOX Life 720p" + 08-06).
+    // Walk up past season-pack / Specials folders to the show folder — real
+    // layouts nest up to Show/Pack/Specials/file. A folder is a season pack
+    // when it carries a season marker anywhere ("Friends S04 BDRemux", "Сезон
+    // 4 (Season 4) 2001-2002") — or, once the filename itself supplied the
+    // season, when it merely mentions that season as a standalone number
+    // ("Greys Anatomy 8 FOX Life 720p" + 08-06).
     const standaloneSeason = new RegExp(`(?:^|[\\s._-])0?${episode.seasonNumber}(?:[\\s._-]|$)`);
-    const isSeasonFolder =
-      folderSeasonNumber(folder) != null ||
-      SPECIALS_FOLDER_RE.test(folder) ||
-      standaloneSeason.test(folder);
+    const isPackName = (name: string): boolean =>
+      folderSeasonNumber(name) != null ||
+      SPECIALS_FOLDER_RE.test(name) ||
+      (episode.seasonNumber > 0 && standaloneSeason.test(name));
     // NFC like filename/folder above — a raw macOS path stays decomposed.
-    let showFolder = isSeasonFolder ? basename(dirname(dirname(fullPath))).normalize("NFC") : folder;
+    const ancestors = [folder, grandparent, basename(dirname(dirname(dirname(fullPath)))).normalize("NFC")];
+    let idx = 0;
+    let packFolder = "";
+    while (idx < ancestors.length - 1 && ancestors[idx] && isPackName(ancestors[idx]!)) {
+      if (!packFolder && !SPECIALS_FOLDER_RE.test(ancestors[idx]!)) packFolder = ancestors[idx]!;
+      idx++;
+    }
+    let showFolder = ancestors[idx] ?? "";
     // A pack directly under the library root has no usable parent — fall back
     // to the episode-filename title below instead of "Series"/"TV".
-    if (isSeasonFolder && GENERIC_ROOT_RE.test(showFolder)) showFolder = "";
+    if (idx > 0 && GENERIC_ROOT_RE.test(showFolder)) showFolder = "";
+    if (!packFolder && idx === 0) packFolder = ""; // flat layout: no pack level
 
     let folderTitle = showFolder ? filenameParse(showFolder, false).title?.trim() || "" : "";
     // Same library mangling as the movie branch: a multi-word Cyrillic show
     // folder with a year collapses to its first letter — recover from the raw name.
     if (showFolder && alnumLen(folderTitle) <= 2) {
-      const recovered = titleBeforeYear(showFolder);
+      const recovered = titleBeforeSeasonMarker(showFolder) || titleBeforeYear(showFolder);
       if (recovered && alnumLen(recovered) >= alnumLen(folderTitle)) folderTitle = recovered;
     }
     const tvTitle = filenameParse(filenameNoExt, true).title?.trim() || "";
-    // Prefer the show-folder title (stable across all episodes of the series),
-    // then a fansub-rule hint (text between the [Group] tag and the "- NN").
-    const rawSeriesTitle = folderTitle || episode.seriesTitleHint || tvTitle || showFolder || folder;
-    // Show folders often carry a release year/range ("Show Name 2010-2019 WEBRip")
-    // that the filename parser leaves as a trailing year — drop it so the series
-    // matches cleanly. Only a *trailing* year, so titles like "2012" are kept.
-    // A trailing parenthetical alias ("Лексс (LEXX)") is dropped the same way.
-    const seriesTitle =
-      rawSeriesTitle
+    const prefix = episodePrefixTitle(filenameNoExt);
+    const prefixTitle = prefix ? cleanSeriesTitle(prefix.title) : "";
+    // Pack-folder text before its season marker — a title candidate when the
+    // pack is named and the show folder is absent/umbrella ("Не сработало.S01…").
+    const packTitle = packFolder ? cleanSeriesTitle(titleBeforeSeasonMarker(packFolder)) : "";
+
+    // Title precedence: the show folder is the stable name across all episodes
+    // of the series — EXCEPT when the episode files carry a strictly longer
+    // name ("Dune/Dune.Prophecy.S01E01…"): then the folder is a franchise
+    // umbrella and the file prefix is the real series. Folders are never
+    // preferred the other way around (a lazy file prefix must not shorten).
+    const cleanTail = (s: string): string =>
+      s
         .replace(/[\s._-]+\d{4}$/, "")
         .replace(/\s*\([^)]*\)\s*$/, "")
-        .trim() || rawSeriesTitle;
+        .trim() || s;
+    const folderCleaned = cleanTail(cleanSeriesTitle(folderTitle));
+    let seriesTitle: string;
+    if (folderCleaned && prefixTitle && tokenExtends(prefixTitle, folderCleaned)) {
+      seriesTitle = prefixTitle;
+    } else {
+      seriesTitle = folderCleaned || episode.seriesTitleHint || prefixTitle || packTitle || tvTitle || showFolder || folder;
+    }
+    seriesTitle = cleanTail(cleanSeriesTitle(seriesTitle));
 
-    const year = extractYear(showFolder) ?? extractYear(folder);
+    // Every materially different faithful name is a matcher variant.
+    const variants: string[] = [];
+    const addVariant = (v: string | undefined): void => {
+      if (!v) return;
+      const key = normTitleKey(v);
+      if (!key || key === normTitleKey(seriesTitle)) return;
+      if (variants.some((x) => normTitleKey(x) === key)) return;
+      if (variants.length < 3) variants.push(v);
+    };
+    addVariant(folderCleaned);
+    addVariant(prefixTitle);
+    addVariant(packTitle ? cleanTail(packTitle) : "");
+
+    const year =
+      extractYear(showFolder) ??
+      extractYear(packFolder || folder) ??
+      extractBareYear(packFolder || folder) ??
+      extractBareYear(showFolder) ??
+      prefix?.year;
     const tmdbId = extractTmdbId(showFolder) ?? extractTmdbId(filename);
     const imdbId = extractImdbId(showFolder) ?? extractImdbId(filename);
 
@@ -290,6 +528,9 @@ export function parseMediaPath(fullPath: string): ParsedMediaPath {
     if (year !== undefined && !Number.isNaN(year)) result.year = year;
     if (tmdbId !== undefined) result.tmdbId = tmdbId;
     if (imdbId !== undefined) result.imdbId = imdbId;
+    if (variants.length) result.titleVariants = variants;
+    if (episode.episodeTitleHint) result.episodeTitleHint = episode.episodeTitleHint;
+    if (episode.episodeYear !== undefined) result.episodeYear = episode.episodeYear;
     return result;
   }
 
