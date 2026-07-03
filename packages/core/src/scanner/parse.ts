@@ -91,7 +91,9 @@ function isExtrasFolder(name: string): boolean {
 
 // File-level extras keywords — only consulted for marker-less files inside a
 // season pack, so a real episode titled "…Sample…" can never be skipped.
-const EXTRAS_FILE_RE = /deleted[\s._-]*scenes?|featurettes?|(?:^|[\s._-])(?:sample|trailer)(?=[\s._-]|$)/i;
+// "Film o filme" / "фильм о фильме" is the RU making-of featurette convention.
+const EXTRAS_FILE_RE =
+  /deleted[\s._-]*scenes?|featurettes?|film[\s._-]+o[\s._-]+fil'?me|фильм[\s._-]+о[\s._-]+фильме|(?:^|[\s._-])(?:sample|trailer)(?=[\s._-]|$)/i;
 
 function extractTmdbId(s: string): number | undefined {
   const m = TMDB_BRACKET_RE.exec(s) ?? TMDB_BRACE_RE.exec(s);
@@ -433,8 +435,14 @@ export function parseMediaPath(fullPath: string): ParsedMediaPath {
 
   const episode = detectEpisode(filenameNoExt, folder) ?? detectSpecial(filenameNoExt, folder);
 
-  // Marker-less extras files inside a season pack ("Family.Guy.Deleted.Scenes…").
-  if (!episode && EXTRAS_FILE_RE.test(filenameNoExt) && folderSeasonNumber(folder) != null) {
+  // Marker-less extras files in a series context: inside a season pack
+  // ("Family.Guy.Deleted.Scenes…") or carrying a season token themselves
+  // ("Sestry.S01.Film.o.filme…" in an unmarked pack).
+  if (
+    !episode &&
+    EXTRAS_FILE_RE.test(filenameNoExt) &&
+    (folderSeasonNumber(folder) != null || folderSeasonNumber(filenameNoExt) != null)
+  ) {
     return { title: filenameNoExt, skip: true };
   }
 
@@ -447,15 +455,18 @@ export function parseMediaPath(fullPath: string): ParsedMediaPath {
     // season, when it merely mentions that season as a standalone number
     // ("Greys Anatomy 8 FOX Life 720p" + 08-06).
     const standaloneSeason = new RegExp(`(?:^|[\\s._-])0?${episode.seasonNumber}(?:[\\s._-]|$)`);
-    const isPackName = (name: string): boolean =>
+    // The loose standalone-number reading only applies to the file's own
+    // folder — a deeper ancestor ("…5.sezonov.iz.5…" for a season-5 file) may
+    // legitimately contain the digit and must only skip on explicit markers.
+    const isPackName = (name: string, immediate: boolean): boolean =>
       folderSeasonNumber(name) != null ||
       SPECIALS_FOLDER_RE.test(name) ||
-      (episode.seasonNumber > 0 && standaloneSeason.test(name));
+      (immediate && episode.seasonNumber > 0 && standaloneSeason.test(name));
     // NFC like filename/folder above — a raw macOS path stays decomposed.
     const ancestors = [folder, grandparent, basename(dirname(dirname(dirname(fullPath)))).normalize("NFC")];
     let idx = 0;
     let packFolder = "";
-    while (idx < ancestors.length - 1 && ancestors[idx] && isPackName(ancestors[idx]!)) {
+    while (idx < ancestors.length - 1 && ancestors[idx] && isPackName(ancestors[idx]!, idx === 0)) {
       if (!packFolder && !SPECIALS_FOLDER_RE.test(ancestors[idx]!)) packFolder = ancestors[idx]!;
       idx++;
     }
@@ -497,6 +508,9 @@ export function parseMediaPath(fullPath: string): ParsedMediaPath {
       seriesTitle = folderCleaned || episode.seriesTitleHint || prefixTitle || packTitle || tvTitle || showFolder || folder;
     }
     seriesTitle = cleanTail(cleanSeriesTitle(seriesTitle));
+    // Space out dots between multi-letter tokens ("Rick.And.Morty" — a folder
+    // the release parser left dotted) while preserving initialisms (S.W.A.T).
+    seriesTitle = seriesTitle.replace(/(?<=[\p{L}\p{N}]{2})\.(?=[\p{L}\p{N}]{2})/gu, " ");
 
     // Every materially different faithful name is a matcher variant.
     const variants: string[] = [];

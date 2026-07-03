@@ -622,3 +622,34 @@ describe("series year from unparenthesized folder names", () => {
     expect(r.year).toBe(1995);
   });
 });
+
+describe("dry-run regressions (full-library parse audit)", () => {
+  it("does not skip a root pack whose name merely contains the season digit", () => {
+    // ".5.sezonov.iz.5." contains a bare "5" — the walk must not treat the
+    // ROOT PACK as another season folder for season-5 files and lose the title.
+    const r = parseMediaPath(
+      "/media/Series/Dezhurnaja.apteka.5.sezonov.iz.5.1991-1995.XviD.SATRip/5x13 (1995)/Farmacia de Guardia - 169 - 5x13 - La Voz de la Noche [Голос ночи].avi",
+    );
+    expect(r.title).toBe("Dezhurnaja apteka");
+    expect(r.seasonNumber).toBe(5);
+    expect(r.episodeNumber).toBe(13);
+  });
+
+  it("skips 'Film o filme' making-of featurettes inside season packs", () => {
+    const r = parseMediaPath(
+      "/media/Series/Epidemia/Epidemiya.S02.2022.WEBRip.1080p/Epidemiya.S02.Film.o.filme.2022.WEBRip.1080p.mkv",
+    );
+    expect(r.skip).toBe(true);
+    const r2 = parseMediaPath(
+      "/media/Series/Sestry/Sestry.2021.WEB-DL.1080p/Sestry.S01.Film.o.filme.2021.WEB-DL.1080p.mkv",
+    );
+    expect(r2.skip).toBe(true);
+  });
+
+  it("normalizes dotted show-folder titles while preserving initialisms", () => {
+    const r = parseMediaPath("/media/Series/Rick.And.Morty.1080/Rick.and.Morty.S01E01.Pilot.1080p.mkv");
+    expect(r.title).toBe("Rick And Morty");
+    const swat = parseMediaPath("/media/Series/S.W.A.T/S.W.A.T.S01E01.1080p.mkv");
+    expect(swat.title).toBe("S.W.A.T");
+  });
+});

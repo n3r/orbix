@@ -267,14 +267,31 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
             // equal rows must converge on one series — a year-less twin would
             // resolve blind and can land on a namesake (Doctor Who 1963).
             if (input.parsed.year != null) {
-              const yearless = await prisma.mediaItem.findFirst({
-                where: { libraryId: input.libraryId, kind: "series", sortTitle: titleForms, year: null },
+              // A season straddling New Year yields per-file years one apart
+              // (Billions S5: 2020+2021) — an adjacent-year row is the same
+              // show. Remakes sharing a title are never a single year apart.
+              const adjacent = await prisma.mediaItem.findFirst({
+                where: {
+                  libraryId: input.libraryId,
+                  kind: "series",
+                  sortTitle: titleForms,
+                  year: { in: [input.parsed.year - 1, input.parsed.year + 1] },
+                },
                 orderBy: { addedAt: "asc" },
                 select: { id: true },
               });
-              if (yearless) {
-                await prisma.mediaItem.update({ where: { id: yearless.id }, data: { year: input.parsed.year } });
-                series = yearless;
+              if (adjacent) {
+                series = adjacent;
+              } else {
+                const yearless = await prisma.mediaItem.findFirst({
+                  where: { libraryId: input.libraryId, kind: "series", sortTitle: titleForms, year: null },
+                  orderBy: { addedAt: "asc" },
+                  select: { id: true },
+                });
+                if (yearless) {
+                  await prisma.mediaItem.update({ where: { id: yearless.id }, data: { year: input.parsed.year } });
+                  series = yearless;
+                }
               }
             } else {
               series = await prisma.mediaItem.findFirst({
