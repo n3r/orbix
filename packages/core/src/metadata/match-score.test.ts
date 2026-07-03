@@ -77,33 +77,67 @@ describe("scoreCandidate", () => {
 
 describe("isAcceptable", () => {
   const ironMan2 = { title: "Iron Man 2", originalTitle: "Iron Man 2", year: 2010, voteCount: 15000 };
+  const frenchDispatch = {
+    title: "The French Dispatch of the Liberty, Kansas Evening Sun",
+    voteCount: 2000,
+  };
 
   it("accepts a confident string match regardless of year (rule A)", () => {
-    expect(isAcceptable(0.95, { title: "16 Blocks" }, undefined, false)).toBe(true);
+    expect(isAcceptable("16 Blocks", { title: "16 Blocks" }, undefined, false, false)).toBe(true);
   });
 
   it("accepts a decent string match with an exact year (rule B)", () => {
-    expect(isAcceptable(0.6, { title: "Foo", year: 2010 }, 2010, false)).toBe(true);
+    expect(
+      isAcceptable("Some Movie", { title: "Some Movie Extended Thing", year: 2010 }, 2010, false, false),
+    ).toBe(true);
   });
 
   it("rejects a decent string match when the year does not match (rule B)", () => {
-    expect(isAcceptable(0.6, { title: "Foo", year: 1999 }, 2010, false)).toBe(false);
+    expect(
+      isAcceptable("Some Movie", { title: "Some Movie Extended Thing", year: 1999 }, 2010, false, false),
+    ).toBe(false);
   });
 
   it("rescues a transliteration on exact year + votes as the top year-filtered hit (rule C)", () => {
-    // low string similarity, but exact year, rank-1 of a year-filtered attempt
-    expect(isAcceptable(0.33, ironMan2, 2010, true)).toBe(true);
+    expect(isAcceptable("Zheleznyj chelovek 2", ironMan2, 2010, true, true)).toBe(true);
   });
 
-  it("does NOT rescue a transliteration when the year is absent", () => {
-    expect(isAcceptable(0.33, { ...ironMan2, year: undefined }, undefined, true)).toBe(false);
+  it("does NOT rescue a transliteration when the year is absent (rule C)", () => {
+    expect(isAcceptable("Zheleznyj chelovek 2", { ...ironMan2, year: undefined }, undefined, true, true)).toBe(
+      false,
+    );
   });
 
-  it("does NOT rescue when the candidate is below the vote floor", () => {
-    expect(isAcceptable(0.33, { ...ironMan2, voteCount: 10 }, 2010, true)).toBe(false);
+  it("does NOT rescue below the vote floor (rule C)", () => {
+    expect(isAcceptable("Zheleznyj chelovek 2", { ...ironMan2, voteCount: 10 }, 2010, true, true)).toBe(false);
   });
 
-  it("does NOT rescue when it is not the top year-filtered hit", () => {
-    expect(isAcceptable(0.33, ironMan2, 2010, false)).toBe(false);
+  it("does NOT rescue when it is not the top year-filtered hit (rule C)", () => {
+    expect(isAcceptable("Zheleznyj chelovek 2", ironMan2, 2010, false, true)).toBe(false);
+  });
+
+  // ── Rule D: prefix rescue (long official titles) ──────────────────────────
+  it("accepts a query that is the head of a longer official title as the #1 hit (rule D)", () => {
+    expect(isAcceptable("The French Dispatch", frenchDispatch, undefined, true, false)).toBe(true);
+  });
+
+  it("does NOT prefix-rescue when the candidate is not the top result (rule D)", () => {
+    expect(isAcceptable("The French Dispatch", frenchDispatch, undefined, false, false)).toBe(false);
+  });
+
+  it("does NOT prefix-rescue below the vote floor (rule D)", () => {
+    expect(isAcceptable("The French Dispatch", { ...frenchDispatch, voteCount: 5 }, undefined, true, false)).toBe(
+      false,
+    );
+  });
+
+  it("does NOT prefix-rescue a single-word query (rule D)", () => {
+    expect(isAcceptable("The", { title: "The Matrix", voteCount: 9000 }, undefined, true, false)).toBe(false);
+  });
+
+  it("does NOT prefix-rescue when the top result is not a prefix extension (rule D)", () => {
+    expect(isAcceptable("Foo Bar", { title: "Completely Different", voteCount: 9000 }, undefined, true, false)).toBe(
+      false,
+    );
   });
 });

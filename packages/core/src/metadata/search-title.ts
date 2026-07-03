@@ -138,6 +138,20 @@ function tokenCount(s: string): number {
 }
 
 /**
+ * A trailing 4-digit year embedded in the title (e.g. "Taxi 1998"), with the
+ * title text before it. Returns null when the title has no such suffix or no
+ * word precedes the number. The plausibility range (1900–2099) is generous;
+ * safety comes from this being a LAST-RESORT ladder attempt with a year filter.
+ */
+function extractTrailingYear(s: string): { base: string; year: number } | null {
+  const m = /^(.*\S)\s+(\d{4})$/.exec(s.trim());
+  if (!m) return null;
+  const year = parseInt(m[2]!, 10);
+  if (year < 1900 || year > 2099) return null;
+  return { base: m[1]!.trim(), year };
+}
+
+/**
  * Ordered, de-duplicated list of TMDB search attempts derived from a parsed
  * (title, year). Escalates from most-specific to broadest:
  *   1. cleaned title + year filter
@@ -165,6 +179,13 @@ export function buildQueryLadder(input: { title: string; year?: number }): Searc
   }
   add(title, true);
   if (tokenCount(clean) > 3) add(firstNTokens(clean, 3), false);
+  // Last resort: a year embedded in the title with no separate year parsed
+  // ("Taxi 1998"). Tried last so a title whose number is part of its name
+  // ("Blade Runner 2049", "Death Race 2000") matches on the full title first.
+  if (year == null) {
+    const inTitle = extractTrailingYear(clean);
+    if (inTitle) raw.push({ query: inTitle.base, year: inTitle.year, yearFiltered: true });
+  }
 
   const seen = new Set<string>();
   const ladder: SearchAttempt[] = [];
