@@ -147,21 +147,27 @@ export function tvQueuePlugin(env: Env) {
             channelId = created.id;
           }
 
-          await prisma.tvStream.deleteMany({ where: { channelId } });
           if (plan.streams.length > 0) {
-            await prisma.tvStream.createMany({
-              data: plan.streams.map((s) => ({
-                channelId,
-                url: s.url,
-                feedId: s.feedId,
-                quality: s.quality,
-                label: s.label,
-                referrer: s.referrer,
-                userAgent: s.userAgent,
-                priority: s.priority,
-                protocol: s.protocol,
-              })),
-            });
+            // Replace wholesale atomically — a failure between delete and
+            // create must never leave the channel with zero streams.
+            await prisma.$transaction([
+              prisma.tvStream.deleteMany({ where: { channelId } }),
+              prisma.tvStream.createMany({
+                data: plan.streams.map((s) => ({
+                  channelId,
+                  url: s.url,
+                  feedId: s.feedId,
+                  quality: s.quality,
+                  label: s.label,
+                  referrer: s.referrer,
+                  userAgent: s.userAgent,
+                  priority: s.priority,
+                  protocol: s.protocol,
+                })),
+              }),
+            ]);
+          } else {
+            await prisma.tvStream.deleteMany({ where: { channelId } });
           }
           streamCount += plan.streams.length;
 
@@ -178,6 +184,16 @@ export function tvQueuePlugin(env: Env) {
 
         // 4. Channels that vanished upstream: hide them and mark their streams
         //    dead (rows are kept — favorites/recents keep referential integrity).
+        // Guard: an empty snapshot must not read as delete-all — if the planner
+        // returned zero channels while we already have some on file, treat it as
+        // an upstream glitch (empty payload) rather than "everything vanished".
+        if (plans.length === 0 && existingRows.length > 0) {
+          await prisma.tvSource.update({
+            where: { id: source.id },
+            data: { status: "error", statusMessage: "sync returned no channels; hide pass skipped" },
+          });
+          return { channels: 0, streams: 0, logosCached: 0 };
+        }
         const planExtIds = new Set(plans.map((p) => p.extId));
         const vanishedIds = existingRows.filter((r) => !planExtIds.has(r.extId)).map((r) => r.id);
         if (vanishedIds.length > 0) {
@@ -262,13 +278,19 @@ export function tvQueuePlugin(env: Env) {
           orderBy: { createdAt: "asc" },
         });
         const totals: Record<string, number> = { channels: 0, streams: 0, logosCached: 0 };
+        let sourcesFailed = 0;
         for (const source of sources) {
-          const c = await syncSource(source, jobId);
-          totals.channels += c.channels;
-          totals.streams += c.streams;
-          totals.logosCached += c.logosCached;
+          try {
+            const c = await syncSource(source, jobId);
+            totals.channels += c.channels;
+            totals.streams += c.streams;
+            totals.logosCached += c.logosCached;
+          } catch (err) {
+            sourcesFailed++;
+            app.log.warn({ err, sourceId: source.id }, "tv-sync source failed — continuing");
+          }
         }
-        const doneEvent: Record<string, unknown> = { phase: "done", ...totals };
+        const doneEvent: Record<string, unknown> = { phase: "done", ...totals, sourcesFailed };
         // Cache so late SSE subscribers get the result; evict after 5 min.
         tvDoneCache.set(jobId, doneEvent);
         const doneTimer = setTimeout(() => tvDoneCache.delete(jobId), 5 * 60 * 1000);
