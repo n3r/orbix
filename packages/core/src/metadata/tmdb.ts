@@ -253,10 +253,11 @@ export class TmdbClient {
     };
   }
 
-  /** Append the configured language tag to a URL, if any. */
-  private withLang(url: string): string {
-    if (!this.language) return url;
-    return url + (url.includes("?") ? "&" : "?") + `language=${this.language}`;
+  /** Append a language tag to a URL: a per-call override wins over the client-level tag. */
+  private withLang(url: string, override?: string): string {
+    const lang = override ?? this.language;
+    if (!lang) return url;
+    return url + (url.includes("?") ? "&" : "?") + `language=${lang}`;
   }
 
   private async get<T>(path: string): Promise<T> {
@@ -292,16 +293,22 @@ export class TmdbClient {
     };
   }
 
-  /** Return the top 8 search results, each including a posterPath for thumbnail display. */
-  async searchMovies(query: string, year?: number): Promise<TmdbSearchCandidate[]> {
+  /**
+   * Return the top 8 search results, each including a posterPath for thumbnail
+   * display. `language` (a per-call override, e.g. "ru-RU") localizes the
+   * returned `title` fields — TMDB's match set is language-independent, but a
+   * localized response lets a same-language query string-compare against the
+   * candidate's displayed title.
+   */
+  async searchMovies(query: string, year?: number, language?: string): Promise<TmdbSearchCandidate[]> {
     const base = `${BASE}/search/movie?query=${encodeURIComponent(query)}`;
     // See searchMovie: primary_release_year (original release only), with an
     // unfiltered fallback so the candidate list is never needlessly empty.
     let data = await this.get<{ results: RawSearchResult[] }>(
-      this.withLang(year != null ? `${base}&primary_release_year=${year}` : base),
+      this.withLang(year != null ? `${base}&primary_release_year=${year}` : base, language),
     );
     if (year != null && data.results.length === 0) {
-      data = await this.get<{ results: RawSearchResult[] }>(this.withLang(base));
+      data = await this.get<{ results: RawSearchResult[] }>(this.withLang(base, language));
     }
     return data.results.slice(0, 8).map((r) => ({
       tmdbId: r.id,
@@ -337,6 +344,31 @@ export class TmdbClient {
         : {}),
       genres: (raw.genres ?? []).map((g) => ({ tmdbId: g.id, name: g.name })),
     };
+  }
+
+  /**
+   * Every title TMDB knows for a movie — display title, original title, all
+   * alternative (per-country release) titles, and all translated titles — in
+   * one API call. Used by the matcher's deep-check to verify a foreign-language
+   * query against a candidate (e.g. "Побег из Шоушенка" ⊂ Shawshank's RU title).
+   */
+  async allTitles(id: number): Promise<string[]> {
+    const raw = await this.get<
+      RawMovie & {
+        alternative_titles?: { titles?: { title?: string }[] };
+        translations?: { translations?: { data?: { title?: string } }[] };
+      }
+    >(`${BASE}/movie/${id}?append_to_response=alternative_titles,translations`);
+
+    const titles = new Set<string>();
+    const add = (t: string | undefined | null) => {
+      if (t && t.trim().length > 0) titles.add(t.trim());
+    };
+    add(raw.title);
+    add(raw.original_title);
+    for (const alt of raw.alternative_titles?.titles ?? []) add(alt.title);
+    for (const tr of raw.translations?.translations ?? []) add(tr.data?.title);
+    return [...titles];
   }
 
   /**

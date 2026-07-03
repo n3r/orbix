@@ -70,6 +70,29 @@ describe("parseMediaPath", () => {
     });
   });
 
+  describe("collection folders", () => {
+    it("keeps per-file titles inside a year-bearing collection folder (no folder-title takeover)", () => {
+      // "Властелин колец (2001)/1 Братство кольца.mkv" — preferring the folder
+      // title would give every disc the same title and dedupe would collapse
+      // the trilogy into one movie.
+      const r = parseMediaPath("/m/Властелин колец (2001)/1 Братство кольца.mkv");
+      expect(r.title).not.toBe("Властелин колец");
+      expect(r.year).toBe(2001);
+    });
+
+    it("keeps the filename title when the filename itself has a year", () => {
+      const r = parseMediaPath("/m/Interstellar (2014)/Interstellar.2014.1080p.BluRay.mkv");
+      expect(r.title).toBe("Interstellar");
+      expect(r.year).toBe(2014);
+    });
+
+    it("parses a root-level file without inventing a year", () => {
+      const r = parseMediaPath("/media/Films/Body of Lies Remux.mkv");
+      expect(r.title).toBe("Body of Lies Remux");
+      expect(r.year).toBeUndefined();
+    });
+  });
+
   describe("TV episodes", () => {
     it("parses SxxExx with a Season folder, using the show folder for title+year", () => {
       const r = parseMediaPath("/tv/Arcane (2021)/Season 01/Arcane.S01E03.1080p.mkv");
@@ -119,6 +142,14 @@ describe("parseMediaPath", () => {
       const r = parseMediaPath("/tv/Сериал/Сезон 3/Сериал серия 5.mp4");
       expect(r.seasonNumber).toBe(3);
       expect(r.episodeNumber).toBe(5);
+    });
+
+    it("NFC-composes an NFD show folder (macOS paths) for episodes in a Season folder", () => {
+      const show = "Тайный город (2014)".normalize("NFD"); // й decomposes
+      const r = parseMediaPath(`/tv/${show}/Season 01/S01E02.mkv`);
+      expect(r.title).toBe("Тайный город".normalize("NFC"));
+      expect(r.seasonNumber).toBe(1);
+      expect(r.episodeNumber).toBe(2);
     });
 
     it("detects a bare 'Серия N' mini-series (no season folder), defaulting season to 1", () => {

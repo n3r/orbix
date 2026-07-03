@@ -130,8 +130,10 @@ function titleBeforeYear(nameNoExt: string): string {
 }
 
 export function parseMediaPath(fullPath: string): ParsedMediaPath {
-  const filename = basename(fullPath);
-  const folder = basename(dirname(fullPath));
+  // Compose to NFC first: macOS filesystems hand out decomposed names (й as
+  // и + combining breve), which breaks TMDB search and dedup keys downstream.
+  const filename = basename(fullPath).normalize("NFC");
+  const folder = basename(dirname(fullPath)).normalize("NFC");
 
   // Strip extension from filename for the library parser
   const filenameNoExt = filename.replace(/\.[^.]+$/, "");
@@ -141,10 +143,17 @@ export function parseMediaPath(fullPath: string): ParsedMediaPath {
   // ── TV episode ────────────────────────────────────────────────────────────
   if (episode) {
     // The "show folder" is the series root: skip a Season NN / Specials folder.
+    // NFC like filename/folder above — a raw macOS path stays decomposed.
     const isSeasonFolder = SEASON_FOLDER_RE.test(folder) || SPECIALS_FOLDER_RE.test(folder);
-    const showFolder = isSeasonFolder ? basename(dirname(dirname(fullPath))) : folder;
+    const showFolder = isSeasonFolder ? basename(dirname(dirname(fullPath))).normalize("NFC") : folder;
 
-    const folderTitle = filenameParse(showFolder, false).title?.trim() || "";
+    let folderTitle = filenameParse(showFolder, false).title?.trim() || "";
+    // Same library mangling as the movie branch: a multi-word Cyrillic show
+    // folder with a year collapses to its first letter — recover from the raw name.
+    if (alnumLen(folderTitle) <= 2) {
+      const recovered = titleBeforeYear(showFolder);
+      if (recovered && alnumLen(recovered) >= alnumLen(folderTitle)) folderTitle = recovered;
+    }
     const tvTitle = filenameParse(filenameNoExt, true).title?.trim() || "";
     // Prefer the show-folder title (stable across all episodes of the series).
     const rawSeriesTitle = folderTitle || tvTitle || showFolder;
@@ -197,7 +206,11 @@ export function parseMediaPath(fullPath: string): ParsedMediaPath {
   const tmdbId = extractTmdbId(folder) ?? extractTmdbId(filename);
   const imdbId = extractImdbId(folder) ?? extractImdbId(filename);
 
-  // Title: prefer filename parser result, fallback to folder parser result
+  // Title: prefer filename parser result, fallback to folder parser result.
+  // NOTE: deliberately NO "prefer the folder title when it looks like a movie
+  // folder" heuristic — in a collection folder ("Властелин колец (2001)/1
+  // Братство кольца.mkv") it would give every disc the folder's title and the
+  // tmdbId dedupe would collapse a trilogy into one movie.
   const title = filenameTitle || folderTitle;
 
   const result: ParsedMediaPath = { title };
