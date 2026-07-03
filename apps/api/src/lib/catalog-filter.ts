@@ -27,19 +27,41 @@ export function kidsRatingWhere(
 }
 
 /**
- * Loads the active profile (kind + maturityCap) from the orbix_profile cookie.
- * Returns null when no cookie is set or the profile no longer exists.
+ * Loads the active profile for this request. Device (bearer) requests resolve
+ * the profile stored on the DeviceToken row; browser requests resolve the
+ * orbix_profile cookie. Returns null when nothing is selected or the profile
+ * no longer exists.
  */
 export async function activeProfile(
   app: FastifyInstance,
   req: FastifyRequest,
 ): Promise<{ id: string; name: string; avatar: string | null; kind: string; maturityCap: number | null; language: string } | null> {
-  const profileId = req.cookies["orbix_profile"];
+  const profileId = await activeProfileId(app, req);
   if (!profileId) return null;
   return app.prisma.profile.findUnique({
     where: { id: profileId },
     select: { id: true, name: true, avatar: true, kind: true, maturityCap: true, language: true },
   });
+}
+
+/**
+ * Resolves just the active profile id (device row for bearer requests, cookie
+ * for browser requests) without fetching the profile. Routes that key rows by
+ * profile id (playback state, play events, home rows) use this instead of
+ * reading the cookie directly, so device clients work identically.
+ */
+export async function activeProfileId(
+  app: FastifyInstance,
+  req: FastifyRequest,
+): Promise<string | null> {
+  if (req.deviceId) {
+    const device = await app.prisma.deviceToken.findUnique({
+      where: { id: req.deviceId },
+      select: { activeProfileId: true },
+    });
+    return device?.activeProfileId ?? null;
+  }
+  return req.cookies["orbix_profile"] ?? null;
 }
 
 /**
