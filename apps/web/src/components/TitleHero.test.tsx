@@ -40,4 +40,29 @@ describe("TitleHero", () => {
     screen.getByRole("button", { name: "Play" }).click();
     expect(onPlay).toHaveBeenCalledOnce();
   });
+
+  it("hides the wishlist button while membership is unknown", () => {
+    render(
+      <TitleHero item={base} onPlay={() => {}} canPlay playLabel="Play"
+        wishlistLabel="Add to Wishlist" onToggleWishlist={() => {}} />,
+    );
+    expect(screen.queryByRole("button", { name: /Wishlist/ })).toBeNull();
+  });
+
+  it("fires onToggleWishlist and reflects membership via aria-pressed", () => {
+    const onToggle = vi.fn();
+    const { rerender } = render(
+      <TitleHero item={base} onPlay={() => {}} canPlay playLabel="Play"
+        inWishlist={false} wishlistLabel="Add to Wishlist" onToggleWishlist={onToggle} />,
+    );
+    const btn = screen.getByRole("button", { name: /Add to Wishlist/ });
+    expect(btn.getAttribute("aria-pressed")).toBe("false");
+    btn.click();
+    expect(onToggle).toHaveBeenCalledOnce();
+    rerender(
+      <TitleHero item={base} onPlay={() => {}} canPlay playLabel="Play"
+        inWishlist={true} wishlistLabel="In Wishlist" onToggleWishlist={onToggle} />,
+    );
+    expect(screen.getByRole("button", { name: /In Wishlist/ }).getAttribute("aria-pressed")).toBe("true");
+  });
 });

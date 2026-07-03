@@ -21,11 +21,18 @@ export default function TitleHero({
   onPlay,
   canPlay,
   playLabel,
+  inWishlist,
+  wishlistLabel,
+  onToggleWishlist,
 }: {
   item: TitleDetail;
   onPlay: () => void;
   canPlay: boolean;
   playLabel: string;
+  /** undefined while membership is unknown (ids still loading) — button hidden. */
+  inWishlist?: boolean;
+  wishlistLabel?: string;
+  onToggleWishlist?: () => void;
 }) {
   const { t } = useTranslation();
   const runtime = formatRuntime(item.runtimeSec, t);
@@ -100,6 +107,16 @@ export default function TitleHero({
               t("title:noMedia")
             )}
           </Button>
+          {inWishlist !== undefined && onToggleWishlist && (
+            <Button
+              variant="ghost"
+              onClick={onToggleWishlist}
+              aria-pressed={inWishlist}
+              className="border border-[var(--text-dim)]/40 bg-[var(--surface)]/50 text-[var(--text)] hover:bg-[var(--surface-2)]"
+            >
+              <span aria-hidden="true">{inWishlist ? "✓" : "+"}</span> {wishlistLabel}
+            </Button>
+          )}
         </div>
       </div>
     </section>
