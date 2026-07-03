@@ -264,6 +264,19 @@ model PlaybackState {
   @@index([profileId, updatedAt])
 }
 
+// Per-profile Wishlist ("watch later"). Same conventions as PlaybackState:
+// bare String ids (no FK relations); stale entries for deleted items are
+// inert because readers inner-join against MediaItem.
+model WishlistEntry {
+  id          String   @id @default(cuid())
+  profileId   String
+  mediaItemId String
+  addedAt     DateTime @default(now())
+
+  @@unique([profileId, mediaItemId])
+  @@index([profileId, addedAt])
+}
+
 // ── Discovery models ─────────────────────────────────────────────────────────
 
 model PlayEvent {
