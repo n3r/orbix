@@ -1,7 +1,7 @@
-import { useState, lazy, Suspense, useCallback } from "react";
+import { useState, lazy, Suspense, useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
-import { useParams } from "react-router";
+import { useParams, useSearchParams } from "react-router";
 import { apiJson, ApiError } from "@/lib/api";
 import type { TitleDetail } from "@/lib/types";
 import TitleHero from "@/components/TitleHero";
@@ -34,6 +34,33 @@ export default function TitlePage() {
     setPlayTarget({ fileId: ep.fileId, episodeId: ep.episodeId, title: ep.title });
   }, []);
 
+  // Shared by the hero Play button and the ?play=1 deep link (home billboard).
+  const startPlayback = useCallback((target: TitleDetail) => {
+    if (target.kind === "series") {
+      if ((target.seasons?.length ?? 0) > 0) setHeroPlayToken((n) => n + 1);
+    } else {
+      const fileId = target.files?.[0]?.id;
+      if (fileId) setPlayTarget({ fileId, episodeId: undefined, title: target.title });
+    }
+  }, []);
+
+  // ?play=1 (billboard's Play) starts playback as soon as the item is known,
+  // then strips the param so back-navigation doesn't replay.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const wantsAutoplay = searchParams.get("play") === "1";
+  useEffect(() => {
+    if (!wantsAutoplay || !itemQuery.data) return;
+    startPlayback(itemQuery.data);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("play");
+        return next;
+      },
+      { replace: true },
+    );
+  }, [wantsAutoplay, itemQuery.data, startPlayback, setSearchParams]);
+
   const notFound = itemQuery.error instanceof ApiError && itemQuery.error.status === 404;
 
   if (itemQuery.isLoading) {
@@ -65,13 +92,7 @@ export default function TitlePage() {
   const firstFileId = item.files?.[0]?.id ?? null;
   const canPlay = isSeries ? (item.seasons?.length ?? 0) > 0 : !!firstFileId;
 
-  const handleHeroPlay = () => {
-    if (isSeries) {
-      setHeroPlayToken((n) => n + 1);
-    } else if (firstFileId) {
-      setPlayTarget({ fileId: firstFileId, episodeId: undefined, title: item.title });
-    }
-  };
+  const handleHeroPlay = () => startPlayback(item);
 
   return (
     <main className="flex w-full flex-col">

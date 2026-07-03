@@ -1,6 +1,14 @@
 @import "tailwindcss";
 @source "../../../packages/ui/src";
 
+/* Netflix-style rows scroll without a visible scrollbar. */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 @keyframes fadein {
   from {
     opacity: 0;

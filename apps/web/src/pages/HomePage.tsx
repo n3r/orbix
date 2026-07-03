@@ -1,28 +1,31 @@
 import { useTranslation } from "react-i18next";
 import { cn } from "@orbix/ui";
 import { useHomeRows } from "@/lib/queries";
+import { dailySeed, pickBillboard } from "@/lib/billboard";
 import HomeRows from "@/components/HomeRows";
-import SpotlightRow from "@/components/spotlight/SpotlightRow";
+import HomeBillboard from "@/components/billboard/HomeBillboard";
 
 export default function HomePage() {
   const { t } = useTranslation();
   const { data, isLoading } = useHomeRows();
   const rows = data?.rows ?? [];
 
-  // Featured row = Continue Watching when present, else the first row.
-  const featured = rows.find((r) => r.key === "continue") ?? rows[0];
-  const rest = rows.filter((r) => r !== featured);
-  const hasFeatured = !!featured && featured.items.length > 0;
+  // One featured title on the billboard (rotates daily); every row (continue
+  // watching included) still renders below it, Netflix-style.
+  const featured = pickBillboard(rows, dailySeed());
 
   if (isLoading)
     return <div className="p-8 text-[var(--text-dim)]">{t("common:status.loading")}</div>;
 
   return (
-    // Pull the spotlight up under the fixed transparent TopNav (cancels
+    // Pull the billboard up under the fixed transparent TopNav (cancels
     // AppShell's pt-14) so the gradient bar overlays the backdrop art.
-    <div className={cn("flex flex-col gap-6 pb-4", hasFeatured && "-mt-14")}>
-      {hasFeatured && <SpotlightRow items={featured.items} />}
-      <HomeRows rows={rest} />
+    <div className={cn("flex flex-col pb-12", featured && "-mt-14")}>
+      {featured && <HomeBillboard card={featured} />}
+      {/* First row rides up into the billboard's bottom dissolve. */}
+      <div className={cn("relative z-10", featured && "-mt-12 md:-mt-20")}>
+        <HomeRows rows={rows} />
+      </div>
     </div>
   );
 }
