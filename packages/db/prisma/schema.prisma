@@ -39,6 +39,21 @@ model Session {
   @@index([accountId])
 }
 
+// Per-device bearer tokens for native clients (tvOS, future mobile).
+// The raw token is returned exactly once at pairing redemption; only its
+// sha256 hex digest is stored. activeProfileId is the device-scoped
+// equivalent of the orbix_profile cookie.
+model DeviceToken {
+  id              String    @id @default(cuid())
+  tokenHash       String    @unique
+  name            String
+  platform        String // "tvos" | future: "ios" | "android" | ...
+  activeProfileId String?
+  lastSeenAt      DateTime  @default(now())
+  createdAt       DateTime  @default(now())
+  revokedAt       DateTime?
+}
+
 // ── Catalog models ──────────────────────────────────────────────────────────
 
 model Library {
