@@ -38,6 +38,38 @@ export const BROWSER_UA =
 const MAX_REDIRECTS = 5;
 const DEFAULT_TIMEOUT_MS = 15_000;
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+const MAX_TEXT_BYTES = 16 * 1024 * 1024; // 16 MiB — playlists are KB-to-low-MB; anything larger is hostile
+
+/**
+ * Reads a response body to completion with a byte cap (wantText:true path
+ * only). Segments use the streaming path below and pass `body` through to
+ * the caller unbuffered — capping them here would break large-but-legit
+ * segments, so this must never be used for that path.
+ */
+async function readCappedText(body: ReadableStream<Uint8Array> | null): Promise<string> {
+  if (!body) return "";
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+    total += value.byteLength;
+    if (total > MAX_TEXT_BYTES) {
+      await reader.cancel().catch(() => {});
+      throw new Error("upstream body too large");
+    }
+    chunks.push(value);
+  }
+  const combined = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    combined.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(combined);
+}
 
 /** dns.lookup that fails when any resolved address is private (rebinding guard). */
 const validatingLookup: LookupFunction = (hostname, options, callback) => {
@@ -76,6 +108,9 @@ export function makeTvUpstream(opts?: { lookup?: LookupFunction }) {
     url: string,
     init: { userAgent: string | null; referrer: string | null; wantText: boolean; timeoutMs?: number },
   ): Promise<UpstreamResult> {
+    // Bounds the whole fetch (connect + headers + body); streaming
+    // (wantText:false) callers should pass a larger timeoutMs since this
+    // isn't meant to cap an entire streaming session.
     const signal = AbortSignal.timeout(init.timeoutMs ?? DEFAULT_TIMEOUT_MS);
     const headers: Record<string, string> = { "user-agent": init.userAgent ?? BROWSER_UA };
     if (init.referrer) headers["referer"] = init.referrer;
@@ -115,7 +150,7 @@ export function makeTvUpstream(opts?: { lookup?: LookupFunction }) {
       });
 
       if (init.wantText) {
-        const text = await res.text();
+        const text = await readCappedText(res.body as unknown as ReadableStream<Uint8Array> | null);
         return { finalUrl: current, status: res.status, headers: headerRecord, body: null, text };
       }
       return {

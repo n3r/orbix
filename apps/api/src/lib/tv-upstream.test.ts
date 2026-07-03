@@ -28,6 +28,41 @@ beforeAll(async () => {
       res.end();
       return;
     }
+    if (req.url === "/to-metadata") {
+      // Redirects off-host to a link-local address (the cloud-metadata SSRF
+      // pivot) — the private-IP pre-check must re-run on this hop.
+      res.writeHead(302, { location: "http://169.254.169.254/latest/meta-data/" });
+      res.end();
+      return;
+    }
+    if (req.url === "/huge") {
+      // Streams past the 16 MiB text cap without ever holding it all in
+      // memory here: one 1 MiB buffer, written repeatedly with backpressure.
+      res.writeHead(200, { "content-type": "application/octet-stream" });
+      res.on("error", () => {}); // client cancels once the cap trips; ignore the reset
+      const chunk = Buffer.alloc(1024 * 1024, "a");
+      const totalBytes = 17 * 1024 * 1024; // > MAX_TEXT_BYTES (16 MiB)
+      let sent = 0;
+      const writeMore = () => {
+        while (sent < totalBytes) {
+          if (res.destroyed || res.writableEnded) return;
+          let ok: boolean;
+          try {
+            ok = res.write(chunk);
+          } catch {
+            return;
+          }
+          sent += chunk.length;
+          if (!ok) {
+            res.once("drain", writeMore);
+            return;
+          }
+        }
+        if (!res.destroyed && !res.writableEnded) res.end();
+      };
+      writeMore();
+      return;
+    }
     res.writeHead(404);
     res.end();
   });
@@ -108,6 +143,29 @@ describe("makeTvUpstream (fixture lookup)", () => {
     await upstream.close();
   });
 
+  it("rejects a redirect that lands on a private/link-local IP (metadata SSRF pivot)", async () => {
+    const upstream = fixtureUpstream();
+    // /to-metadata 302s to http://169.254.169.254/... — a literal IP, so this
+    // is caught by the pre-dial private-IP check re-running on the redirect
+    // hop, not by the injected lookup (which only ever answers FIXTURE_HOST).
+    let error: unknown;
+    try {
+      await upstream.fetchUpstream(`http://${FIXTURE_HOST}:${port}/to-metadata`, {
+        userAgent: null,
+        referrer: null,
+        wantText: true,
+      });
+    } catch (err) {
+      error = err;
+    }
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toMatch(/private/i);
+    // Confirms the redirect was actually followed to that hop, not rejected
+    // for some unrelated reason before ever leaving the fixture host.
+    expect((error as Error).message).toContain("169.254.169.254");
+    await upstream.close();
+  });
+
   it("returns a readable byte stream when wantText is false", async () => {
     const upstream = fixtureUpstream();
     const res = await upstream.fetchUpstream(`http://${FIXTURE_HOST}:${port}/ok`, {
@@ -119,6 +177,18 @@ describe("makeTvUpstream (fixture lookup)", () => {
     expect(res.body).not.toBeNull();
     const text = await new Response(res.body as unknown as BodyInit).text();
     expect(text).toBe("hello");
+    await upstream.close();
+  });
+
+  it("rejects a wantText body larger than the 16 MiB cap", async () => {
+    const upstream = fixtureUpstream();
+    await expect(
+      upstream.fetchUpstream(`http://${FIXTURE_HOST}:${port}/huge`, {
+        userAgent: null,
+        referrer: null,
+        wantText: true,
+      }),
+    ).rejects.toThrow(/too large/i);
     await upstream.close();
   });
 
@@ -152,7 +222,9 @@ describe("makeTvUpstream (REAL guard — no lookup override)", () => {
         referrer: null,
         wantText: true,
       }),
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({
+      cause: expect.objectContaining({ message: expect.stringMatching(/private/i) }),
+    });
     await upstream.close();
   });
 });
