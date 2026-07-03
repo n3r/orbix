@@ -19,8 +19,6 @@ export interface ScoreCandidate {
 export const TITLE_STRONG = 0.85;
 /** Decent string match — accept only alongside an exact year. */
 export const TITLE_WEAK = 0.55;
-/** Minimum TMDB votes for the year-gated transliteration rescue (rule C). */
-export const VOTE_FLOOR = 50;
 
 /**
  * Fold accents, lowercase, and reduce runs of non-alphanumerics to single
@@ -156,15 +154,17 @@ function isStrictTitlePrefix(qTokens: string[], candidate: ScoreCandidate): bool
  * to auto-match. Kept separate from ranking so a popular-but-wrong film can
  * never sneak in on its popularity tie-breaker.
  *
- * @param isTopResult  true for the #1 result of the current search attempt.
- * @param yearFiltered true when the attempt sent TMDB's year filter.
+ * Deliberately has NO "exact year alone" rescue: a low-similarity candidate is
+ * never accepted on year + popularity, because a title the filename parser
+ * mangles could otherwise match a random same-year film.
+ *
+ * @param isTopResult true for the #1 result of the current search attempt.
  */
 export function isAcceptable(
   query: string,
   candidate: ScoreCandidate,
   year: number | undefined,
   isTopResult: boolean,
-  yearFiltered: boolean,
 ): boolean {
   const sim = titleSimilarity(query, candidate);
   const exactYear = year != null && candidate.year != null && candidate.year === year;
@@ -176,12 +176,7 @@ export function isAcceptable(
   // Rule B — decent string match backed by an exact year.
   if (sim >= TITLE_WEAK && exactYear) return true;
 
-  // Rule C — transliteration rescue: little string overlap, but TMDB returned
-  // this as the top hit of a year-filtered query, the year is exact, and the
-  // film has a real vote count. Strictly tighter than a blind results[0].
-  if (exactYear && isTopResult && yearFiltered && votes >= VOTE_FLOOR) return true;
-
-  // Rule D — prefix rescue: the query is the whole distinctive head of a much
+  // Rule C — prefix rescue: the query is the whole distinctive head of a much
   // longer official title ("The French Dispatch" ⊂ "The French Dispatch of the
   // Liberty, Kansas Evening Sun"). Trusted only as TMDB's #1 hit, with real
   // votes and ≥2 query tokens. When an exact title exists TMDB returns it #1

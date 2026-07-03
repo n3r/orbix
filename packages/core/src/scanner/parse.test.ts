@@ -42,6 +42,34 @@ describe("parseMediaPath", () => {
     expect(r.episodeNumber).toBeUndefined();
   });
 
+  describe("mangled Cyrillic titles", () => {
+    // @ctrl/video-filename-parser collapses a multi-word Cyrillic title to its
+    // first letter once a year is present — recover it from the raw name.
+    it("recovers a Cyrillic title mangled to a single letter (parenthesized year)", () => {
+      const r = parseMediaPath("/media/Films/Мажор в сочи (2022) (4K HDR, 5.1).mkv");
+      expect(r.title).toBe("Мажор в сочи");
+      expect(r.year).toBe(2022);
+    });
+
+    it("recovers a dot-separated Cyrillic title", () => {
+      const r = parseMediaPath("/media/Films/Побег из Шоушенка.1994.Hybrid.UHD.Blu-Ray.Remux.2160p.mkv");
+      expect(r.title).toBe("Побег из Шоушенка");
+      expect(r.year).toBe(1994);
+    });
+
+    it("does not over-extend a legitimately short title", () => {
+      const r = parseMediaPath("/media/Films/M (1931).mkv");
+      expect(r.title).toBe("M");
+      expect(r.year).toBe(1931);
+    });
+
+    it("leaves a normal Latin title untouched", () => {
+      const r = parseMediaPath("/media/Films/Django Unchained (2012).mkv");
+      expect(r.title).toBe("Django Unchained");
+      expect(r.year).toBe(2012);
+    });
+  });
+
   describe("TV episodes", () => {
     it("parses SxxExx with a Season folder, using the show folder for title+year", () => {
       const r = parseMediaPath("/tv/Arcane (2021)/Season 01/Arcane.S01E03.1080p.mkv");

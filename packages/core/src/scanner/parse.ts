@@ -108,6 +108,27 @@ function detectEpisode(filenameNoExt: string, folder: string): EpisodeMarker | n
   return null;
 }
 
+/** Count of letters/digits — used to detect a mangled (degenerate) title. */
+function alnumLen(s: string): number {
+  return (s.match(/[\p{L}\p{N}]/gu) ?? []).length;
+}
+
+/**
+ * Recover a title from the raw filename when the library mangles it: the text
+ * before the first 4-digit year or bracket group. `@ctrl/video-filename-parser`
+ * collapses a multi-word Cyrillic title (e.g. "Мажор в сочи (2022)") to its
+ * first letter, so we fall back to this when its output is degenerate.
+ */
+function titleBeforeYear(nameNoExt: string): string {
+  const s = nameNoExt.replace(/[._]+/g, " ");
+  const yearIdx = s.search(/(?:^|[\s([{])\d{4}(?:\D|$)/);
+  const brIdx = s.search(/[([{]/);
+  let cut = s.length;
+  if (yearIdx >= 0) cut = Math.min(cut, yearIdx);
+  if (brIdx >= 0) cut = Math.min(cut, brIdx);
+  return s.slice(0, cut).replace(/[\s([{\-–—:,]+$/u, "").trim();
+}
+
 export function parseMediaPath(fullPath: string): ParsedMediaPath {
   const filename = basename(fullPath);
   const folder = basename(dirname(fullPath));
@@ -150,8 +171,15 @@ export function parseMediaPath(fullPath: string): ParsedMediaPath {
   // ── Movie ───────────────────────────────────────────────────────────────
   // Use the library to parse the filename
   const parsed = filenameParse(filenameNoExt, false);
-  const filenameTitle = parsed.title?.trim() || "";
+  let filenameTitle = parsed.title?.trim() || "";
   const filenameYear = parsed.year != null ? parseInt(String(parsed.year), 10) : undefined;
+
+  // The library mangles some titles (notably multi-word Cyrillic + year) down to
+  // a single letter. When its output is degenerate, recover from the raw name.
+  if (alnumLen(filenameTitle) <= 2) {
+    const recovered = titleBeforeYear(filenameNoExt);
+    if (recovered && alnumLen(recovered) >= alnumLen(filenameTitle)) filenameTitle = recovered;
+  }
 
   // Also try parsing the folder name as fallback for title
   const folderParsed = filenameParse(folder, false);
