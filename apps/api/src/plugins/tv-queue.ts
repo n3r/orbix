@@ -188,11 +188,7 @@ export function tvQueuePlugin(env: Env) {
         // returned zero channels while we already have some on file, treat it as
         // an upstream glitch (empty payload) rather than "everything vanished".
         if (plans.length === 0 && existingRows.length > 0) {
-          await prisma.tvSource.update({
-            where: { id: source.id },
-            data: { status: "error", statusMessage: "sync returned no channels; hide pass skipped" },
-          });
-          return { channels: 0, streams: 0, logosCached: 0 };
+          throw new Error("sync returned no channels; hide pass skipped");
         }
         const planExtIds = new Set(plans.map((p) => p.extId));
         const vanishedIds = existingRows.filter((r) => !planExtIds.has(r.extId)).map((r) => r.id);
