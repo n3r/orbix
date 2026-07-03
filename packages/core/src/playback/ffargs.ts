@@ -28,6 +28,10 @@ export interface HlsArgsOpts {
   audioTrackIndex?: number;
   /** Target channel count when audioAction === "aac" (default 2). */
   audioChannels?: number;
+  /** Exact seek pts (seconds) for restarts; overrides startSegment*segSec arithmetic. */
+  startTimeSec?: number;
+  /** Transcode only: force keyframes at the segment cadence so fixed EXTINFs are exact. */
+  forceKeyframes?: boolean;
 }
 
 export function buildHlsArgs(opts: HlsArgsOpts): string[] {
@@ -45,8 +49,8 @@ export function buildHlsArgs(opts: HlsArgsOpts): string[] {
   }
 
   // 1. Input-side seek (before -i) when resuming
-  if (startSegment > 0) {
-    args.push("-ss", String(startSegment * segSec));
+  if (startSegment > 0 || (opts.startTimeSec !== undefined && opts.startTimeSec > 0)) {
+    args.push("-ss", String(opts.startTimeSec !== undefined ? opts.startTimeSec : startSegment * segSec));
   }
 
   // 2. Input
@@ -78,6 +82,9 @@ export function buildHlsArgs(opts: HlsArgsOpts): string[] {
         const videoEncoder = ENCODER_MAP[rawEncoder] ?? rawEncoder;
         args.push("-c:v", videoEncoder, "-preset", "veryfast", "-crf", "21");
       }
+    }
+    if (opts.forceKeyframes) {
+      args.push("-force_key_frames", `expr:gte(t,n_forced*${segSec})`);
     }
   }
 
