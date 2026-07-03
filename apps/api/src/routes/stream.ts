@@ -1,11 +1,19 @@
 import fs from "node:fs";
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import { buildVodPlaylist } from "@orbix/core";
+import {
+  buildVodPlaylist,
+  buildMultivariantPlaylist,
+  buildMediaPlaylistFromBoundaries,
+  videoCodecString,
+  audioCodecString,
+  videoRange,
+} from "@orbix/core";
 import { requireAuth } from "../lib/auth";
-import { queryTokenAuth } from "../lib/device-auth";
+import { queryTokenAuth, tokenSuffix } from "../lib/device-auth";
 import { assertFileAllowed } from "../lib/catalog-filter";
 import { SessionManager, SegmentTimeoutError } from "../playback/session";
 import type { PlaySessionRegistry, PlaySessionEntry } from "../playback/registry";
+import { IMAGE_CODECS } from "./subtitles";
 
 const DEFAULT_SEG_SEC = 6;
 
@@ -16,12 +24,6 @@ function contentTypeForContainer(container: string | null | undefined): string {
   if (/mkv|matroska/.test(c)) return "video/x-matroska";
   if (c === "webm") return "video/webm";
   return "application/octet-stream";
-}
-
-/** Echo the auth token query (if the request used one) into child playlist URIs. */
-function tokenSuffix(req: FastifyRequest): string {
-  const token = (req.query as { token?: unknown } | undefined)?.token;
-  return typeof token === "string" && token.length > 0 ? `&token=${encodeURIComponent(token)}` : "";
 }
 
 /**
@@ -71,6 +73,8 @@ async function resolveByPlaySession(
     plan: entry.plan,
     durationSec: entry.durationSec,
     segSec: DEFAULT_SEG_SEC,
+    boundaries: entry.boundaries,
+    forceKeyframes: entry.forceKeyframes,
   });
 }
 
@@ -163,7 +167,7 @@ export default function streamRoute(
     );
 
     // ------------------------------------------------------------------
-    // GET /play/:fileId/master.m3u8 — tiny HLS master playlist
+    // GET /play/:fileId/master.m3u8 — Apple-grade multivariant playlist
     // ------------------------------------------------------------------
     app.get<{ Params: { fileId: string } }>(
       "/play/:fileId/master.m3u8",
@@ -183,11 +187,44 @@ export default function streamRoute(
         if (!isPlayableEntry(entry, fileId)) {
           return reply.code(404).send({ error: "session_expired" });
         }
-        const master = [
-          "#EXTM3U",
-          "#EXT-X-STREAM-INF:BANDWIDTH=2000000",
-          `index.m3u8?playSessionId=${playSessionId}${tokenSuffix(req)}`,
-        ].join("\n");
+
+        // isPlayableEntry guarantees plan.mode !== "direct" (remux | transcode);
+        // narrow audioAction via the "in" check since PlaybackPlan is a union.
+        const media = entry.media;
+        const audioAction: "copy" | "aac" = "audioAction" in entry.plan ? entry.plan.audioAction : "aac";
+
+        // Video codec string: remux reports the SOURCE codec/profile/level;
+        // transcode always emits libx264 High@4.1 today, so hardcode that.
+        const videoCodec =
+          entry.plan.mode === "transcode"
+            ? videoCodecString("h264", "High", 41)
+            : videoCodecString(media?.videoCodec ?? undefined, media?.videoProfile ?? undefined, media?.videoLevel ?? undefined);
+        const audioCodec =
+          audioAction === "copy" ? audioCodecString(media?.audioCodec ?? undefined) : audioCodecString("aac");
+        const codecs = [videoCodec, audioCodec].filter((c): c is string => c !== null);
+
+        const resolution =
+          media?.width && media?.height ? { width: media.width, height: media.height } : undefined;
+
+        // Subtitle renditions: only text-based tracks (image subs need burn-in, not HLS renditions).
+        const subtitles = (media?.subtitleTracks ?? [])
+          .filter((t) => !IMAGE_CODECS.has(t.codec ?? ""))
+          .map((t) => ({
+            name: t.language ?? `Track ${t.index}`,
+            language: t.language,
+            uri: `subs/${t.index}/index.m3u8?playSessionId=${playSessionId}${tokenSuffix(req)}`,
+          }));
+
+        const master = buildMultivariantPlaylist({
+          mediaUri: `index.m3u8?playSessionId=${playSessionId}${tokenSuffix(req)}`,
+          bandwidth: media?.bitrate ?? 8_000_000,
+          codecs,
+          resolution,
+          frameRate: media?.frameRate ?? undefined,
+          // Transcode output is SDR H.264 today regardless of the source's color transfer.
+          videoRange: entry.plan.mode === "remux" ? videoRange(media?.colorTransfer ?? undefined) : "SDR",
+          subtitles,
+        });
 
         return reply
           .code(200)
@@ -212,16 +249,19 @@ export default function streamRoute(
         const session = await resolveByPlaySession(app, { manager, registry }, fileId, playSessionId, req, reply);
         if (!session) return;
 
+        // Keyframe-derived boundaries (remux) give exact EXTINFs matching what
+        // ffmpeg actually cuts; without them (transcode, or remux with no
+        // extracted keyframes) fall back to the fixed-cadence VOD playlist.
+        const q = `playSessionId=${playSessionId}${tokenSuffix(req)}`;
+        const body =
+          session.boundaries && session.boundaries.length > 0
+            ? buildMediaPlaylistFromBoundaries(session.boundaries, q)
+            : buildVodPlaylist(session.durationSec, session.segSec, q);
+
         return reply
           .code(200)
           .header("Content-Type", "application/vnd.apple.mpegurl")
-          .send(
-            buildVodPlaylist(
-              session.durationSec,
-              session.segSec,
-              `playSessionId=${playSessionId}${tokenSuffix(req)}`,
-            ),
-          );
+          .send(body);
       },
     );
 

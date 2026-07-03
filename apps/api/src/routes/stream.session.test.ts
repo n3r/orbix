@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildApp } from "../app";
+import { injectTimestampMap } from "./subtitles";
 import type { Env } from "@orbix/config";
 
 const env: Env = {
@@ -26,7 +27,13 @@ function stubAll(app: unknown) {
       id: "f1", path: "/media/movie.mkv", container: "matroska,webm", videoCodec: "h264",
       audioCodecs: ["aac"], durationSec: 30,
       audioTracks: [{ index: 1, codec: "aac", channels: 2 }],
-      subtitleTracks: [],
+      subtitleTracks: [
+        { index: 2, codec: "subrip", language: "en" },
+        { index: 3, codec: "hdmv_pgs_subtitle", language: "ru" },
+      ],
+      keyframes: [0, 6.006, 12.012],
+      width: 1920, height: 1080, bitrate: 5_000_000, frameRate: 25,
+      videoProfile: "High", videoLevel: 41, colorTransfer: null,
       mediaItem: { rating: "PG-13" },
     }),
   };
@@ -184,5 +191,56 @@ describe("session-aware HLS routes", () => {
     expect(res.statusCode).toBe(403);
     expect(res.json()).toEqual({ error: "blocked_by_rating" });
     await app.close();
+  });
+});
+
+describe("Apple-grade playlists", () => {
+  it("master is a spec-complete multivariant with subtitle renditions", async () => {
+    const app = await buildApp(env);
+    stubAll(app);
+    const sid = await negotiate(app);
+    const res = await app.inject({ method: "GET", url: `/api/play/f1/master.m3u8?playSessionId=${sid}`, cookies });
+    const body = res.body;
+    expect(body).toContain("#EXT-X-VERSION:7");
+    expect(body).toContain("#EXT-X-INDEPENDENT-SEGMENTS");
+    expect(body).toMatch(/#EXT-X-STREAM-INF:BANDWIDTH=\d+,AVERAGE-BANDWIDTH=\d+,CODECS="/);
+    expect(body).toContain("RESOLUTION=");
+    expect(body).toContain("FRAME-RATE=");
+    expect(body).toContain('#EXT-X-MEDIA:TYPE=SUBTITLES');
+    expect(body).toContain(`subs/2/index.m3u8?playSessionId=${sid}`);
+    expect(body).not.toContain("subs/3/"); // PGS track excluded
+    await app.close();
+  });
+
+  it("index EXTINFs come from keyframe boundaries", async () => {
+    const app = await buildApp(env);
+    stubAll(app);
+    const sid = await negotiate(app);
+    const res = await app.inject({ method: "GET", url: `/api/play/f1/index.m3u8?playSessionId=${sid}`, cookies });
+    expect(res.body).toContain("#EXTINF:6.006,");
+    expect(res.body).toContain(`seg0.m4s?playSessionId=${sid}`);
+    expect(res.body).toContain("#EXT-X-INDEPENDENT-SEGMENTS");
+    await app.close();
+  });
+
+  it("subtitle rendition playlist serves a full-duration VTT segment", async () => {
+    const app = await buildApp(env);
+    stubAll(app);
+    const sid = await negotiate(app);
+    const res = await app.inject({ method: "GET", url: `/api/play/f1/subs/2/index.m3u8?playSessionId=${sid}`, cookies });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toContain("mpegurl");
+    expect(res.body).toContain("/api/play/f1/subs/2.vtt?hls=1");
+    expect(res.body).toContain("#EXT-X-ENDLIST");
+    await app.close();
+  });
+});
+
+describe("VTT X-TIMESTAMP-MAP injection", () => {
+  it("injects the Apple timestamp map header after the WEBVTT line", () => {
+    const input = "WEBVTT\n\n1\n00:00:01.000 --> 00:00:02.000\nHello\n";
+    expect(injectTimestampMap(input)).toBe(
+      "WEBVTT\nX-TIMESTAMP-MAP=LOCAL:00:00:00.000,MPEGTS:0\n\n1\n00:00:01.000 --> 00:00:02.000\nHello\n",
+    );
   });
 });

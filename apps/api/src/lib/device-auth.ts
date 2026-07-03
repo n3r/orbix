@@ -55,3 +55,14 @@ export function queryTokenAuth(app: FastifyInstance) {
     }
   };
 }
+
+/**
+ * Echo the auth token query (if the request used one) into child playlist /
+ * segment / subtitle-rendition URIs. AVPlayer and other native players follow
+ * generated URIs verbatim with no header/cookie support, so a `?token=` on
+ * the parent request must be propagated to every child URI it links to.
+ */
+export function tokenSuffix(req: FastifyRequest): string {
+  const token = (req.query as { token?: unknown } | undefined)?.token;
+  return typeof token === "string" && token.length > 0 ? `&token=${encodeURIComponent(token)}` : "";
+}
