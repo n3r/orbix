@@ -1002,13 +1002,19 @@ git commit -m "feat(api): pairing endpoints + devices registry"
 ### Task 6: Device-scoped active profile
 
 **Files:**
-- Modify: `apps/api/src/lib/catalog-filter.ts` (function `activeProfile`, lines 33-43)
+- Modify: `apps/api/src/lib/catalog-filter.ts` (function `activeProfile`, lines 33-43; add `activeProfileId`)
 - Modify: `apps/api/src/routes/profiles.ts` (select route, lines 78-88)
+- Modify: `apps/api/src/routes/playstate.ts` (direct cookie reads at lines 12, 80, 114)
+- Modify: `apps/api/src/routes/discovery.ts` (direct cookie read at line 74)
+- Modify: `apps/api/src/routes/series.ts` (direct cookie read at line 23)
 - Create: `apps/api/src/routes/profiles.device.test.ts`
 
 **Interfaces:**
 - Consumes: `req.deviceId` (Task 4), `prisma.deviceToken`.
-- Produces: `activeProfile(app, req)` resolves, in order: device's `activeProfileId` when `req.deviceId` is set; else the `orbix_profile` cookie. `POST /api/profiles/:id/select` with bearer auth persists `deviceToken.activeProfileId` instead of setting a cookie. Every existing consumer of `activeProfile` (home rows, progress, kids gates, `requireNonKids`, `assertFileAllowed`) picks up device profiles with no further changes.
+- Produces:
+  - `activeProfile(app, req)` resolves, in order: device's `activeProfileId` when `req.deviceId` is set; else the `orbix_profile` cookie.
+  - NEW export `activeProfileId(app, req): Promise<string | null>` in `catalog-filter.ts` — same resolution order, id only (no profile row fetch). The five direct `req.cookies["orbix_profile"]` reads in playstate/discovery/series are replaced with this helper so progress reporting, continue-watching, home rows, and episode-progress hydration all work for bearer devices.
+  - `POST /api/profiles/:id/select` with bearer auth persists `deviceToken.activeProfileId` instead of setting a cookie.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1102,6 +1108,47 @@ describe("device-scoped profile selection", () => {
     expect(String(res.headers["set-cookie"])).toContain("orbix_profile=p_std");
     await app.close();
   });
+
+  it("progress PUT/GET works via bearer using the device's active profile", async () => {
+    const app = await buildApp(env);
+    stubs(app, makeDevice({ activeProfileId: "p_std" }));
+    (app as any).prisma.mediaItem = {
+      findUnique: async () => ({ rating: "PG-13" }),
+    };
+    const upserts: Record<string, unknown>[] = [];
+    (app as any).prisma.playbackState = {
+      upsert: async ({ where, create }: any) => { upserts.push({ where, create }); return create; },
+      findUnique: async () => ({ positionSec: 42, durationSec: 100, finished: false }),
+    };
+    (app as any).prisma.playEvent = {
+      findFirst: async () => ({ id: "recent" }), // suppress event append
+      create: async () => ({}),
+    };
+
+    const put = await app.inject({
+      method: "PUT", url: "/api/items/m1/progress", headers: bearer,
+      payload: { positionSec: 42, durationSec: 100 },
+    });
+    expect(put.statusCode).toBe(200);
+    expect((upserts[0].where as any).profileId_mediaItemId_episodeId.profileId).toBe("p_std");
+
+    const get = await app.inject({ method: "GET", url: "/api/items/m1/progress", headers: bearer });
+    expect(get.statusCode).toBe(200);
+    expect(get.json().positionSec).toBe(42);
+    await app.close();
+  });
+
+  it("progress PUT still 400s when a device has no active profile", async () => {
+    const app = await buildApp(env);
+    stubs(app, makeDevice({ activeProfileId: null }));
+    const res = await app.inject({
+      method: "PUT", url: "/api/items/m1/progress", headers: bearer,
+      payload: { positionSec: 1, durationSec: 100 },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: "no_profile" });
+    await app.close();
+  });
 });
 ```
 
@@ -1145,6 +1192,53 @@ export async function activeProfile(
   });
 }
 ```
+
+Also add to `apps/api/src/lib/catalog-filter.ts` (below `activeProfile`):
+
+```ts
+/**
+ * Resolves just the active profile id (device row for bearer requests, cookie
+ * for browser requests) without fetching the profile. Routes that key rows by
+ * profile id (playback state, play events, home rows) use this instead of
+ * reading the cookie directly, so device clients work identically.
+ */
+export async function activeProfileId(
+  app: FastifyInstance,
+  req: FastifyRequest,
+): Promise<string | null> {
+  if (req.deviceId) {
+    const device = await app.prisma.deviceToken.findUnique({
+      where: { id: req.deviceId },
+      select: { activeProfileId: true },
+    });
+    return device?.activeProfileId ?? null;
+  }
+  return req.cookies["orbix_profile"] ?? null;
+}
+```
+
+And refactor `activeProfile` to reuse it:
+
+```ts
+export async function activeProfile(
+  app: FastifyInstance,
+  req: FastifyRequest,
+): Promise<{ id: string; name: string; avatar: string | null; kind: string; maturityCap: number | null; language: string } | null> {
+  const profileId = await activeProfileId(app, req);
+  if (!profileId) return null;
+  return app.prisma.profile.findUnique({
+    where: { id: profileId },
+    select: { id: true, name: true, avatar: true, kind: true, maturityCap: true, language: true },
+  });
+}
+```
+
+Then replace every direct cookie read with the helper (add `activeProfileId` to each file's existing `../lib/catalog-filter` import):
+- `apps/api/src/routes/playstate.ts` lines 12, 80, 114: `const profileId = req.cookies["orbix_profile"];` → `const profileId = await activeProfileId(app, req);`
+- `apps/api/src/routes/discovery.ts` line 74: same replacement.
+- `apps/api/src/routes/series.ts` line 23: same replacement.
+
+(The surrounding `if (!profileId) …` guards stay exactly as they are.)
 
 In `apps/api/src/routes/profiles.ts`, replace the select handler body (lines 78-88) with:
 
