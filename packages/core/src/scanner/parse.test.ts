@@ -516,7 +516,9 @@ describe("episode-filename title variants (umbrella folders / folder typos)", ()
       "/media/Series/Billions/Billions.2016.S04.1080p.AMZN.WEB-DL.H.264.RUS.LF.DDP5.1.SRT-EniaHD/Billions.2016.S04E01.1080p.AMZN.WEB-DL.mkv",
     );
     expect(r.title).toBe("Billions");
-    expect(r.year).toBe(2016);
+    // A season-4 pack's year is not premiere-grade — left unset; the group
+    // converges onto a year-carrying sibling at ingest.
+    expect(r.year).toBeUndefined();
     expect(r.titleVariants ?? []).toHaveLength(0);
   });
 
@@ -564,7 +566,9 @@ describe("specials routed to season 0 with a title hint", () => {
       "/media/Series/Doctor Who/Doctor.Who.2005.S07.1080p.BluRay.x264.Rus.Eng/Specials/The.Day.Of.The.Doctor.2013.1080p.BluRay.x264-WiKi.mkv",
     );
     expect(r.title).toBe("Doctor Who");
-    expect(r.year).toBe(2005);
+    // Specials never date the series — the S0 group joins its year-carrying
+    // siblings at ingest instead.
+    expect(r.year).toBeUndefined();
     expect(r.seasonNumber).toBe(0);
     expect(r.episodeNumber).toBeGreaterThanOrEqual(900);
     expect(r.episodeTitleHint).toBe("The Day Of The Doctor");
@@ -651,5 +655,55 @@ describe("dry-run regressions (full-library parse audit)", () => {
     expect(r.title).toBe("Rick And Morty");
     const swat = parseMediaPath("/media/Series/S.W.A.T/S.W.A.T.S01E01.1080p.mkv");
     expect(swat.title).toBe("S.W.A.T");
+  });
+});
+
+describe("review findings — parser hardening", () => {
+  it("does not skip a show that lives under an extras-named bucket or IS named Extras", () => {
+    // grandparent-level extras checks are gone: only the immediate folder counts.
+    const r = parseMediaPath("/media/Series/Extras/Season 1/Extras.S01E01.mkv");
+    expect(r.skip).toBeUndefined();
+    expect(r.title).toBe("Extras");
+    expect(r.seasonNumber).toBe(1);
+    const bucket = parseMediaPath("/media/Other/Breaking Bad/Breaking.Bad.S01E01.mkv");
+    expect(bucket.skip).toBeUndefined();
+    expect(bucket.title).toBe("Breaking Bad");
+  });
+
+  it("treats a per-episode folder as a pack level, not the show (no year leak)", () => {
+    const r = parseMediaPath(
+      "/media/Series/Doctor Who/Doctor.Who.2005.S09E13.1080p.BluRay.x264-REMPOWN/doctor.who.2005.s09e13.1080p.bluray.x264-rempown.mkv",
+    );
+    expect(r.title).toBe("Doctor Who");
+    expect(r.seasonNumber).toBe(9);
+    expect(r.episodeNumber).toBe(13);
+    // The episode-folder's embedded year is episode-adjacent, not premiere-grade.
+    expect(r.year).toBeUndefined();
+  });
+
+  it("still skips files directly inside extras folders", () => {
+    expect(parseMediaPath("/media/Series/Family Guy/1 Season (SerGoLeOne)/FOX.com Promos/Don't Vote.mkv").skip).toBe(true);
+  });
+
+  it("never turns a browser-duplicate '(1)' copy into an episode", () => {
+    const r = parseMediaPath("/media/Films/Iron Man 2/Iron Man 2 (1).mkv");
+    expect(r.seasonNumber).toBeUndefined();
+    const r2 = parseMediaPath("/media/Films/Iron Man 2/Iron Man 2 (2).mkv");
+    expect(r2.seasonNumber).toBeUndefined();
+  });
+
+  it("only trusts a season-pack year as the series year for season 1", () => {
+    // A late season's pack year is the AIR year, not the premiere year — it
+    // must not feed exact-year gates ("Сезон 5 2002-2003" for a 1998 show).
+    const s5 = parseMediaPath("/media/Series/Все женщины ведьмы/Сезон 5 2002-2003/Charmed.5x01.mkv");
+    expect(s5.title).toBe("Все женщины ведьмы");
+    expect(s5.seasonNumber).toBe(5);
+    expect(s5.year).toBeUndefined();
+    // …while a season-1 pack's year is premiere-grade and kept.
+    const s1 = parseMediaPath("/media/Series/Doctor Who/Doctor.Who.2005.S01.1080p.BluRay.x264-SHORTBREHD/Doctor.Who.2005.S01E01.1080p.mkv");
+    expect(s1.year).toBe(2005);
+    // …and a SHOW-folder year applies regardless of season.
+    const show = parseMediaPath("/media/Series/Метод (2015)/Season 2/Метод.2x01.mkv");
+    expect(show.year).toBe(2015);
   });
 });

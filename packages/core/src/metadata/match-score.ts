@@ -222,10 +222,11 @@ export function isAcceptable(
   const exactYear = year != null && candidate.year != null && candidate.year === year;
   const votes = candidate.voteCount ?? 0;
 
-  // A 1-2 digit query with no year is stray-file garbage ("01.mkv", an
-  // episode leak), not a searchable title — real short-numeric films ("9",
-  // "10") are only identifiable with a year to corroborate.
-  if (year == null && /^\d{1,2}$/.test(normalizeForMatch(query))) return false;
+  // A single-digit or zero-led numeric query with no year is stray-file
+  // garbage ("01.mkv", "(09)" — episode leaks), not a searchable title.
+  // Two-digit titles without a leading zero stay matchable: "24", "86" are
+  // real shows/films whose paths often carry no year.
+  if (year == null && /^(?:\d|0\d)$/.test(normalizeForMatch(query))) return false;
 
   // Rule A — confident string match, any year.
   if (sim >= TITLE_STRONG) return true;

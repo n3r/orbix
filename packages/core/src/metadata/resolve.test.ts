@@ -109,6 +109,24 @@ describe("resolveTitle — deep-check year sanity", () => {
     expect(id).toBe(222);
   });
 
+  it("lets a well-known film verify via alt-title within a few years (rebrand rips)", async () => {
+    // "Live.Die.Repeat.2016.mkv" — Edge of Tomorrow (2014, huge vote count)
+    // rebranded for home video; the 2-year gap must not block the deep check.
+    const eot: ResolveCandidate = { id: 137113, title: "Edge of Tomorrow", year: 2014, voteCount: 15000 };
+    const { deps } = fakeDeps([{ match: /live die repeat/i, results: [eot] }], {
+      137113: ["Edge of Tomorrow", "Live Die Repeat", "Live. Die. Repeat."],
+    });
+    const id = await resolveTitle("Live Die Repeat", 2016, deps);
+    expect(id).toBe(137113);
+  });
+
+  it("still blocks an OBSCURE alt-title namesake a few years off", async () => {
+    const obscure: ResolveCandidate = { id: 444, title: "Something Else Entirely", year: 2017, voteCount: 8 };
+    const { deps } = fakeDeps([{ match: /rare film/i, results: [obscure] }], { 444: ["Rare Film"] });
+    const id = await resolveTitle("Rare Film", 2020, deps);
+    expect(id).toBeUndefined();
+  });
+
   it("keeps year-less items deep-checking as before", async () => {
     const ru: ResolveCandidate = { id: 333, title: "Совсем другое имя", year: 1999, voteCount: 200 };
     const { deps } = fakeDeps([{ match: /other/i, results: [ru] }], { 333: ["The Other Name"] });

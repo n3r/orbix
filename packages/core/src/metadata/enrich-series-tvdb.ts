@@ -5,7 +5,7 @@ import type { EnrichResult, MetadataTranslation } from "./enrich";
 import type { SaveSeriesInput, SaveSeriesSeason, SaveSeriesEpisode } from "./enrich-series";
 import { titleSimilarity, acronymMatches, normalizeForMatch, TITLE_STRONG, TITLE_WEAK } from "./match-score";
 import { yearMatches, buildLadders } from "./resolve";
-import { seasonShapeScore, type LocalSeasonShape, type ProviderSeasonShape } from "./season-shape";
+import { pickBestByShape, type LocalSeasonShape, type ProviderSeasonShape } from "./season-shape";
 
 /** Structural surface of TvdbClient needed to enrich a series. */
 export interface TvdbLike {
@@ -46,9 +46,6 @@ async function tvdbSeasonShape(
   return [...counts].map(([seasonNumber, episodeCount]) => ({ seasonNumber, episodeCount }));
 }
 
-/** How many gate-clearing candidates the shape phase may fetch episodes for. */
-const SHAPE_CHECK_LIMIT = 3;
-
 /**
  * Resolve a series' TVDB id. TVDB's search response carries every known name
  * (display + aliases + translated) inline, so — unlike the TMDB resolver —
@@ -79,8 +76,6 @@ export async function resolveTvdbId(
     const key = normalizeForMatch(attempt.query);
     if (seen.has(key)) continue;
     seen.add(key);
-    // 1-2 digit queries with no year are stray-file garbage, not titles.
-    if (year == null && /^\d{1,2}$/.test(key)) continue;
 
     let candidates: TvdbSearchCandidate[];
     try {
@@ -112,17 +107,10 @@ export async function resolveTvdbId(
     // Insertion order preserves TVDB's own relevance ranking within equal sims.
     const ranked = [...accepted.values()].sort((a, b) => b.sim - a.sim);
     if (ranked.length === 1) return ranked[0]!.tvdbId;
-    let bestShaped: { tvdbId: number; shape: number } | undefined;
-    for (const f of ranked.slice(0, SHAPE_CHECK_LIMIT)) {
-      let shape: number;
-      try {
-        shape = seasonShapeScore(opts!.localShape!, await tvdbSeasonShape(client as Pick<TvdbLike, "seasonEpisodes">, f.tvdbId));
-      } catch {
-        continue; // an unshapeable candidate neither wins nor blocks the others
-      }
-      if (!bestShaped || shape > bestShaped.shape) bestShaped = { tvdbId: f.tvdbId, shape };
-    }
-    return (bestShaped ?? ranked[0]!).tvdbId;
+    const winner = await pickBestByShape(ranked, opts!.localShape!, (f) =>
+      tvdbSeasonShape(client as Pick<TvdbLike, "seasonEpisodes">, f.tvdbId),
+    );
+    return (winner ?? ranked[0]!).tvdbId;
   }
   return best?.tvdbId;
 }

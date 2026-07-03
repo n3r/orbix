@@ -57,6 +57,32 @@ export function seasonShapeScore(local: LocalSeasonShape[], provider: ProviderSe
   return score;
 }
 
+/**
+ * Pick the finalist whose season structure best explains the local files.
+ * Shapes are fetched for at most `limit` finalists, in the given (best-first)
+ * order; a failed fetch neither wins nor blocks the others, and an equal
+ * score keeps the earlier (better-ranked) finalist. Returns undefined when
+ * every fetch failed — the caller falls back to its own ranking.
+ */
+export async function pickBestByShape<T>(
+  finalists: T[],
+  local: LocalSeasonShape[],
+  fetchShape: (finalist: T) => Promise<ProviderSeasonShape[]>,
+  limit = 3,
+): Promise<T | undefined> {
+  let best: { finalist: T; shape: number } | undefined;
+  for (const f of finalists.slice(0, limit)) {
+    let shape: number;
+    try {
+      shape = seasonShapeScore(local, await fetchShape(f));
+    } catch {
+      continue;
+    }
+    if (!best || shape > best.shape) best = { finalist: f, shape };
+  }
+  return best?.finalist;
+}
+
 /** Threshold for accepting a specials title-hint match (hints are noisy). */
 const SPECIAL_TITLE_SIM = 0.6;
 

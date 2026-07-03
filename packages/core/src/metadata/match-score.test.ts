@@ -167,15 +167,20 @@ describe("isAcceptable", () => {
 });
 
 describe("degenerate numeric queries", () => {
-  it("never accepts a 1-2 digit query without a year (episode-leak garbage)", () => {
-    const ten = { title: "10", year: 1979, voteCount: 500 };
-    expect(isAcceptable("10", ten, undefined, true)).toBe(false);
+  it("never accepts a single-digit or zero-led query without a year (episode-leak garbage)", () => {
+    expect(isAcceptable("9", { title: "9", year: 2009, voteCount: 2000 }, undefined, true)).toBe(false);
     expect(isAcceptable("01", { title: "01", year: 2003, voteCount: 100 }, undefined, true)).toBe(false);
+    expect(isAcceptable("(09)", { title: "09", year: 2014, voteCount: 50 }, undefined, true)).toBe(false);
   });
 
   it("accepts a short numeric title when the year corroborates it", () => {
     const nine = { title: "9", year: 2009, voteCount: 2000 };
     expect(isAcceptable("9", nine, 2009, true)).toBe(true);
+  });
+
+  it("keeps two-digit titles matchable without a year (shows and films named 24/86/10)", () => {
+    expect(isAcceptable("24", { title: "24", year: 2001, voteCount: 3000 }, undefined, true)).toBe(true);
+    expect(isAcceptable("86", { title: "86", year: 2021, voteCount: 800 }, undefined, true)).toBe(true);
   });
 
   it("leaves longer numeric titles alone (1917, 2012)", () => {

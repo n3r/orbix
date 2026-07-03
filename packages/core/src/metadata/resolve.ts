@@ -8,7 +8,7 @@ import {
   TITLE_STRONG,
   TITLE_WEAK,
 } from "./match-score";
-import { seasonShapeScore, type LocalSeasonShape, type ProviderSeasonShape } from "./season-shape";
+import { pickBestByShape, type LocalSeasonShape, type ProviderSeasonShape } from "./season-shape";
 
 // ---------------------------------------------------------------------------
 // Generic title → provider-id resolver.
@@ -55,22 +55,28 @@ const DEEP_CHECK_LIMIT = 3;
 /** Minimum votes for a WEAK-tier deep-check acceptance (translated-title data is noisy). */
 const DEEP_WEAK_VOTE_FLOOR = 50;
 
-/** How many gate-clearing candidates the shape phase may fetch seasons for. */
-const SHAPE_CHECK_LIMIT = 3;
-
 /** Single definition of "the candidate's year exactly matches the item's". */
 export function yearMatches(itemYear: number | undefined, candidateYear: number | undefined): boolean {
   return itemYear != null && candidateYear != null && candidateYear === itemYear;
 }
 
+/** Vote floor for stretching the deep-check year window to a few years. */
+const DEEP_YEAR_STRETCH_VOTES = 200;
+
 /**
- * Alt-title (deep-check) verification only trusts a STRONG match when the
- * candidate's year is within a year of the item's: alternative-title data is
+ * Alt-title (deep-check) verification only trusts a match when the
+ * candidate's year is near the item's: alternative-title data is
  * crowd-sourced and a namesake decades away ("Batya" 2020 vs "Batya't
- * Palu-Palo" 1974 carrying the alt title "Batya") must not verify.
+ * Palu-Palo" 1974 carrying the alt title "Batya") must not verify. A ±1
+ * window always applies (festival vs wide release); well-known films
+ * (real vote counts) stretch it to ±4 for rebrand/re-release rips
+ * ("Live.Die.Repeat.2016" = Edge of Tomorrow 2014).
  */
-function deepYearSane(itemYear: number | undefined, candidateYear: number | undefined): boolean {
-  return itemYear == null || candidateYear == null || Math.abs(candidateYear - itemYear) <= 1;
+function deepYearSane(itemYear: number | undefined, candidate: ResolveCandidate): boolean {
+  if (itemYear == null || candidate.year == null) return true;
+  const delta = Math.abs(candidate.year - itemYear);
+  if (delta <= 1) return true;
+  return delta <= 4 && (candidate.voteCount ?? 0) >= DEEP_YEAR_STRETCH_VOTES;
 }
 
 /** Primary + variant ladders, deduped by (query, year-filter, language, derived). */
@@ -139,9 +145,13 @@ export async function resolveTitle(
       // check — an exact match against a lossy query proves nothing.
       if (!attempt.derived && isAcceptable(attempt.query, candidate, attempt.year, i === 0)) {
         if (shapeMode) {
+          // Sim and rank are not monotonic together (rank carries year and
+          // popularity bonuses) — track each maximum independently.
           const prev = accepted.get(candidate.id);
-          if (!prev || rank > prev.rank) {
-            accepted.set(candidate.id, { candidate, rank, sim: Math.max(sim, prev?.sim ?? 0) });
+          if (!prev) accepted.set(candidate.id, { candidate, rank, sim });
+          else {
+            prev.rank = Math.max(prev.rank, rank);
+            prev.sim = Math.max(prev.sim, sim);
           }
           continue;
         }
@@ -172,21 +182,8 @@ export async function resolveTitle(
   if (shapeMode && accepted.size) {
     const ranked = [...accepted.values()].sort((a, b) => b.sim - a.sim || b.rank - a.rank);
     if (ranked.length === 1) return ranked[0]!.candidate.id;
-    const finalists = ranked.slice(0, SHAPE_CHECK_LIMIT);
-    let bestShaped: { id: number; shape: number; rank: number } | undefined;
-    for (const f of finalists) {
-      let shape: number;
-      try {
-        shape = seasonShapeScore(opts!.localShape!, await opts!.seasonShape!(f.candidate.id));
-      } catch {
-        continue; // an unshapeable candidate neither wins nor blocks the others
-      }
-      if (!bestShaped || shape > bestShaped.shape || (shape === bestShaped.shape && f.rank > bestShaped.rank)) {
-        bestShaped = { id: f.candidate.id, shape, rank: f.rank };
-      }
-    }
-    if (bestShaped) return bestShaped.id;
-    return ranked[0]!.candidate.id; // every shape fetch failed — rank order
+    const winner = await pickBestByShape(ranked, opts!.localShape!, (f) => opts!.seasonShape!(f.candidate.id));
+    return (winner ?? ranked[0]!).candidate.id;
   }
   if (best) return best.id;
 
@@ -207,7 +204,7 @@ export async function resolveTitle(
     .slice(0, DEEP_CHECK_LIMIT);
 
   for (const { candidate } of top) {
-    if (!deepYearSane(year, candidate.year)) continue;
+    if (!deepYearSane(year, candidate)) continue;
     let titles: string[];
     try {
       titles = await deps.allTitles(candidate.id);

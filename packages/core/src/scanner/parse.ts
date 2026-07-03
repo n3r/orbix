@@ -81,8 +81,11 @@ function extractBareYear(s: string): number | undefined {
 
 // ── Extras (never library items) ─────────────────────────────────────────────
 // Plex-style skip folders: bonus material shipped inside show/movie folders.
+// These names are only reserved INSIDE an item folder — a library-root
+// collection legitimately named "Shorts"/"Trailers" is real content, so the
+// caller additionally requires a non-generic ancestor above the extras dir.
 const EXTRAS_FOLDER_RE =
-  /^(?:extras?|featurettes?|behind[\s._-]+the[\s._-]+scenes?|deleted[\s._-]+(?:and[\s._-]+alternate[\s._-]+)?scenes?|interviews?|samples?|shorts?|trailers?|bonus(?:es)?|special[\s._-]+features?|other)$/i;
+  /^(?:extras?|featurettes?|behind[\s._-]+the[\s._-]+scenes?|deleted[\s._-]+(?:and[\s._-]+alternate[\s._-]+)?scenes?|interviews?|samples?|shorts?|trailers?|bonus(?:es)?|special[\s._-]+features?)$/i;
 const PROMO_FOLDER_RE = /(?:^|[\s._-])promos?$/i;
 
 function isExtrasFolder(name: string): boolean {
@@ -205,10 +208,18 @@ interface EpisodeMarker {
 }
 
 /**
+ * Season-0 numbers at or above this base are PROVISIONAL: assigned to
+ * unnumbered specials at scan time (base + air-year), renumbered at enrich by
+ * matching against the provider's real specials list. Real provider specials
+ * number far below it.
+ */
+export const PROVISIONAL_SPECIAL_BASE = 900;
+
+/**
  * Unnumbered special episode: a file in a Specials folder, or a file carrying
  * the "special" keyword inside a season pack ("doctor.who.2005.christmas.
  * special.the.snowmen.2012…"). Mapped to season 0 with a provisional number
- * (900 + air-year, so re-scans are stable); enrichment renumbers it by
+ * (base + air-year, so re-scans are stable); enrichment renumbers it by
  * matching the title hint / air year against the provider's specials list.
  */
 function detectSpecial(filenameNoExt: string, folder: string): EpisodeMarker | null {
@@ -232,7 +243,7 @@ function detectSpecial(filenameNoExt: string, folder: string): EpisodeMarker | n
 
   return {
     seasonNumber: 0,
-    episodeNumber: 900 + (episodeYear != null ? episodeYear % 100 : 99),
+    episodeNumber: PROVISIONAL_SPECIAL_BASE + (episodeYear != null ? episodeYear % 100 : 99),
     ...(hint ? { episodeTitleHint: hint } : {}),
     ...(episodeYear != null ? { episodeYear } : {}),
   };
@@ -374,9 +385,10 @@ function detectEpisode(filenameNoExt: string, folder: string): EpisodeMarker | n
   }
 
   // "<title> <season> (NN).mkv" echoing a "<title> <season>" folder
-  // ("OITNB 5/OITNB 5 (01).mkv" → S5E01). The 1-3 digit cap keeps a
-  // parenthesized year ("Heat (1995).mkv") a movie.
-  const trailParen = /^(.*?)[\s._-]*\((\d{1,3})\)\s*$/.exec(filenameNoExt);
+  // ("OITNB 5/OITNB 5 (01).mkv" → S5E01). Two digits minimum: "(1)"/"(2)"
+  // are browser-duplicate/disc suffixes on movies, and the 3-digit cap keeps
+  // a parenthesized year ("Heat (1995).mkv") a movie.
+  const trailParen = /^(.*?)[\s._-]*\((\d{2,3})\)\s*$/.exec(filenameNoExt);
   if (trailParen && echoKey(trailParen[1]!) && echoKey(trailParen[1]!) === echoKey(folder)) {
     const seasonTail = /(?:^|\s)(\d{1,2})$/.exec(folder.replace(/[._]+/g, " ").trim());
     if (seasonTail) {
@@ -427,13 +439,21 @@ export function parseMediaPath(fullPath: string): ParsedMediaPath {
   // Strip extension from filename for the library parser
   const filenameNoExt = filename.replace(/\.[^.]+$/, "");
 
-  // Extras/bonus folders are never library items, whatever they contain.
+  // Extras/bonus folders are never library items — but ONLY inside an item
+  // folder. A root-level collection named "Shorts"/"Trailers" (grandparent is
+  // a generic library root) is real content and must ingest normally.
   const grandparent = basename(dirname(dirname(fullPath))).normalize("NFC");
-  if (isExtrasFolder(folder) || isExtrasFolder(grandparent)) {
+  const insideItemFolder = !!grandparent && !GENERIC_ROOT_RE.test(grandparent) && grandparent !== "/";
+  if (isExtrasFolder(folder) && insideItemFolder) {
     return { title: filenameNoExt, skip: true };
   }
 
-  const episode = detectEpisode(filenameNoExt, folder) ?? detectSpecial(filenameNoExt, folder);
+  // A "Specials" dir is a season-0 marker only in the same item-folder
+  // context — a movie library's own "/Specials/" collection (standup specials
+  // are movies) must stay in the movie branch.
+  const episode =
+    detectEpisode(filenameNoExt, folder) ??
+    (insideItemFolder || !SPECIALS_FOLDER_RE.test(folder) ? detectSpecial(filenameNoExt, folder) : null);
 
   // Marker-less extras files in a series context: inside a season pack
   // ("Family.Guy.Deleted.Scenes…") or carrying a season token themselves
@@ -458,9 +478,13 @@ export function parseMediaPath(fullPath: string): ParsedMediaPath {
     // The loose standalone-number reading only applies to the file's own
     // folder — a deeper ancestor ("…5.sezonov.iz.5…" for a season-5 file) may
     // legitimately contain the digit and must only skip on explicit markers.
+    // A folder carrying a full episode marker is a per-episode folder
+    // ("Doctor.Who.2005.S09E13…") — never the show.
     const isPackName = (name: string, immediate: boolean): boolean =>
       folderSeasonNumber(name) != null ||
       SPECIALS_FOLDER_RE.test(name) ||
+      SE_RE.test(name) ||
+      X_RE.test(name) ||
       (immediate && episode.seasonNumber > 0 && standaloneSeason.test(name));
     // NFC like filename/folder above — a raw macOS path stays decomposed.
     const ancestors = [folder, grandparent, basename(dirname(dirname(dirname(fullPath)))).normalize("NFC")];
@@ -474,7 +498,6 @@ export function parseMediaPath(fullPath: string): ParsedMediaPath {
     // A pack directly under the library root has no usable parent — fall back
     // to the episode-filename title below instead of "Series"/"TV".
     if (idx > 0 && GENERIC_ROOT_RE.test(showFolder)) showFolder = "";
-    if (!packFolder && idx === 0) packFolder = ""; // flat layout: no pack level
 
     let folderTitle = showFolder ? filenameParse(showFolder, false).title?.trim() || "" : "";
     // Same library mangling as the movie branch: a multi-word Cyrillic show
@@ -525,12 +548,18 @@ export function parseMediaPath(fullPath: string): ParsedMediaPath {
     addVariant(prefixTitle);
     addVariant(packTitle ? cleanTail(packTitle) : "");
 
+    // A show-folder year is premiere-grade. A SEASON PACK's year is only the
+    // premiere for season 1 — later packs carry that season's AIR year
+    // ("Сезон 5 2002-2003" of a 1998 show), which would poison exact-year
+    // gates; such packs stay year-less and converge onto their season-1
+    // sibling via title grouping. Specials (S0) never date the series.
+    const packYearTrusted = episode.seasonNumber === 1;
     const year =
       extractYear(showFolder) ??
-      extractYear(packFolder || folder) ??
-      extractBareYear(packFolder || folder) ??
+      (packYearTrusted ? extractYear(packFolder || folder) : undefined) ??
+      (packYearTrusted ? extractBareYear(packFolder || folder) : undefined) ??
       extractBareYear(showFolder) ??
-      prefix?.year;
+      (packYearTrusted ? prefix?.year : undefined);
     const tmdbId = extractTmdbId(showFolder) ?? extractTmdbId(filename);
     const imdbId = extractImdbId(showFolder) ?? extractImdbId(filename);
 
