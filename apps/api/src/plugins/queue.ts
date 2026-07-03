@@ -220,6 +220,10 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
           height: input.tech.height,
           durationSec: input.tech.durationSec,
           bitrate: input.tech.bitrate,
+          videoProfile: input.tech.videoProfile,
+          videoLevel: input.tech.videoLevel,
+          colorTransfer: input.tech.colorTransfer,
+          frameRate: input.tech.frameRate,
           // Prisma accepts Json as unknown[]
           subtitleTracks: input.tech.subtitleTracks as unknown as Prisma.InputJsonValue,
           audioTracks: input.tech.audioTracks as unknown as Prisma.InputJsonValue,

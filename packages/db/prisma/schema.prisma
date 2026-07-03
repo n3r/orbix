@@ -196,6 +196,11 @@ model MediaFile {
   height         Int?
   durationSec    Int?
   bitrate        Int?
+  videoProfile   String?
+  videoLevel     Int?
+  colorTransfer  String?
+  frameRate      Float?
+  keyframes      Json? // keyframe pts seconds (asc); written by the keyframes job, not scan
   size           BigInt?
   mtime          DateTime?
   subtitleTracks Json      @default("[]")

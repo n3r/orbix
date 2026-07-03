@@ -11,6 +11,10 @@ export interface MediaFileTechnical {
   height?: number;
   durationSec?: number;
   bitrate?: number;
+  videoProfile?: string;
+  videoLevel?: number;
+  colorTransfer?: string;
+  frameRate?: number;
   subtitleTracks: { index: number; codec?: string; language?: string }[];
   audioTracks: { index: number; codec?: string; channels?: number; language?: string }[];
   /** Whether ffprobe succeeded. false = empty tech from a probe failure / missing ffprobe. */
@@ -25,6 +29,10 @@ interface FfprobeStream {
   height?: number;
   channels?: number;
   tags?: { language?: string };
+  profile?: string;
+  level?: number;
+  color_transfer?: string;
+  r_frame_rate?: string;
 }
 
 interface FfprobeFormat {
@@ -55,6 +63,10 @@ export async function probeFile(
   let videoCodec: string | undefined;
   let width: number | undefined;
   let height: number | undefined;
+  let videoProfile: string | undefined;
+  let videoLevel: number | undefined;
+  let colorTransfer: string | undefined;
+  let frameRate: number | undefined;
 
   for (const stream of streams) {
     if (stream.codec_type === "video" && videoCodec === undefined) {
@@ -63,6 +75,17 @@ export async function probeFile(
       const h = stream.height !== undefined ? Number(stream.height) : NaN;
       if (!Number.isNaN(w)) width = w;
       if (!Number.isNaN(h)) height = h;
+      if (stream.profile !== undefined) videoProfile = stream.profile;
+      const lvl = stream.level !== undefined ? Number(stream.level) : NaN;
+      if (!Number.isNaN(lvl)) videoLevel = lvl;
+      if (stream.color_transfer !== undefined) colorTransfer = stream.color_transfer;
+      if (stream.r_frame_rate) {
+        const m = /^(\d+)\/(\d+)$/.exec(stream.r_frame_rate);
+        if (m && Number(m[2]) > 0) {
+          const fr = Math.round((Number(m[1]) / Number(m[2])) * 1000) / 1000;
+          if (fr > 0) frameRate = fr;
+        }
+      }
     } else if (stream.codec_type === "audio") {
       if (stream.codec_name) audioCodecs.push(stream.codec_name);
       const channels = stream.channels !== undefined ? parseInt(String(stream.channels), 10) : undefined;
@@ -99,6 +122,10 @@ export async function probeFile(
   if (height !== undefined) result.height = height;
   if (durationSec !== undefined) result.durationSec = durationSec;
   if (bitrate !== undefined) result.bitrate = bitrate;
+  if (videoProfile !== undefined) result.videoProfile = videoProfile;
+  if (videoLevel !== undefined) result.videoLevel = videoLevel;
+  if (colorTransfer !== undefined) result.colorTransfer = colorTransfer;
+  if (frameRate !== undefined) result.frameRate = frameRate;
 
   return result;
 }
