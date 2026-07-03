@@ -23,6 +23,7 @@ export default function AccountDevicesPage() {
 
   const [code, setCode] = useState("");
   const [pairMsg, setPairMsg] = useState<"approved" | "unknown" | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const approve = useMutation({
     mutationFn: (c: string) =>
@@ -39,13 +40,17 @@ export default function AccountDevicesPage() {
 
   const revoke = useMutation({
     mutationFn: (id: string) => apiJson<{ ok: true }>(`/devices/${id}/revoke`, { method: "POST" }),
+    onMutate: () => setActionError(null),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["devices"] }),
+    onError: () => setActionError(t("errors:network")),
   });
 
   const rename = useMutation({
     mutationFn: (v: { id: string; name: string }) =>
       apiJson<{ ok: true }>(`/devices/${v.id}`, { method: "PATCH", body: JSON.stringify({ name: v.name }) }),
+    onMutate: () => setActionError(null),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["devices"] }),
+    onError: () => setActionError(t("errors:network")),
   });
 
   const [editing, setEditing] = useState<{ id: string; name: string } | null>(null);
@@ -85,6 +90,7 @@ export default function AccountDevicesPage() {
 
       <section>
         <h2 className="text-lg font-medium text-[var(--text)]">{t("account:devices.title")}</h2>
+        {actionError && <p className="mt-2 text-sm text-red-400">{actionError}</p>}
         {devices.data && devices.data.devices.length === 0 && (
           <p className="mt-2 text-sm text-[var(--text-dim)]">{t("account:devices.empty")}</p>
         )}
@@ -97,6 +103,7 @@ export default function AccountDevicesPage() {
                     className="flex gap-2"
                     onSubmit={(e) => {
                       e.preventDefault();
+                      if (!editing.name.trim()) return;
                       rename.mutate(editing);
                       setEditing(null);
                     }}
@@ -105,8 +112,15 @@ export default function AccountDevicesPage() {
                       value={editing.name}
                       onChange={(e) => setEditing({ id: d.id, name: e.target.value })}
                       className="rounded bg-[var(--surface-2)] px-2 py-1 text-sm text-[var(--text)] outline-none"
+                      aria-label={t("account:devices.rename")}
                     />
-                    <button type="submit" className="text-sm text-[var(--accent)]">{t("account:devices.save")}</button>
+                    <button
+                      type="submit"
+                      disabled={!editing.name.trim() || rename.isPending}
+                      className="text-sm text-[var(--accent)] disabled:opacity-50"
+                    >
+                      {t("account:devices.save")}
+                    </button>
                   </form>
                 ) : (
                   <p className="truncate text-sm text-[var(--text)]">
@@ -131,8 +145,12 @@ export default function AccountDevicesPage() {
                     {t("account:devices.rename")}
                   </button>
                   <button
-                    onClick={() => revoke.mutate(d.id)}
-                    className="text-sm text-red-400 hover:text-red-300"
+                    onClick={() => {
+                      if (editing?.id === d.id) setEditing(null);
+                      revoke.mutate(d.id);
+                    }}
+                    disabled={revoke.isPending}
+                    className="text-sm text-red-400 hover:text-red-300 disabled:opacity-50"
                   >
                     {t("account:devices.revoke")}
                   </button>
