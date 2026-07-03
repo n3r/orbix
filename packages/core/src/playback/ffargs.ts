@@ -24,6 +24,10 @@ export interface HlsArgsOpts {
   encoder?: EncoderSetting | "libx264";
   /** VAAPI render node (defaults to /dev/dri/renderD128). */
   vaapiDevice?: string;
+  /** Audio-RELATIVE track position for -map 0:a:N (default 0). */
+  audioTrackIndex?: number;
+  /** Target channel count when audioAction === "aac" (default 2). */
+  audioChannels?: number;
 }
 
 export function buildHlsArgs(opts: HlsArgsOpts): string[] {
@@ -49,7 +53,7 @@ export function buildHlsArgs(opts: HlsArgsOpts): string[] {
   args.push("-i", input);
 
   // 3. Stream mapping
-  args.push("-map", "0:v:0", "-map", "0:a:0?");
+  args.push("-map", "0:v:0", "-map", `0:a:${opts.audioTrackIndex ?? 0}?`);
 
   // 4. Video codec (+ hardware-upload pipeline for GPU encoders). Hardware
   //    encoders take frames on the GPU, so software-decoded frames are uploaded
@@ -77,14 +81,15 @@ export function buildHlsArgs(opts: HlsArgsOpts): string[] {
     }
   }
 
-  // 5. Audio codec. Downmix to stereo when transcoding: multichannel (5.1) AAC
-  //    over hls.js/MSE fails to append in the browser — segments load but never
-  //    decode (the <video> stays at readyState 0 / buffered empty, with no error).
-  //    Stereo AAC is universally compatible.
+  // 5. Audio codec. The channel count now comes from the capability decision (via
+  //    audioChannels); when playing multichannel AAC over hls.js/MSE, segments load
+  //    but fail to decode in the browser (readyState 0, no error). The bitrate is
+  //    adjusted based on channel count: 384k for >2ch, 192k otherwise.
   if (audioAction === "copy") {
     args.push("-c:a", "copy");
   } else {
-    args.push("-c:a", "aac", "-b:a", "192k", "-ac", "2");
+    const ac = opts.audioChannels ?? 2;
+    args.push("-c:a", "aac", "-b:a", ac > 2 ? "384k" : "192k", "-ac", String(ac));
   }
 
   // 6. HLS muxer flags
