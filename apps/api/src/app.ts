@@ -31,11 +31,16 @@ import { fixRoute } from "./routes/fix";
 import { refreshRoute } from "./routes/refresh";
 import { tvSourcesRoute } from "./routes/tv-sources";
 import tvCatalogRoute from "./routes/tv-catalog";
+import tvPlayRoute from "./routes/tv-play";
+import type { TvUpstream } from "./lib/tv-upstream";
 import { staticWebPlugin } from "./plugins/static-web";
 import { TmdbClient, getSetting } from "@orbix/core";
 import { refreshMetadata } from "./jobs/refresh-metadata.js";
 
-export async function buildApp(env: Env, overrides?: { mountRuntime?: MountRuntime }): Promise<FastifyInstance> {
+export async function buildApp(
+  env: Env,
+  overrides?: { mountRuntime?: MountRuntime; tvUpstream?: TvUpstream },
+): Promise<FastifyInstance> {
   const app = Fastify({ logger: true });
   const runtime = overrides?.mountRuntime;
   const origins = env.WEB_ORIGIN.split(",").map((s) => s.trim());
@@ -70,6 +75,7 @@ export async function buildApp(env: Env, overrides?: { mountRuntime?: MountRunti
   await app.register(refreshRoute(env), { prefix: "/api" });
   await app.register(tvSourcesRoute(env), { prefix: "/api" });
   await app.register(tvCatalogRoute, { prefix: "/api" });
+  await app.register(tvPlayRoute(env, { upstream: overrides?.tvUpstream }), { prefix: "/api" });
 
   // ── Periodic metadata refresh (daily; selectStaleItems decides what's stale) ──
   const REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 h
