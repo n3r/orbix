@@ -64,6 +64,24 @@ function levRatio(a: string, b: string): number {
   return m === 0 ? 0 : 1 - levenshtein(a, b) / m;
 }
 
+/** Similarity floor granted to a numbered-sequel prefix match. */
+const SEQUEL_PREFIX_SCORE = 0.9;
+
+/**
+ * True when the query is a numbered sequel that is a strict token-prefix of the
+ * candidate — e.g. "step up 2" ⊂ "step up 2 the streets". Gated on the LAST
+ * query token being a number so plain prefixes ("the matrix" → "the matrix
+ * reloaded") are NOT treated as matches.
+ */
+function isNumberedSequelPrefix(qTokens: string[], tTokens: string[]): boolean {
+  if (qTokens.length < 2 || tTokens.length <= qTokens.length) return false;
+  if (!/^\d{1,3}$/.test(qTokens[qTokens.length - 1]!)) return false;
+  for (let i = 0; i < qTokens.length; i++) {
+    if (qTokens[i] !== tTokens[i]) return false;
+  }
+  return true;
+}
+
 function tokenDice(a: string, b: string): number {
   const A = new Set(a.split(" ").filter(Boolean));
   const B = new Set(b.split(" ").filter(Boolean));
@@ -85,9 +103,13 @@ export function titleSimilarity(query: string, candidate: ScoreCandidate): numbe
     .filter((t): t is string => t != null && t.length > 0)
     .map(normalizeForMatch);
 
+  const qTokens = q.split(" ").filter(Boolean);
   let best = 0;
   for (const t of targets) {
-    const s = Math.max(levRatio(q, t), tokenDice(q, t));
+    let s = Math.max(levRatio(q, t), tokenDice(q, t));
+    if (isNumberedSequelPrefix(qTokens, t.split(" ").filter(Boolean))) {
+      s = Math.max(s, SEQUEL_PREFIX_SCORE);
+    }
     if (s > best) best = s;
   }
   return best;

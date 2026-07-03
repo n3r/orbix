@@ -18,6 +18,10 @@ describe("cleanSearchTitle", () => {
     expect(cleanSearchTitle("[Taxi 1998] [BDRemux Rutracker.org]")).toBe("Taxi 1998");
   });
 
+  it("strips a trailing 'Remaster' token", () => {
+    expect(cleanSearchTitle("Blade Runner Remaster")).toBe("Blade Runner");
+  });
+
   // ── Cyrillic titles truncated at (1080p) (bucket ③) ───────────────────────
   it.each([
     ["Горько! 2 Blu-Ray (", "Горько! 2"],
@@ -64,5 +68,31 @@ describe("buildQueryLadder", () => {
   it("adds a first-3-tokens attempt only when the clean title is longer", () => {
     const ladder = buildQueryLadder({ title: "Indiana Jones and the Last Crusade UHD BDRemux" });
     expect(ladder.some((a) => a.query === "Indiana Jones and")).toBe(true);
+  });
+
+  // ── Parenthetical variants ────────────────────────────────────────────────
+  it("adds the parenthesized original title as its own attempt", () => {
+    const q = buildQueryLadder({ title: "Экзистенция (eXistenZ) (BDRemux)" }).map((a) => a.query);
+    expect(q).toContain("eXistenZ");
+  });
+
+  it("adds the outside-parens text as an attempt (drops a director/edition note)", () => {
+    const leon = buildQueryLadder({ title: "Леон (авторская версия)" }).map((a) => a.query);
+    expect(leon).toContain("Леон");
+    const stilyagi = buildQueryLadder({ title: "Стиляги (Валерий Тодоровский)" }).map((a) => a.query);
+    expect(stilyagi).toContain("Стиляги");
+  });
+
+  it("extracts an English alt-title from a second parenthetical", () => {
+    const q = buildQueryLadder({
+      title: "Шкатулка проклятия (Одержимость) (The Possession)",
+    }).map((a) => a.query);
+    expect(q).toContain("The Possession");
+  });
+
+  it("never emits a pure-noise parenthetical as a query", () => {
+    const q = buildQueryLadder({ title: "Foo (1080p)" }).map((a) => a.query);
+    expect(q).not.toContain("1080p");
+    expect(q).not.toContain("");
   });
 });
