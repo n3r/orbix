@@ -1,14 +1,18 @@
-import type { TmdbSearchResult, TmdbMovie, TmdbCredits, TmdbKeyword } from "./tmdb";
+import type { TmdbSearchResult, TmdbSearchCandidate, TmdbMovie, TmdbCredits, TmdbKeyword } from "./tmdb";
 import type { ImageKind } from "./images";
 import type { ExternalRatings } from "./omdb";
 import { isRealTranslation } from "./localize";
+import { buildQueryLadder } from "./search-title";
+import { titleSimilarity, scoreCandidate, isAcceptable, TITLE_STRONG } from "./match-score";
 
 // ---------------------------------------------------------------------------
 // Structural interface — real TmdbClient satisfies this.
 // ---------------------------------------------------------------------------
 
 export interface TmdbLike {
+  /** Retained for compatibility; enrichItem now resolves via searchMovies. */
   searchMovie(title: string, year?: number): Promise<TmdbSearchResult | null>;
+  searchMovies(query: string, year?: number): Promise<TmdbSearchCandidate[]>;
   movie(id: number): Promise<TmdbMovie>;
   credits(id: number): Promise<TmdbCredits>;
   keywords(id: number): Promise<TmdbKeyword[]>;
@@ -64,6 +68,40 @@ export interface EnrichResult {
 // enrichItem
 // ---------------------------------------------------------------------------
 
+/**
+ * Resolve a movie's TMDB id from a raw parsed title + optional year.
+ *
+ * Runs the query ladder (cleaned title → drop year → raw → first-3-tokens),
+ * scores every candidate against the query, and returns the best one that
+ * clears the acceptance gate. Short-circuits as soon as a confident (rule-A)
+ * match appears, keeping the common clean-title case at a single API call.
+ */
+async function resolveTmdbId(
+  title: string,
+  year: number | undefined,
+  client: Pick<TmdbLike, "searchMovies">,
+): Promise<number | undefined> {
+  const ladder = buildQueryLadder({ title, year });
+  let best: { tmdbId: number; rank: number } | undefined;
+
+  for (const attempt of ladder) {
+    const candidates = await client.searchMovies(attempt.query, attempt.year);
+    for (let i = 0; i < candidates.length; i++) {
+      const candidate = candidates[i]!;
+      const sim = titleSimilarity(attempt.query, candidate);
+      if (!isAcceptable(sim, candidate, attempt.year, i === 0 && attempt.yearFiltered)) {
+        continue;
+      }
+      const rank = scoreCandidate(attempt.query, candidate, attempt.year);
+      if (!best || rank > best.rank) best = { tmdbId: candidate.tmdbId, rank };
+    }
+    // A confident string match is as good as it gets — stop searching.
+    if (best && best.rank >= TITLE_STRONG) break;
+  }
+
+  return best?.tmdbId;
+}
+
 export async function enrichItem(
   item: { id: string; title: string; year?: number; tmdbId?: number },
   deps: {
@@ -78,9 +116,9 @@ export async function enrichItem(
     fetchRatings?: (imdbId: string) => Promise<ExternalRatings | undefined>;
   },
 ): Promise<EnrichResult> {
-  // Step 1: resolve tmdbId
-  const tmdbId =
-    item.tmdbId ?? (await deps.client.searchMovie(item.title, item.year))?.tmdbId;
+  // Step 1: resolve tmdbId — embedded id wins; otherwise clean the parsed title,
+  // walk a query ladder, and accept the best-scored candidate (Plex-style).
+  const tmdbId = item.tmdbId ?? (await resolveTmdbId(item.title, item.year, deps.client));
 
   if (!tmdbId) {
     return { matched: false };
