@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { buildApp } from "../app";
 import { tvDoneCache } from "../plugins/tv-queue";
+import { Prisma } from "@orbix/db";
 import type { Env } from "@orbix/config";
 
 const metadataDir = fs.mkdtempSync(path.join(os.tmpdir(), "orbix-tv-sources-"));
@@ -138,6 +139,41 @@ describe("POST /tv/sources", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(created.data.countries).toEqual(["RU", "UK"]);
+    await app.close();
+  });
+
+  it("409s when the DB singleton index rejects a concurrent iptv-org create (P2002)", async () => {
+    const app = await buildApp(env);
+    patchAuth(app);
+    (app as any).prisma.tvSource = {
+      findFirst: async () => null, // pre-check raced and lost — another request created one first
+      create: async () => {
+        throw new Prisma.PrismaClientKnownRequestError("unique violation", {
+          code: "P2002",
+          clientVersion: "x",
+        });
+      },
+    };
+    const res = await app.inject({
+      method: "POST", url: "/api/tv/sources", cookies: COOKIES,
+      payload: { kind: "iptv-org", name: "Catalog", countries: ["RU"] },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({ error: "iptv_org_exists" });
+    await app.close();
+  });
+});
+
+describe("PATCH /tv/sources/:id", () => {
+  it("400s on {countries: []} the same way POST does", async () => {
+    const app = await buildApp(env);
+    patchAuth(app);
+    const res = await app.inject({
+      method: "PATCH", url: "/api/tv/sources/src1", cookies: COOKIES,
+      payload: { countries: [] },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: "countries_required" });
     await app.close();
   });
 });

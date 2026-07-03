@@ -73,9 +73,20 @@ export function tvSourcesRoute(env: Env) {
           if (!countries || countries.length === 0) {
             return reply.code(400).send({ error: "countries_required" });
           }
-          return await app.prisma.tvSource.create({
-            data: { kind: "iptv-org", name, countries },
-          });
+          try {
+            return await app.prisma.tvSource.create({
+              data: { kind: "iptv-org", name, countries },
+            });
+          } catch (e) {
+            // Belt-and-suspenders: the findFirst check above is a friendly
+            // pre-check, but two concurrent requests can both pass it (TOCTOU).
+            // The DB-level partial unique index (TvSource_iptv_org_singleton_key)
+            // is the real guard — translate its P2002 into the same 409 shape.
+            if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+              return reply.code(409).send({ error: "iptv_org_exists" });
+            }
+            throw e;
+          }
         }
 
         if (body.kind === "m3u") {
@@ -114,7 +125,9 @@ export function tvSourcesRoute(env: Env) {
         if (typeof body.epgUrl === "string") data.epgUrl = body.epgUrl.trim() || null;
         if (body.countries !== undefined) {
           const countries = parseCountries(body.countries);
-          if (!countries) return reply.code(400).send({ error: "invalid_countries" });
+          if (!countries || countries.length === 0) {
+            return reply.code(400).send({ error: "countries_required" });
+          }
           data.countries = countries;
         }
         try {

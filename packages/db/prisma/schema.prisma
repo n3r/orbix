@@ -345,6 +345,11 @@ model EpisodeTranslation {
 
 // ── TV live channels ─────────────────────────────────────────────────────────
 
+// NOTE: a partial UNIQUE index `TvSource_iptv_org_singleton_key` on the constant
+// expression (1) WHERE kind = 'iptv-org' exists in the database (migration
+// 20260703214327_tv_source_iptv_org_singleton). Prisma cannot express a partial
+// index, so it is not declared here — do not "fix" the resulting drift by dropping
+// it. It enforces at most one iptv-org source across the whole table.
 model TvSource {
   id            String      @id @default(cuid())
   kind          String      // "iptv-org" | "m3u"
