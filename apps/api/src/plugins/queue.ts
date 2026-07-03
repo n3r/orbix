@@ -239,11 +239,19 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
           const seasonNumber = input.parsed.seasonNumber!;
           const episodeNumber = input.parsed.episodeNumber!;
 
+          // Parsed titles are NFC-composed; rows scanned before that change may
+          // hold NFD sortTitles (macOS filenames) — match either form so a new
+          // episode attaches to the existing series instead of duplicating it.
           let series = await prisma.mediaItem.findFirst({
             where: {
               libraryId: input.libraryId,
               kind: "series",
-              sortTitle: input.parsed.title.toLowerCase(),
+              sortTitle: {
+                in: [
+                  input.parsed.title.toLowerCase(),
+                  input.parsed.title.normalize("NFD").toLowerCase(),
+                ],
+              },
               year: input.parsed.year ?? null,
             },
             select: { id: true },
@@ -291,11 +299,17 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
         }
 
         // ── Movie: find or create the parent MediaItem ────────────────────
+        // NFC/NFD dual lookup — see the series lookup above.
         let item = await prisma.mediaItem.findFirst({
           where: {
             libraryId: input.libraryId,
             kind: "movie",
-            sortTitle: input.parsed.title.toLowerCase(),
+            sortTitle: {
+              in: [
+                input.parsed.title.toLowerCase(),
+                input.parsed.title.normalize("NFD").toLowerCase(),
+              ],
+            },
             year: input.parsed.year ?? null,
           },
           select: { id: true },

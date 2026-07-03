@@ -37,6 +37,14 @@ describe("cleanSearchTitle", () => {
     expect(cleanSearchTitle(raw)).toBe(expected);
   });
 
+  it("keeps a leading dictionary-noise word that starts a real title (TC 2000)", () => {
+    // Leading-position skipping is only safe for STRUCTURED tokens (1080p,
+    // x264, t05) — a dictionary word like TC can legitimately start a title.
+    expect(cleanSearchTitle("TC 2000")).toBe("TC 2000");
+    // ...while a structured leading token is still dropped:
+    expect(cleanSearchTitle("1080p The Matrix")).toBe("The Matrix");
+  });
+
   // ── Cyrillic titles truncated at (1080p) (bucket ③) ───────────────────────
   it.each([
     ["Горько! 2 Blu-Ray (", "Горько! 2"],
@@ -144,6 +152,14 @@ describe("buildQueryLadder", () => {
       yearFiltered: true,
       language: "ru-RU",
     });
+  });
+
+  it("does not emit a language-less duplicate of an identical clean query (no 2x API calls)", () => {
+    // TMDB's match set is language-independent — when cleaning changed nothing,
+    // a language-less raw rung is the same search twice.
+    const ladder = buildQueryLadder({ title: "Побег из Шоушенка", year: 1994 });
+    const fullQueryAttempts = ladder.filter((a) => a.query === "Побег из Шоушенка");
+    expect(fullQueryAttempts.every((a) => a.language === "ru-RU")).toBe(true);
   });
 
   it("tags a Japanese query with ja-JP", () => {

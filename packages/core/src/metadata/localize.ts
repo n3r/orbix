@@ -7,6 +7,8 @@
  * stands. Output is therefore never blank.
  */
 
+// NB: keyed by profile LANGUAGE code; script.ts has a sibling table keyed by
+// detected SCRIPT for search-language inference — keep region variants in sync.
 const TMDB_LANGUAGE_TAGS: Record<string, string> = {
   en: "en-US",
   es: "es-ES",

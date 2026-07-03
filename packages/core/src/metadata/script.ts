@@ -101,6 +101,9 @@ export function dominantScript(s: string): Script | null {
  * TMDB language tag to search with for content named in this script, or null
  * when the script is too ambiguous to imply a language (latin) or unmapped.
  */
+// NB: keyed by detected SCRIPT (for search-language inference); the sibling
+// TMDB_LANGUAGE_TAGS table in localize.ts is keyed by profile LANGUAGE code —
+// keep region variants (e.g. ru-RU) in sync when TMDB changes tags.
 const TMDB_LANGUAGE_FOR_SCRIPT: Partial<Record<Script, string>> = {
   // Deliberate: most Cyrillic media content is Russian; a downstream
   // alternative-titles check catches uk/bg/sr.

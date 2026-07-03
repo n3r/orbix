@@ -49,8 +49,7 @@ function makeFakeClient(
     /** Per-id title list for the deep-check phase (default: none known). */
     allTitles?: (id: number) => string[];
   } = {},
-): TmdbLike & { searchCalls: number; searchMoviesCalls: number; allTitlesCalls: number } {
-  let searchCalls = 0;
+): TmdbLike & { searchMoviesCalls: number; allTitlesCalls: number } {
   let searchMoviesCalls = 0;
   let allTitlesCalls = 0;
   // Default: one candidate mirroring searchResult (a strong string match for the
@@ -59,18 +58,11 @@ function makeFakeClient(
     ? [{ tmdbId: searchResult.tmdbId, title: searchResult.title, year: searchResult.year, voteCount: 20000 }]
     : [];
   return {
-    get searchCalls() {
-      return searchCalls;
-    },
     get searchMoviesCalls() {
       return searchMoviesCalls;
     },
     get allTitlesCalls() {
       return allTitlesCalls;
-    },
-    async searchMovie(_title: string, _year?: number): Promise<TmdbSearchResult | null> {
-      searchCalls++;
-      return searchResult;
     },
     async searchMovies(query: string, year?: number, language?: string): Promise<TmdbSearchCandidate[]> {
       searchMoviesCalls++;
@@ -230,7 +222,6 @@ describe("enrichItem", () => {
     expect(result.matched).toBe(true);
     expect(result.tmdbId).toBe(MATRIX_ID);
     // No TMDB search of any kind since tmdbId was embedded
-    expect(client.searchCalls).toBe(0);
     expect(client.searchMoviesCalls).toBe(0);
   });
 
@@ -677,6 +668,84 @@ describe("enrichItem", () => {
 
     expect(result.matched).toBe(true);
     expect(result.tmdbId).toBe(FILM_2005);
+  });
+
+  it("Test 21: a weak exact-year candidate cannot displace a STRONG off-year match", async () => {
+    // The item's parsed year is off by one vs TMDB's canonical year (common:
+    // festival vs wide release). The sim-1.0 film must win over a junk film
+    // that merely shares the parsed year at rule-B similarity.
+    const RIGHT = 1001; // sim 1.0, year 1969
+    const JUNK = 2002; // sim ~0.75 (WEAK tier), year 1968 (matches parsed year)
+    const client = makeFakeClient(null, {
+      searchMovies: (query) => {
+        if (query !== "Once Upon a Time") return [];
+        return [
+          { tmdbId: RIGHT, title: "Once Upon a Time", year: 1969, voteCount: 9000 },
+          { tmdbId: JUNK, title: "Once Upon a Winter", year: 1968, voteCount: 800 },
+        ];
+      },
+    });
+    const { cacheImage } = makeCacheImageSpy();
+    const { saveMetadata } = makeSaveMetadataSpy();
+
+    const result = await enrichItem(
+      { id: "item-21", title: "Once Upon a Time", year: 1968 },
+      { client, cacheImage, saveMetadata },
+    );
+
+    expect(result.matched).toBe(true);
+    expect(result.tmdbId).toBe(RIGHT);
+  });
+
+  it("Test 22: deep-check WEAK-tier acceptance requires a real vote count", async () => {
+    // A near-zero-vote film sharing the parsed year with a 0.6-sim translated
+    // title must NOT be matched; the same film with real votes may be.
+    const makeClientWithVotes = (votes: number) =>
+      makeFakeClient(null, {
+        searchMovies: (query) =>
+          query === "Хитровка Знак четырёх"
+            ? [{ tmdbId: 777, title: "Some Display Title", year: 2023, voteCount: votes }]
+            : [],
+        allTitles: () => ["Хитровка Знак"], // partial overlap ≈ WEAK tier
+      });
+    const { cacheImage } = makeCacheImageSpy();
+    const { saveMetadata } = makeSaveMetadataSpy();
+
+    const low = await enrichItem(
+      { id: "item-22a", title: "Хитровка Знак четырёх", year: 2023 },
+      { client: makeClientWithVotes(3), cacheImage, saveMetadata },
+    );
+    expect(low.matched).toBe(false);
+
+    const ok = await enrichItem(
+      { id: "item-22b", title: "Хитровка Знак четырёх", year: 2023 },
+      { client: makeClientWithVotes(500), cacheImage, saveMetadata },
+    );
+    expect(ok.matched).toBe(true);
+    expect(ok.tmdbId).toBe(777);
+  });
+
+  it("Test 23: a failing search attempt does not abort the ladder", async () => {
+    let calls = 0;
+    const client = makeFakeClient(null, {
+      searchMovies: (query, yr) => {
+        calls++;
+        if (calls === 1) throw new Error("429 rate limited");
+        return query === "The Matrix" && yr == null
+          ? [{ tmdbId: MATRIX_ID, title: "The Matrix", year: 1999, voteCount: 20000 }]
+          : [];
+      },
+    });
+    const { cacheImage } = makeCacheImageSpy();
+    const { saveMetadata } = makeSaveMetadataSpy();
+
+    const result = await enrichItem(
+      { id: "item-23", title: "The Matrix", year: 1999 },
+      { client, cacheImage, saveMetadata },
+    );
+
+    expect(result.matched).toBe(true);
+    expect(result.tmdbId).toBe(MATRIX_ID);
   });
 
   it("Test 20: deep check is skipped entirely when the cheap gate already matched", async () => {

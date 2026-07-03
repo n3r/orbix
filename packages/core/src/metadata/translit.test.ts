@@ -92,3 +92,15 @@ describe("reverseTransliterateRu", () => {
     expect(reverseTransliterateRu("Obitel'")).toBe("Обитель");
   });
 });
+
+describe("vowel+y codas (BGN/Wikipedia romanization style)", () => {
+  it("maps a word-final vowel+y to й", () => {
+    expect(reverseTransliterateRu("Nochnoy Dozor")).toBe("Ночной Дозор");
+    expect(reverseTransliterateRu("Bolshoy god")).toBe("Болшой год"); // ь missing, 1 edit from Большой
+  });
+
+  it("keeps mid-word y as ы", () => {
+    expect(reverseTransliterateRu("Prostye")).toBe("Простые");
+    expect(reverseTransliterateRu("Dyhanie")).toBe("Дыхание");
+  });
+});

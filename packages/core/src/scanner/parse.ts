@@ -143,10 +143,17 @@ export function parseMediaPath(fullPath: string): ParsedMediaPath {
   // ── TV episode ────────────────────────────────────────────────────────────
   if (episode) {
     // The "show folder" is the series root: skip a Season NN / Specials folder.
+    // NFC like filename/folder above — a raw macOS path stays decomposed.
     const isSeasonFolder = SEASON_FOLDER_RE.test(folder) || SPECIALS_FOLDER_RE.test(folder);
-    const showFolder = isSeasonFolder ? basename(dirname(dirname(fullPath))) : folder;
+    const showFolder = isSeasonFolder ? basename(dirname(dirname(fullPath))).normalize("NFC") : folder;
 
-    const folderTitle = filenameParse(showFolder, false).title?.trim() || "";
+    let folderTitle = filenameParse(showFolder, false).title?.trim() || "";
+    // Same library mangling as the movie branch: a multi-word Cyrillic show
+    // folder with a year collapses to its first letter — recover from the raw name.
+    if (alnumLen(folderTitle) <= 2) {
+      const recovered = titleBeforeYear(showFolder);
+      if (recovered && alnumLen(recovered) >= alnumLen(folderTitle)) folderTitle = recovered;
+    }
     const tvTitle = filenameParse(filenameNoExt, true).title?.trim() || "";
     // Prefer the show-folder title (stable across all episodes of the series).
     const rawSeriesTitle = folderTitle || tvTitle || showFolder;

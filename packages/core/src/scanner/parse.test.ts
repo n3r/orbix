@@ -144,6 +144,14 @@ describe("parseMediaPath", () => {
       expect(r.episodeNumber).toBe(5);
     });
 
+    it("NFC-composes an NFD show folder (macOS paths) for episodes in a Season folder", () => {
+      const show = "Тайный город (2014)".normalize("NFD"); // й decomposes
+      const r = parseMediaPath(`/tv/${show}/Season 01/S01E02.mkv`);
+      expect(r.title).toBe("Тайный город".normalize("NFC"));
+      expect(r.seasonNumber).toBe(1);
+      expect(r.episodeNumber).toBe(2);
+    });
+
     it("detects a bare 'Серия N' mini-series (no season folder), defaulting season to 1", () => {
       const r = parseMediaPath("/m/Films/12 Стульев/12 Стульев. Серия 3.mkv");
       expect(r.title).toBe("12 Стульев");

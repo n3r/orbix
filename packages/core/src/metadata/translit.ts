@@ -103,6 +103,9 @@ const SINGLES = new Map<string, string>([
 /** Vowels after which j reads as ж ("Prodoljenie"); jo → ё is a digraph. */
 const J_ZH_VOWELS = new Set(["a", "e", "i", "u"]);
 
+/** Vowels before a word-final y that make it read as й ("Nochnoy" → Ночной). */
+const Y_CODA_VOWELS = new Set(["a", "e", "i", "o", "u"]);
+
 /** Latin-letter test on an already-lowercased string ("" for out-of-range). */
 function isLetter(ch: string): boolean {
   return ch >= "a" && ch <= "z";
@@ -164,6 +167,14 @@ export function reverseTransliterateRu(latin: string): string | null {
         // "Prodoljenie" → "Продолжение"); in codas it is й ("Bolshoj" →
         // "Болшой", "-skij" → "-ский").
         mapped = J_ZH_VOWELS.has(lower.charAt(i + 1)) ? "ж" : "й";
+      } else if (
+        ch === "y" &&
+        Y_CODA_VOWELS.has(lower.charAt(i - 1)) &&
+        !isLetter(lower.charAt(i + 1))
+      ) {
+        // BGN/Wikipedia-style й coda: a word-final vowel+y ("Nochnoy",
+        // "Bolshoy", "May") is й, not ы. Mid-word y stays ы ("Prostye").
+        mapped = "й";
       } else if (ch === "e" && wordStart) {
         // Bare word-initial e usually encodes э ("Eterna" → "Этерна"),
         // because initial е is romanized "ye"/"je". Mid-word e stays е.

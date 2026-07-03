@@ -96,13 +96,16 @@ function stripNoise(raw: string): string {
   const tokens = spaced.split(/\s+/).filter(Boolean);
 
   // 4/5. Truncate at the first strong-noise token that follows a real word.
+  // BEFORE the first word, only STRUCTURED tokens (1080p, x264, t05) are
+  // skipped — a dictionary word like "TC" can legitimately start a real title
+  // ("TC 2000"), so leading dictionary noise is kept as part of the title.
   const kept: string[] = [];
   let seenWord = false;
   for (const token of tokens) {
     const key = noiseKey(token);
     if (isNoise(key)) {
       if (seenWord) break; // cut here
-      continue; // leading noise before any word — skip it
+      if (NOISE_RE.some((re) => re.test(key))) continue; // structured leading junk
     }
     if (key.length > 0) seenWord = true;
     kept.push(token);
@@ -163,11 +166,17 @@ function tokenCount(s: string): number {
  * word precedes the number. The plausibility range (1900–2099) is generous;
  * safety comes from this being a LAST-RESORT ladder attempt with a year filter.
  */
+/** Shared plausibility window for a 4-digit token read as a release year. */
+function plausibleYear(token: string): number | null {
+  const year = parseInt(token, 10);
+  return year >= 1900 && year <= 2099 ? year : null;
+}
+
 function extractTrailingYear(s: string): { base: string; year: number } | null {
   const m = /^(.*\S)\s+(\d{4})$/.exec(s.trim());
   if (!m) return null;
-  const year = parseInt(m[2]!, 10);
-  if (year < 1900 || year > 2099) return null;
+  const year = plausibleYear(m[2]!);
+  if (year == null) return null;
   return { base: m[1]!.trim(), year };
 }
 
@@ -179,8 +188,8 @@ function extractTrailingYear(s: string): { base: string; year: number } | null {
 function extractLeadingYear(s: string): { base: string; year: number } | null {
   const m = /^(\d{4})[\s._-]+(\S.*)$/.exec(s.trim());
   if (!m) return null;
-  const year = parseInt(m[1]!, 10);
-  if (year < 1900 || year > 2099) return null;
+  const year = plausibleYear(m[1]!);
+  if (year == null) return null;
   if (!/\p{L}/u.test(m[2]!)) return null;
   return { base: m[2]!.trim(), year };
 }
@@ -255,7 +264,13 @@ export function buildQueryLadder(input: { title: string; year?: number }): Searc
     }
   }
 
-  push(title, input.year, undefined);
+  // Raw-title fallback — only when cleaning actually changed the text. When
+  // clean === raw a language-less rung would be the exact same TMDB search
+  // (the match set is language-independent), doubling API calls for every
+  // well-named foreign-script file.
+  if (normalizeForMatch(title) !== normalizeForMatch(clean)) {
+    push(title, input.year, undefined);
+  }
   if (tokenCount(body) > 3) {
     push(firstNTokens(body, 3), undefined, bodyLang, /* derived */ true);
   } else if (tokenCount(body) >= 2) {
