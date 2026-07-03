@@ -16,17 +16,21 @@ import "@vidstack/react/player/styles/default/layouts/video.css";
 import Hls from "hls.js";
 import { apiFetch } from "@/lib/api";
 
-interface Decision {
+interface PlaybackInfo {
+  playSessionId: string;
   mode: string;
-  url: string;
+  streamUrl: string;
+  audioTracks: { index: number; codec?: string; channels?: number; language?: string; selected: boolean }[];
+  subtitleTracks: { index: number; codec?: string; language?: string; available: boolean; reason?: string }[];
 }
 
-interface SubTrack {
-  index: number;
-  codec: string;
-  language?: string;
-  burnIn: boolean;
-}
+const WEB_CAPABILITIES = {
+  containers: ["mp4"],
+  videoCodecs: ["h264"],
+  audioCodecs: ["aac"],
+  maxAudioChannels: 2,
+  hlsMultichannelAacBroken: true,
+};
 
 interface Progress {
   positionSec: number;
@@ -74,41 +78,35 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
     </SeekButton>
   );
 
-  const [decision, setDecision] = useState<Decision | null>(null);
-  const [subs, setSubs] = useState<SubTrack[]>([]);
+  const [info, setInfo] = useState<PlaybackInfo | null>(null);
   const [resume, setResume] = useState<Progress | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const playerRef = useRef<MediaPlayerInstance>(null);
   const resumedRef = useRef(false);
+  const infoRef = useRef<PlaybackInfo | null>(null);
 
-  // Fetch decision, subtitle tracks, and saved progress on mount
+  // Negotiate playback (mode + stream URL + track lists) via PlaybackInfo, and
+  // fetch saved progress, in parallel on mount.
   useEffect(() => {
     void (async () => {
       try {
-        const [decisionRes, subsRes, progressRes] = await Promise.all([
-          apiFetch(`/play/${fileId}/decision`),
-          apiFetch(`/play/${fileId}/subs`),
+        const [infoRes, progressRes] = await Promise.all([
+          apiFetch("/playback/info", {
+            method: "POST",
+            body: JSON.stringify({ fileId, capabilities: WEB_CAPABILITIES }),
+          }),
           apiFetch(`/items/${mediaItemId}/progress${progressQuery}`),
         ]);
-
-        if (!decisionRes.ok) {
+        if (!infoRes.ok) {
           setError(t("player:error.decision"));
           return;
         }
-        const d = (await decisionRes.json()) as Decision;
-        setDecision(d);
-
-        if (subsRes.ok) {
-          const s = (await subsRes.json()) as SubTrack[];
-          setSubs(s);
-        }
-
-        if (progressRes.ok) {
-          const p = (await progressRes.json()) as Progress;
-          setResume(p);
-        }
+        const data = (await infoRes.json()) as PlaybackInfo;
+        infoRef.current = data;
+        setInfo(data);
+        if (progressRes.ok) setResume((await progressRes.json()) as Progress);
       } catch {
         setError(t("player:error.network"));
       } finally {
@@ -117,7 +115,8 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
     })();
   }, [fileId, mediaItemId, progressQuery, t]);
 
-  // Save progress to the server (reads live state from the player ref)
+  // Save progress to the server (reads live state from the player ref); the
+  // playSessionId rides along so the server can attribute the play event.
   const saveProgress = useCallback(async () => {
     const player = playerRef.current;
     if (!player) return;
@@ -127,7 +126,12 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
     try {
       await apiFetch(`/items/${mediaItemId}/progress`, {
         method: "PUT",
-        body: JSON.stringify({ positionSec: pos, durationSec: dur, episodeId }),
+        body: JSON.stringify({
+          positionSec: pos,
+          durationSec: dur,
+          episodeId,
+          playSessionId: infoRef.current?.playSessionId,
+        }),
       });
     } catch {
       // Ignore transient save errors
@@ -136,24 +140,32 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
 
   // Periodic progress save (every 10s while playing)
   useEffect(() => {
-    if (!decision) return;
+    if (!info) return;
     const id = setInterval(async () => {
       const player = playerRef.current;
       if (!player || player.state.paused || player.state.duration <= 0) return;
       await saveProgress();
     }, SAVE_INTERVAL_MS);
     return () => clearInterval(id);
-  }, [decision, saveProgress]);
+  }, [info, saveProgress]);
 
-  // Save on page hide (tab switch, close) and on unmount
+  // Save progress on page hide (tab switch) and stop the play session (so its
+  // ffmpeg + temp dir are released) on page hide / unmount.
   useEffect(() => {
+    const stop = () => {
+      const id = infoRef.current?.playSessionId;
+      if (id) navigator.sendBeacon(`/api/playback/${id}/stop`);
+    };
     const handleVisibility = () => {
       if (document.visibilityState === "hidden") void saveProgress();
     };
     document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("pagehide", stop);
     return () => {
       document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("pagehide", stop);
       void saveProgress();
+      stop();
     };
   }, [saveProgress]);
 
@@ -187,7 +199,7 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
     );
   }
 
-  if (error || !decision) {
+  if (error || !info) {
     return (
       <div className="grid h-full w-full place-items-center text-sm text-red-400">
         {error ?? t("player:error.generic")}
@@ -195,13 +207,13 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
     );
   }
 
-  const textTracks = subs.filter((s) => !s.burnIn);
+  const textTracks = info.subtitleTracks.filter((s) => s.available);
 
   return (
     <MediaPlayer
       ref={playerRef}
       title={title}
-      src={{ src: decision.url, type: decision.mode === "direct" ? "video/mp4" : "application/x-mpegurl" }}
+      src={{ src: info.streamUrl, type: info.mode === "direct" ? "video/mp4" : "application/x-mpegurl" }}
       className="h-full w-full bg-black"
       style={{ "--media-brand": "var(--accent)" }}
       autoPlay

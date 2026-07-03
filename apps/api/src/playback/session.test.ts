@@ -4,8 +4,16 @@ import path from "node:path";
 import os from "node:os";
 import type { ChildProcess } from "node:child_process";
 import { SessionManager, SegmentTimeoutError } from "./session";
-import { decideStrategy } from "@orbix/core";
+import type { PlaybackPlan } from "@orbix/core";
 import type { SpawnFn } from "./session";
+
+// These tests exercise SessionManager plumbing (spawn/restart/reap), not
+// playback-decision logic, so a plan is provided as a literal rather than via
+// the (deleted) legacy decideStrategy. This is the decision that
+// decideStrategy({ container: "mkv", videoCodec: "hevc", audioCodecs: ["aac"] })
+// used to produce: hevc video forces transcode (not h264 → no remux/direct);
+// aac audio already present → copy (no re-encode needed).
+const HEVC_TRANSCODE_PLAN: PlaybackPlan = { mode: "transcode", audioAction: "copy" };
 
 // ---------------------------------------------------------------------------
 // Fake spawn factory
@@ -106,7 +114,7 @@ describe("SessionManager", () => {
     const { spawn, calls } = makeFakeSpawn();
     const manager = new SessionManager({ transcodeDir: testDir, spawn });
 
-    const plan = decideStrategy({ container: "mkv", videoCodec: "hevc", audioCodecs: ["aac"] });
+    const plan = HEVC_TRANSCODE_PLAN;
     const session = await manager.getOrCreate("file1:default", {
       inputPath: "/fake/video.mkv",
       plan,
@@ -128,7 +136,7 @@ describe("SessionManager", () => {
     const { spawn, calls } = makeFakeSpawn();
     const manager = new SessionManager({ transcodeDir: testDir, spawn });
 
-    const plan = decideStrategy({ container: "mkv", videoCodec: "hevc", audioCodecs: ["aac"] });
+    const plan = HEVC_TRANSCODE_PLAN;
     const session = await manager.getOrCreate("file2:default", {
       inputPath: "/fake/video.mkv",
       plan,
@@ -177,11 +185,7 @@ describe("SessionManager", () => {
     const { spawn, calls } = makeFakeSpawn();
     const manager = new SessionManager({ transcodeDir: testDir, spawn });
 
-    const plan = decideStrategy({
-      container: "mkv",
-      videoCodec: "hevc",
-      audioCodecs: ["aac"],
-    });
+    const plan = HEVC_TRANSCODE_PLAN;
     const session = await manager.getOrCreate("file3:default", {
       inputPath: "/fake/video.mkv",
       plan,
@@ -212,11 +216,7 @@ describe("SessionManager", () => {
     const { spawn, calls } = makeFakeSpawn();
     const manager = new SessionManager({ transcodeDir: testDir, spawn });
 
-    const plan = decideStrategy({
-      container: "mkv",
-      videoCodec: "hevc",
-      audioCodecs: ["aac"],
-    });
+    const plan = HEVC_TRANSCODE_PLAN;
     const session = await manager.getOrCreate("file4:default", {
       inputPath: "/fake/video.mkv",
       plan,
@@ -254,7 +254,7 @@ describe("SessionManager", () => {
     };
     const manager = new SessionManager({ transcodeDir: testDir, spawn, getEncoder });
 
-    const plan = decideStrategy({ container: "mkv", videoCodec: "hevc", audioCodecs: ["aac"] });
+    const plan = HEVC_TRANSCODE_PLAN;
     expect(plan.mode).toBe("transcode"); // guard: getEncoder is only consulted for transcode
     const session = await manager.getOrCreate("file-race:default", {
       inputPath: "/fake/video.mkv",
@@ -280,7 +280,7 @@ describe("SessionManager", () => {
     const { spawn, calls } = makeFakeSpawn();
     const manager = new SessionManager({ transcodeDir: testDir, spawn });
 
-    const plan = decideStrategy({ container: "mkv", videoCodec: "hevc", audioCodecs: ["aac"] });
+    const plan = HEVC_TRANSCODE_PLAN;
     const session = await manager.getOrCreate("file-exit:default", {
       inputPath: "/fake/video.mkv",
       plan,
@@ -305,7 +305,7 @@ describe("SessionManager", () => {
     const { spawn } = makeFakeSpawn();
     const manager = new SessionManager({ transcodeDir: testDir, spawn, maxSessions: 2 });
 
-    const plan = decideStrategy({ container: "mkv", videoCodec: "hevc", audioCodecs: ["aac"] });
+    const plan = HEVC_TRANSCODE_PLAN;
     const opts = { inputPath: "/fake/video.mkv", plan, durationSec: 120, segSec: 6 };
 
     const s1 = await manager.getOrCreate("k1", opts);
@@ -341,7 +341,7 @@ describe("SessionManager", () => {
     // Use a very short timeoutMs so the test doesn't wait 30s.
     const manager = new SessionManager({ transcodeDir: testDir, spawn: noopSpawn, timeoutMs: 200 });
 
-    const plan = decideStrategy({ container: "mkv", videoCodec: "hevc", audioCodecs: ["aac"] });
+    const plan = HEVC_TRANSCODE_PLAN;
     const session = await manager.getOrCreate("file-timeout:default", {
       inputPath: "/fake/video.mkv",
       plan,

@@ -99,13 +99,27 @@ describe("session-aware HLS routes", () => {
     await app.close();
   });
 
-  it("legacy param-less master keeps working (pre-migration web)", async () => {
+  it("master without playSessionId → 400 missing_session", async () => {
     const app = await buildApp(env);
     stubAll(app);
     const res = await app.inject({ method: "GET", url: "/api/play/f1/master.m3u8", cookies });
-    expect(res.statusCode).toBe(200);
-    expect(res.body).toContain("index.m3u8");
-    expect(res.body).not.toContain("playSessionId");
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: "missing_session" });
+    await app.close();
+  });
+
+  it("index/init/seg without playSessionId → 400 missing_session", async () => {
+    const app = await buildApp(env);
+    stubAll(app);
+    for (const url of [
+      "/api/play/f1/index.m3u8",
+      "/api/play/f1/init.mp4",
+      "/api/play/f1/seg0.m4s",
+    ]) {
+      const res = await app.inject({ method: "GET", url, cookies });
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toEqual({ error: "missing_session" });
+    }
     await app.close();
   });
 

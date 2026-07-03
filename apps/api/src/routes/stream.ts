@@ -1,13 +1,12 @@
 import fs from "node:fs";
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import { decideStrategy, buildVodPlaylist } from "@orbix/core";
+import { buildVodPlaylist } from "@orbix/core";
 import { requireAuth } from "../lib/auth";
 import { queryTokenAuth } from "../lib/device-auth";
-import { activeProfile, profileAllowsItem, assertFileAllowed } from "../lib/catalog-filter";
+import { assertFileAllowed } from "../lib/catalog-filter";
 import { SessionManager, SegmentTimeoutError } from "../playback/session";
 import type { PlaySessionRegistry, PlaySessionEntry } from "../playback/registry";
 
-const DEFAULT_PROFILE = "default";
 const DEFAULT_SEG_SEC = 6;
 
 function contentTypeForContainer(container: string | null | undefined): string {
@@ -17,69 +16,6 @@ function contentTypeForContainer(container: string | null | undefined): string {
   if (/mkv|matroska/.test(c)) return "video/x-matroska";
   if (c === "webm") return "video/webm";
   return "application/octet-stream";
-}
-
-/**
- * Lookup MediaFile and return an active Session for the given fileId.
- * Returns null (+ sends reply) when file is not found, not probed, or blocked
- * by the active profile's maturity cap (kids-safety gate).
- */
-async function resolveSession(
-  app: FastifyInstance,
-  manager: SessionManager,
-  fileId: string,
-  req: FastifyRequest,
-  reply: { code: (n: number) => { send: (b: unknown) => unknown } },
-) {
-  // Load the file (with its parent item's rating) and the active profile in
-  // parallel so we can enforce the kids maturity cap before serving any bytes.
-  const [file, profile] = await Promise.all([
-    app.prisma.mediaFile.findUnique({
-      where: { id: fileId },
-      select: {
-        id: true,
-        path: true,
-        container: true,
-        videoCodec: true,
-        audioCodecs: true,
-        durationSec: true,
-        mediaItem: { select: { rating: true } },
-      },
-    }),
-    activeProfile(app, req),
-  ]);
-
-  if (!file) {
-    reply.code(404).send({ error: "not_found" });
-    return null;
-  }
-
-  // Kids-safety gate: block access before serving any playlist bytes.
-  if (!profileAllowsItem(profile, { rating: file.mediaItem.rating })) {
-    reply.code(403).send({ error: "blocked_by_rating" });
-    return null;
-  }
-
-  if (!file.durationSec) {
-    reply.code(409).send({ error: "not_probed" });
-    return null;
-  }
-
-  const plan = decideStrategy({
-    container: file.container ?? undefined,
-    videoCodec: file.videoCodec ?? undefined,
-    audioCodecs: file.audioCodecs,
-  });
-
-  const key = `${fileId}:${DEFAULT_PROFILE}`;
-  const session = await manager.getOrCreate(key, {
-    inputPath: file.path,
-    plan,
-    durationSec: file.durationSec,
-    segSec: DEFAULT_SEG_SEC,
-  });
-
-  return session;
 }
 
 /** Echo the auth token query (if the request used one) into child playlist URIs. */
@@ -108,10 +44,9 @@ function isPlayableEntry(entry: PlaySessionEntry | null, fileId: string): entry 
 }
 
 /**
- * Session-aware counterpart to resolveSession: resolves a registry entry by
- * playSessionId (instead of trusting the fileId alone) and hands the manager
- * a stable per-session key so each negotiated playback attempt gets its own
- * isolated ffmpeg + temp dir.
+ * Resolves a registry entry by playSessionId (instead of trusting the fileId
+ * alone) and hands the manager a stable per-session key so each negotiated
+ * playback attempt gets its own isolated ffmpeg + temp dir.
  */
 async function resolveByPlaySession(
   app: FastifyInstance,
@@ -145,55 +80,6 @@ export default function streamRoute(
 ) {
   return async function (app: FastifyInstance) {
     const { manager, registry } = deps;
-
-    // ------------------------------------------------------------------
-    // GET /play/:fileId/decision
-    // ------------------------------------------------------------------
-    app.get<{ Params: { fileId: string } }>(
-      "/play/:fileId/decision",
-      { preHandler: [queryTokenAuth(app), requireAuth(app)] },
-      async (req, reply) => {
-        const { fileId } = req.params;
-
-        // Load the file (with its parent item's rating) and the active profile
-        // in parallel so we can enforce the kids maturity cap before issuing a
-        // play URL.
-        const [file, profile] = await Promise.all([
-          app.prisma.mediaFile.findUnique({
-            where: { id: fileId },
-            select: {
-              id: true,
-              container: true,
-              videoCodec: true,
-              audioCodecs: true,
-              mediaItem: { select: { rating: true } },
-            },
-          }),
-          activeProfile(app, req),
-        ]);
-
-        if (!file) return reply.code(404).send({ error: "not_found" });
-
-        // Kids-safety gate: a kids profile must not receive a play URL for a
-        // blocked title.
-        if (!profileAllowsItem(profile, { rating: file.mediaItem.rating })) {
-          return reply.code(403).send({ error: "blocked_by_rating" });
-        }
-
-        const plan = decideStrategy({
-          container: file.container ?? undefined,
-          videoCodec: file.videoCodec ?? undefined,
-          audioCodecs: file.audioCodecs,
-        });
-
-        const url =
-          plan.mode === "direct"
-            ? `/api/play/${file.id}/direct`
-            : `/api/play/${file.id}/master.m3u8`;
-
-        return { mode: plan.mode, url };
-      },
-    );
 
     // ------------------------------------------------------------------
     // GET /play/:fileId/direct
@@ -289,32 +175,19 @@ export default function streamRoute(
         // Kids-safety gate: check before serving the master playlist.
         if (!await assertFileAllowed(app, req, fileId, reply)) return;
 
-        if (playSessionId) {
-          const entry = registry.get(playSessionId);
-          if (!isPlayableEntry(entry, fileId)) {
-            return reply.code(404).send({ error: "session_expired" });
-          }
-          const master = [
-            "#EXTM3U",
-            "#EXT-X-STREAM-INF:BANDWIDTH=2000000",
-            `index.m3u8?playSessionId=${playSessionId}${tokenSuffix(req)}`,
-          ].join("\n");
-
-          return reply
-            .code(200)
-            .header("Content-Type", "application/vnd.apple.mpegurl")
-            .send(master);
+        if (!playSessionId) {
+          return reply.code(400).send({ error: "missing_session" });
         }
 
-        const file = await app.prisma.mediaFile.findUnique({
-          where: { id: fileId },
-          select: { id: true },
-        });
-        if (!file) return reply.code(404).send({ error: "not_found" });
-
-        const master = ["#EXTM3U", "#EXT-X-STREAM-INF:BANDWIDTH=2000000", "index.m3u8"].join(
-          "\n",
-        );
+        const entry = registry.get(playSessionId);
+        if (!isPlayableEntry(entry, fileId)) {
+          return reply.code(404).send({ error: "session_expired" });
+        }
+        const master = [
+          "#EXTM3U",
+          "#EXT-X-STREAM-INF:BANDWIDTH=2000000",
+          `index.m3u8?playSessionId=${playSessionId}${tokenSuffix(req)}`,
+        ].join("\n");
 
         return reply
           .code(200)
@@ -332,30 +205,23 @@ export default function streamRoute(
       async (req, reply) => {
         const { fileId } = req.params;
         const playSessionId = (req.query as { playSessionId?: string }).playSessionId;
-
-        if (playSessionId) {
-          const session = await resolveByPlaySession(app, { manager, registry }, fileId, playSessionId, req, reply);
-          if (!session) return;
-
-          return reply
-            .code(200)
-            .header("Content-Type", "application/vnd.apple.mpegurl")
-            .send(
-              buildVodPlaylist(
-                session.durationSec,
-                session.segSec,
-                `playSessionId=${playSessionId}${tokenSuffix(req)}`,
-              ),
-            );
+        if (!playSessionId) {
+          return reply.code(400).send({ error: "missing_session" });
         }
 
-        const session = await resolveSession(app, manager, fileId, req, reply);
+        const session = await resolveByPlaySession(app, { manager, registry }, fileId, playSessionId, req, reply);
         if (!session) return;
 
         return reply
           .code(200)
           .header("Content-Type", "application/vnd.apple.mpegurl")
-          .send(manager.playlist(session));
+          .send(
+            buildVodPlaylist(
+              session.durationSec,
+              session.segSec,
+              `playSessionId=${playSessionId}${tokenSuffix(req)}`,
+            ),
+          );
       },
     );
 
@@ -368,9 +234,10 @@ export default function streamRoute(
       async (req, reply) => {
         const { fileId } = req.params;
         const playSessionId = (req.query as { playSessionId?: string }).playSessionId;
-        const session = playSessionId
-          ? await resolveByPlaySession(app, { manager, registry }, fileId, playSessionId, req, reply)
-          : await resolveSession(app, manager, fileId, req, reply);
+        if (!playSessionId) {
+          return reply.code(400).send({ error: "missing_session" });
+        }
+        const session = await resolveByPlaySession(app, { manager, registry }, fileId, playSessionId, req, reply);
         if (!session) return;
 
         let initPath: string;
@@ -404,9 +271,10 @@ export default function streamRoute(
         const n = parseInt(m[1], 10);
 
         const playSessionId = (req.query as { playSessionId?: string }).playSessionId;
-        const session = playSessionId
-          ? await resolveByPlaySession(app, { manager, registry }, fileId, playSessionId, req, reply)
-          : await resolveSession(app, manager, fileId, req, reply);
+        if (!playSessionId) {
+          return reply.code(400).send({ error: "missing_session" });
+        }
+        const session = await resolveByPlaySession(app, { manager, registry }, fileId, playSessionId, req, reply);
         if (!session) return;
 
         let segPath: string;

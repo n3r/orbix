@@ -5,8 +5,8 @@
  *   Playwright's bundled Chromium does NOT decode proprietary H.264/AAC.
  *   We therefore do NOT assert real frame decoding or currentTime advancing.
  *   Instead we verify WIRING deterministically:
- *     1. Clicking Play mounts the Player (decision API request fires + player
- *        div is rendered in the DOM).
+ *     1. Clicking Play mounts the Player (POST /playback/info negotiation
+ *        request fires + player div is rendered in the DOM).
  *     2. Progress PUT → continue-watching GET → home row render → progress GET
  *        (full round-trip via page.evaluate fetch, bypassing codec requirement).
  */
@@ -188,14 +188,14 @@ test.describe("Playback wiring", () => {
     await cleanDb();
   });
 
-  // ── Test 1: clicking Play mounts the Player and fires the decision request ──
-  test("Play button mounts Player and fires /decision request", async ({ page }) => {
+  // ── Test 1: clicking Play mounts the Player and negotiates playback ──────
+  test("Play button mounts Player and fires /playback/info request", async ({ page }) => {
     await doOnboarding(page);
     await page.goto(`http://localhost:1060/title/${ITEM_ID}`);
 
     // Set up request intercept BEFORE clicking Play
-    const decisionReq = page.waitForRequest(
-      (req) => req.url().includes(`/api/play/${FILE_ID}/decision`),
+    const infoReq = page.waitForRequest(
+      (req) => req.method() === "POST" && req.url().includes("/api/playback/info"),
       { timeout: 20_000 },
     );
 
@@ -204,8 +204,8 @@ test.describe("Playback wiring", () => {
     await expect(playBtn).toBeEnabled({ timeout: 15_000 });
     await playBtn.click();
 
-    // The decision API request MUST fire (proves Player mounted + useEffect ran)
-    await decisionReq;
+    // The playback/info negotiation request MUST fire (proves Player mounted + useEffect ran)
+    await infoReq;
 
     // Clicking Play mounts the full-page PlayerOverlay (a portal). Its close
     // affordance always renders once mounted — independent of video decode,
