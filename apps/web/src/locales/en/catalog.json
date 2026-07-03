@@ -2,7 +2,9 @@
   "rows": {
     "continue": "Continue Watching",
     "hiddenGems": "Hidden gems",
-    "tonight": "Pick something for tonight"
+    "tonight": "Pick something for tonight",
+    "scrollLeft": "Scroll left",
+    "scrollRight": "Scroll right"
   },
   "browse": {
     "title": "Browse",

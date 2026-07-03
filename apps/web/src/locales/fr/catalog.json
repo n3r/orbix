@@ -2,7 +2,9 @@
   "rows": {
     "continue": "Reprendre la lecture",
     "hiddenGems": "Perles cachées",
-    "tonight": "Une idée pour ce soir"
+    "tonight": "Une idée pour ce soir",
+    "scrollLeft": "Faire défiler vers la gauche",
+    "scrollRight": "Faire défiler vers la droite"
   },
   "browse": {
     "title": "Parcourir",

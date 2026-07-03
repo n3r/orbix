@@ -65,6 +65,7 @@ describe("GET /home/rows — continue-watching enrichment", () => {
 
   const seriesItem = {
     id: "series-1", title: "The Series", year: 2011, posterPath: "poster/s.jpg",
+    backdropPath: "backdrop/s.jpg",
     addedAt: new Date("2026-06-30T00:00:00Z"),
     translations: [], genres: [], keywords: [], credits: [],
   };
@@ -93,6 +94,7 @@ describe("GET /home/rows — continue-watching enrichment", () => {
     const cont = res.json().rows.find((r: any) => r.key === "continue");
     expect(cont.items[0]).toMatchObject({
       id: "series-1",
+      backdropPath: "backdrop/s.jpg",
       addedAt: "2026-06-30T00:00:00.000Z",
       progress: { positionSec: 600, durationSec: 1200 },
       resume: { seasonNumber: 3, episodeNumber: 4, episodeTitle: "Old Friends" },

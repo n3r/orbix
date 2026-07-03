@@ -87,6 +87,7 @@ export default async function discoveryRoute(app: FastifyInstance) {
         title: true,
         year: true,
         posterPath: true,
+        backdropPath: true,
         addedAt: true,
         translations: { where: { language: lang }, select: { title: true } },
         genres: {
@@ -266,6 +267,7 @@ export default async function discoveryRoute(app: FastifyInstance) {
                 title: locTitle(item),
                 year: item.year,
                 posterPath: item.posterPath,
+                backdropPath: item.backdropPath,
                 addedAt: item.addedAt.toISOString(),
                 progress: cw
                   ? { positionSec: cw.positionSec, durationSec: cw.durationSec }

@@ -54,38 +54,36 @@ export default function TopNav({ profile }: { profile: Profile | null }) {
       className={cn(
         "fixed inset-x-0 top-0 z-40 transition-colors duration-300",
         scrolled
-          ? "bg-[var(--surface)]/85 backdrop-blur border-b border-[var(--surface-2)]"
-          : "bg-gradient-to-b from-black/60 to-transparent",
+          ? "bg-[var(--bg)]/95 backdrop-blur border-b border-[var(--surface)]"
+          : "bg-gradient-to-b from-black/70 via-black/25 to-transparent",
       )}
     >
-      <nav className="mx-auto grid h-14 grid-cols-[1fr_auto_1fr] items-center gap-4 px-4 md:px-8">
-        {/* Left: logo */}
-        <Link to="/" className="justify-self-start text-xl font-bold tracking-tight text-[var(--text)]">
-          {t("common:app.name")}
-        </Link>
-
-        {/* Center: Home · TV · categories (desktop only — mobile uses BottomNav).
-            The auto middle column sits between two equal 1fr columns, so it stays
-            centered in the bar regardless of the logo / right-actions widths. */}
-        <div className="hidden md:flex items-center gap-4 justify-self-center">
-          <Link
-            to="/"
-            aria-current={pathname === "/" ? "page" : undefined}
-            className={cn(
-              "flex items-center gap-1.5 text-sm transition-colors",
-              pathname === "/" ? "text-[var(--text)] font-medium" : "text-[var(--text-dim)] hover:text-[var(--text)]",
-            )}
-          >
-            <HomeIcon className="h-4 w-4" /> {t("nav:home")}
+      <nav className="flex h-14 items-center justify-between gap-6 px-[4vw]">
+        {/* Left cluster: wordmark + browse links (Netflix layout — mobile uses BottomNav). */}
+        <div className="flex min-w-0 items-center gap-6 md:gap-8">
+          <Link to="/" className="shrink-0 text-lg font-extrabold uppercase tracking-[0.25em] text-[var(--accent)]">
+            {t("common:app.name")}
           </Link>
-          <Placeholder label={t("nav:tv")} comingSoon={t("nav:comingSoon")}><TvIcon className="h-4 w-4" /> {t("nav:tv")}</Placeholder>
-          <NavCategories items={items} pathname={pathname} />
+          <div className="hidden md:flex items-center gap-4">
+            <Link
+              to="/"
+              aria-current={pathname === "/" ? "page" : undefined}
+              className={cn(
+                "flex items-center gap-1.5 text-sm transition-colors",
+                pathname === "/" ? "text-[var(--text)] font-medium" : "text-[var(--text-dim)] hover:text-[var(--text)]",
+              )}
+            >
+              <HomeIcon className="h-4 w-4" /> {t("nav:home")}
+            </Link>
+            <Placeholder label={t("nav:tv")} comingSoon={t("nav:comingSoon")}><TvIcon className="h-4 w-4" /> {t("nav:tv")}</Placeholder>
+            <NavCategories items={items} pathname={pathname} />
+          </div>
         </div>
 
         {/* Right: heart · search · avatar */}
-        <div className="flex items-center gap-4 justify-self-end">
+        <div className="flex shrink-0 items-center gap-4">
           <Placeholder label={t("nav:myList")} comingSoon={t("nav:comingSoon")}><HeartIcon /></Placeholder>
-          <Link to="/search" aria-label={t("nav:search")} className="text-[var(--text-dim)] hover:text-[var(--text)] transition-colors">
+          <Link to="/search" aria-label={t("nav:search")} className="text-[var(--text)] hover:text-[var(--text-dim)] transition-colors">
             <SearchIcon />
           </Link>
           <Link to="/account" aria-label={t("nav:account")} className="rounded-full focus:outline-none focus:ring-2 focus:ring-[var(--accent)]">

@@ -65,7 +65,7 @@ export function itemDetailOptions(id: string) {
   return { queryKey: ["item", id] as const, queryFn: () => apiJson<TitleDetail>(`/items/${id}`) };
 }
 
-/** Full title detail; shared cache key ["item", id] (used by the spotlight hero). */
+/** Full title detail; shared cache key ["item", id] (used by the home billboard). */
 export function useItemDetail(id: string | undefined) {
   return useQuery({ ...itemDetailOptions(id ?? ""), enabled: !!id });
 }

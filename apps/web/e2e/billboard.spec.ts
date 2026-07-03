@@ -1,7 +1,8 @@
 /**
- * E2E: homepage spotlight row.
- *   - Seeds two in-progress movies (Continue Watching).
- *   - Hero defaults to the first; hovering the second poster promotes it.
+ * E2E: Netflix-style homepage (billboard + rows).
+ *   - Seeds two in-progress movies (they land in the Continue Watching rail).
+ *   - The billboard features one of them (h1 + Play/More info), the rail lists
+ *     both as box-art cards, and a card click navigates to the title page.
  */
 import { test, expect, type Page } from "@playwright/test";
 
@@ -99,23 +100,33 @@ async function seedProgress(profileId: string) {
   await prisma.$disconnect();
 }
 
-test.describe("homepage spotlight row", () => {
+test.describe("homepage billboard", () => {
   test.beforeAll(seedDb);
   test.afterAll(cleanDb);
 
-  test("hero defaults to the first item and hovering a poster promotes it", async ({ page }) => {
+  test("features a title on the billboard and lists both movies in the Continue Watching rail", async ({ page }) => {
     const profileId = await onboardAndGetProfileId(page);
     await seedProgress(profileId);
 
     await page.goto("http://localhost:1060/");
-    // Alpha is newest-updated? createMany order is not guaranteed; assert either
-    // hero shows one of the two, then hover the other and assert it takes over.
-    const heroAlpha = page.getByRole("heading", { name: "Alpha Movie" });
-    const heroBravo = page.getByRole("heading", { name: "Bravo Movie" });
-    await expect(heroAlpha.or(heroBravo)).toBeVisible({ timeout: 15_000 });
 
-    // Hover the Bravo poster (there is a poster link for each item).
-    await page.getByRole("link", { name: /Bravo Movie/ }).first().hover();
-    await expect(page.getByRole("heading", { name: "Bravo Movie" })).toBeVisible({ timeout: 15_000 });
+    // Billboard: one of the seeded movies is featured as the page's h1, with
+    // a Play deep link (?play=1) and a More info link.
+    const billboardTitle = page
+      .getByRole("heading", { level: 1, name: "Alpha Movie" })
+      .or(page.getByRole("heading", { level: 1, name: "Bravo Movie" }));
+    await expect(billboardTitle).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("link", { name: /^Play$/i })).toHaveAttribute("href", /\/title\/.+\?play=1/);
+    await expect(page.getByRole("link", { name: /More info/i })).toBeVisible();
+
+    // Rows: Continue Watching rail is back, with a box-art card per movie.
+    await expect(page.getByRole("heading", { name: "Continue Watching" })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Alpha Movie/ }).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: /Bravo Movie/ }).first()).toBeVisible();
+
+    // A rail card navigates to its title page (same session, so this stays in
+    // this test rather than paying a second onboarding).
+    await page.getByRole("link", { name: /Bravo Movie/ }).first().click();
+    await expect(page).toHaveURL(new RegExp(`/title/${ITEM_B}`), { timeout: 15_000 });
   });
 });

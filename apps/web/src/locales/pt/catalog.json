@@ -2,7 +2,9 @@
   "rows": {
     "continue": "Continuar assistindo",
     "hiddenGems": "Joias escondidas",
-    "tonight": "Escolha algo para esta noite"
+    "tonight": "Escolha algo para esta noite",
+    "scrollLeft": "Rolar para a esquerda",
+    "scrollRight": "Rolar para a direita"
   },
   "browse": {
     "title": "Explorar",

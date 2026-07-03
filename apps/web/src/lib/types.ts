@@ -61,8 +61,9 @@ export interface MediaCard {
   matchState?: string;
 }
 
-/** Home-row card: MediaCard plus continue-watching + recency fields. */
+/** Home-row card: MediaCard plus box art, continue-watching + recency fields. */
 export interface HomeCard extends MediaCard {
+  backdropPath?: string | null;
   addedAt?: string;
   progress?: { positionSec: number; durationSec: number } | null;
   resume?: { seasonNumber: number; episodeNumber: number; episodeTitle: string | null } | null;

@@ -2,7 +2,9 @@
   "rows": {
     "continue": "Weiterschauen",
     "hiddenGems": "Verborgene Schätze",
-    "tonight": "Etwas für heute Abend"
+    "tonight": "Etwas für heute Abend",
+    "scrollLeft": "Nach links scrollen",
+    "scrollRight": "Nach rechts scrollen"
   },
   "browse": {
     "title": "Durchstöbern",

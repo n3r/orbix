@@ -5,7 +5,7 @@ import type { HomeRow } from "@/lib/types";
 export default function HomeRows({ rows }: { rows: HomeRow[] }) {
   if (rows.length === 0) return null;
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-6 md:gap-9">
       {rows.map((row) => (
         <MediaRow key={row.key} rowKey={row.key} title={row.title} items={row.items} />
       ))}
