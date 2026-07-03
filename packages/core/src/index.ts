@@ -27,6 +27,7 @@ export * from "./playback/capabilities";
 export * from "./playback/resume";
 export * from "./playback/subs";
 export * from "./playback/keyframes";
+export * from "./playback/apple-playlist";
 export * from "./playback/codec-string";
 export * from "./discovery/similarity";
 export * from "./discovery/rows";
