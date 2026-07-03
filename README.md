@@ -15,6 +15,7 @@ Runs on your NAS via Docker/Portainer. Web-first (responsive); no native apps re
 - **Metadata enrichment** — TMDB metadata + locally-cached posters/backdrops (offline after scan). Manual match/poster fix UI for the inevitable mismatch. Periodic refresh job.
 - **In-browser playback** — direct play for compatible files; on-the-fly **remux/transcode to fMP4 HLS** (ffmpeg) for MKV/HEVC/etc., with seek, subtitles (text → WebVTT), and per-profile resume + Continue Watching.
 - **Discovery** — content-based smart rows + natural-language mood search using **local sentence embeddings** (bge-small via transformers.js + pgvector), fully offline; degrades gracefully if the model is absent.
+- **TV (live channels)** — a browsable worldwide catalog of free, publicly available live channels: opt-in runtime sync of the iptv-org public-domain index (DMCA blocklist honored, NSFW excluded) plus your own M3U playlists, with channel logos cached to disk for offline browsing. Orbix ships no channels and no stream URLs; availability depends on your network position. Hidden for kids profiles (server-enforced).
 - **Self-hostable** — dev stack via `docker compose`; production via a Portainer NAS stack with a baked offline model, read-only media mount, and persistent named volumes.
 
 ## Architecture
