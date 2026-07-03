@@ -1,5 +1,25 @@
 import { randomUUID } from "node:crypto";
-import type { PlaybackPlan } from "@orbix/core";
+import type { PlaybackPlan, SegmentBoundary } from "@orbix/core";
+
+/**
+ * Snapshot of a file's technical metadata + selected-track info, captured at
+ * negotiation time so the HLS session routes (master/index playlists) can
+ * build spec-complete output without re-querying the DB per segment request.
+ */
+export interface PlaySessionMedia {
+  width?: number | null;
+  height?: number | null;
+  bitrate?: number | null;
+  videoProfile?: string | null;
+  videoLevel?: number | null;
+  colorTransfer?: string | null;
+  frameRate?: number | null;
+  videoCodec?: string | null;
+  container?: string | null;
+  /** The SELECTED audio track's codec (per the negotiated audioTrackIndex). */
+  audioCodec?: string | null;
+  subtitleTracks: { index: number; codec?: string; language?: string }[];
+}
 
 export interface PlaySessionEntry {
   playSessionId: string;
@@ -7,6 +27,14 @@ export interface PlaySessionEntry {
   inputPath: string;
   durationSec: number;
   plan: PlaybackPlan;
+  /**
+   * Keyframe-derived segment boundaries for a remux plan (null when the plan
+   * isn't remux, or when computeSegmentBoundaries had nothing to compute).
+   */
+  boundaries: SegmentBoundary[] | null;
+  /** Transcode plans force keyframes at the segment cadence so fixed EXTINFs stay exact. */
+  forceKeyframes: boolean;
+  media: PlaySessionMedia | null;
   createdAtMs: number;
   lastAccessMs: number;
 }
@@ -39,7 +67,15 @@ export class PlaySessionRegistry {
     }
   }
 
-  create(input: { fileId: string; inputPath: string; durationSec: number; plan: PlaybackPlan }): PlaySessionEntry {
+  create(input: {
+    fileId: string;
+    inputPath: string;
+    durationSec: number;
+    plan: PlaybackPlan;
+    boundaries: SegmentBoundary[] | null;
+    forceKeyframes: boolean;
+    media: PlaySessionMedia | null;
+  }): PlaySessionEntry {
     this.sweep();
     while (this.entries.size >= this.max) {
       let lruId: string | undefined;

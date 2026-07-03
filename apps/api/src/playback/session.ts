@@ -3,7 +3,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { spawn as nodeSpawn, type ChildProcess } from "node:child_process";
 import { buildVodPlaylist, buildHlsArgs } from "@orbix/core";
-import type { PlaybackPlan } from "@orbix/core";
+import type { PlaybackPlan, SegmentBoundary } from "@orbix/core";
 
 export type { PlaybackPlan };
 
@@ -32,6 +32,10 @@ export interface Session {
   plan: PlaybackPlan;
   inputPath: string;
   lastAccess: number;
+  /** Keyframe-derived segment boundaries (index-aligned to segment number); undefined/null → legacy arithmetic seek. */
+  boundaries?: SegmentBoundary[] | null;
+  /** Transcode plans force keyframes at the segment cadence so fixed EXTINFs stay exact. */
+  forceKeyframes?: boolean;
 }
 
 /**
@@ -110,7 +114,14 @@ export class SessionManager {
   /** Return existing session or create a new one (mkdir recursive; does NOT spawn ffmpeg). */
   async getOrCreate(
     key: string,
-    opts: { inputPath: string; plan: PlaybackPlan; durationSec: number; segSec: number },
+    opts: {
+      inputPath: string;
+      plan: PlaybackPlan;
+      durationSec: number;
+      segSec: number;
+      boundaries?: SegmentBoundary[] | null;
+      forceKeyframes?: boolean;
+    },
   ): Promise<Session> {
     const existing = this.sessions.get(key);
     if (existing) {
@@ -144,6 +155,8 @@ export class SessionManager {
       plan: opts.plan,
       inputPath: opts.inputPath,
       lastAccess: Date.now(),
+      boundaries: opts.boundaries,
+      forceKeyframes: opts.forceKeyframes,
     };
     this.sessions.set(key, session);
     return session;
@@ -207,6 +220,8 @@ export class SessionManager {
       audioChannels,
       encoder: encoder as "software" | "vaapi" | "qsv" | "nvenc" | undefined,
       vaapiDevice: process.env.VAAPI_DEVICE || "/dev/dri/renderD128",
+      startTimeSec: startSegment > 0 ? session.boundaries?.[startSegment]?.start : undefined,
+      forceKeyframes: session.forceKeyframes,
     });
 
     const proc = this.spawnFn("ffmpeg", args, { stdio: "ignore" });

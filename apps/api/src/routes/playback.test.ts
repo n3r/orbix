@@ -52,6 +52,8 @@ function stubFile(app: unknown, overrides: Record<string, unknown> = {}) {
         { index: 2, codec: "subrip", language: "en" },
         { index: 3, codec: "hdmv_pgs_subtitle", language: "ru" },
       ],
+      keyframes: null, width: 1920, height: 1080, bitrate: 5_000_000,
+      videoProfile: null, videoLevel: null, colorTransfer: null, frameRate: 25,
       mediaItem: { rating: "PG-13" },
       ...overrides,
     }),
@@ -64,7 +66,9 @@ describe("POST /api/playback/info", () => {
   it("returns a session, decision, and track lists", async () => {
     const app = await buildApp(env);
     stubAuth(app);
-    stubFile(app);
+    // A keyframe index is present so this exercises a "stays remux" decision,
+    // not the keyframe-aware downgrade covered in its own describe block below.
+    stubFile(app, { keyframes: [0, 6.006, 12.012] });
     const res = await app.inject({
       method: "POST", url: "/api/playback/info", cookies,
       payload: { fileId: "f1", capabilities: WEB_CAPS },
@@ -189,6 +193,56 @@ describe("POST /api/playback/info", () => {
       payload: { fileId: "f1", capabilities: WEB_CAPS },
     });
     expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+});
+
+describe("keyframe-aware decisions", () => {
+  const APPLE_CAPS = {
+    containers: ["mp4"], videoCodecs: ["h264", "hevc"],
+    audioCodecs: ["aac", "ac3", "eac3", "flac"], maxAudioChannels: 6,
+  };
+
+  it("remux-eligible file WITHOUT a keyframe index downgrades to transcode and enqueues extraction", async () => {
+    const app = await buildApp(env);
+    stubAuth(app);
+    stubFile(app, { keyframes: null });
+    const added: unknown[] = [];
+    (app as any).keyframesQueue = { add: async (...a: unknown[]) => { added.push(a); } };
+    const res = await app.inject({
+      method: "POST", url: "/api/playback/info", cookies,
+      payload: { fileId: "f1", capabilities: APPLE_CAPS },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().mode).toBe("transcode");
+    expect(added).toHaveLength(1);
+    await app.close();
+  });
+
+  it("remux-eligible file WITH a keyframe index stays remux", async () => {
+    const app = await buildApp(env);
+    stubAuth(app);
+    stubFile(app, { keyframes: [0, 6.006, 12.012] });
+    const res = await app.inject({
+      method: "POST", url: "/api/playback/info", cookies,
+      payload: { fileId: "f1", capabilities: APPLE_CAPS },
+    });
+    expect(res.json().mode).toBe("remux");
+    await app.close();
+  });
+
+  it("native transcode does not enqueue keyframe extraction", async () => {
+    const app = await buildApp(env);
+    stubAuth(app);
+    stubFile(app, { videoCodec: "vp9", keyframes: null });
+    const added: unknown[] = [];
+    (app as any).keyframesQueue = { add: async (...a: unknown[]) => { added.push(a); } };
+    const res = await app.inject({
+      method: "POST", url: "/api/playback/info", cookies,
+      payload: { fileId: "f1", capabilities: APPLE_CAPS },
+    });
+    expect(res.json().mode).toBe("transcode");
+    expect(added).toHaveLength(0);
     await app.close();
   });
 });

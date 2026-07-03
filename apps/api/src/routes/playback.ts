@@ -1,5 +1,11 @@
 import type { FastifyInstance } from "fastify";
-import { decidePlayback, type AudioTrack, type ClientCapabilities } from "@orbix/core";
+import {
+  decidePlayback,
+  computeSegmentBoundaries,
+  type AudioTrack,
+  type ClientCapabilities,
+  type SegmentBoundary,
+} from "@orbix/core";
 import { requireAuth } from "../lib/auth";
 import { queryTokenAuth } from "../lib/device-auth";
 import { activeProfile, profileAllowsItem } from "../lib/catalog-filter";
@@ -48,6 +54,8 @@ export default function playbackRoute(deps: { registry: PlaySessionRegistry; man
             select: {
               id: true, path: true, container: true, videoCodec: true,
               durationSec: true, audioTracks: true, subtitleTracks: true,
+              keyframes: true, width: true, height: true, bitrate: true,
+              videoProfile: true, videoLevel: true, colorTransfer: true, frameRate: true,
               mediaItem: { select: { rating: true } },
             },
           }),
@@ -64,21 +72,71 @@ export default function playbackRoute(deps: { registry: PlaySessionRegistry; man
         if (audioTrackIndex > 0 && audioTrackIndex >= audioTracks.length) {
           return reply.code(400).send({ error: "invalid" });
         }
-        const plan = decidePlayback(
+        let plan = decidePlayback(
           { container: file.container ?? undefined, videoCodec: file.videoCodec ?? undefined, audioTracks },
           caps,
           { audioTrackIndex },
         );
 
+        // durationSec is required from here on (computeSegmentBoundaries needs
+        // it), so this gate must run before any keyframe-awareness logic.
         if (plan.mode !== "direct" && !file.durationSec) {
           return reply.code(409).send({ error: "not_probed" });
         }
+
+        // Keyframe-awareness: a remux plan needs an exact keyframe index to
+        // build spec-accurate EXTINFs (declared segment durations must match
+        // real segment content, or AVPlayer stalls/misbehaves). Without one,
+        // downgrade to transcode instead — forced keyframes at the segment
+        // cadence make ITS fixed-cadence EXTINFs exact — and kick off a
+        // best-effort background extraction so the NEXT negotiation remuxes.
+        let boundaries: SegmentBoundary[] | null = null;
+        let forceKeyframes = false;
+        if (plan.mode === "remux") {
+          const keyframes = file.keyframes as number[] | null;
+          if (Array.isArray(keyframes) && keyframes.length > 0) {
+            boundaries = computeSegmentBoundaries(keyframes, file.durationSec ?? 0, 6);
+          } else {
+            plan = {
+              mode: "transcode",
+              audioAction: plan.audioAction,
+              audioTrackIndex: plan.audioTrackIndex,
+              audioChannels: plan.audioChannels,
+            };
+            forceKeyframes = true;
+            // Fire-and-forget: must never fail or slow this request. Errors
+            // (including a bogus/unreachable Redis) just mean the file stays
+            // on the transcode path until a future scan retries the enqueue.
+            void app.keyframesQueue?.add("keyframes", { fileId: file.id }, { jobId: file.id }).catch((err) => {
+              app.log.warn({ err }, "keyframes enqueue failed");
+            });
+          }
+        } else if (plan.mode === "transcode") {
+          forceKeyframes = true;
+        }
+
+        const rawSubtitleTracks = (file.subtitleTracks as SubTrackJson[] | null) ?? [];
 
         const entry = deps.registry.create({
           fileId: file.id,
           inputPath: file.path,
           durationSec: file.durationSec ?? 0,
           plan,
+          boundaries,
+          forceKeyframes,
+          media: {
+            width: file.width,
+            height: file.height,
+            bitrate: file.bitrate,
+            videoProfile: file.videoProfile,
+            videoLevel: file.videoLevel,
+            colorTransfer: file.colorTransfer,
+            frameRate: file.frameRate,
+            videoCodec: file.videoCodec,
+            container: file.container,
+            audioCodec: audioTracks[audioTrackIndex]?.codec,
+            subtitleTracks: rawSubtitleTracks.map((t) => ({ index: t.index, codec: t.codec, language: t.language })),
+          },
         });
 
         let streamUrl =
@@ -98,7 +156,7 @@ export default function playbackRoute(deps: { registry: PlaySessionRegistry; man
           }
         }
 
-        const subs = ((file.subtitleTracks as SubTrackJson[] | null) ?? []).map((t) => {
+        const subs = rawSubtitleTracks.map((t) => {
           const available = !IMAGE_CODECS.has(t.codec ?? "");
           return {
             index: t.index,
