@@ -22,7 +22,7 @@ export default function AccountDevicesPage() {
   });
 
   const [code, setCode] = useState("");
-  const [pairMsg, setPairMsg] = useState<"approved" | "unknown" | null>(null);
+  const [pairMsg, setPairMsg] = useState<"approved" | "unknown" | "failed" | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const approve = useMutation({
@@ -34,7 +34,7 @@ export default function AccountDevicesPage() {
       void qc.invalidateQueries({ queryKey: ["devices"] });
     },
     onError: (e) => {
-      setPairMsg(e instanceof ApiError && e.status === 404 ? "unknown" : null);
+      setPairMsg(e instanceof ApiError && e.status === 404 ? "unknown" : "failed");
     },
   });
 
@@ -86,11 +86,14 @@ export default function AccountDevicesPage() {
         </form>
         {pairMsg === "approved" && <p className="mt-2 text-sm text-green-500">{t("account:devices.pairApproved")}</p>}
         {pairMsg === "unknown" && <p className="mt-2 text-sm text-red-400">{t("account:devices.pairUnknown")}</p>}
+        {pairMsg === "failed" && <p className="mt-2 text-sm text-red-400">{t("errors:network")}</p>}
       </section>
 
       <section>
         <h2 className="text-lg font-medium text-[var(--text)]">{t("account:devices.title")}</h2>
         {actionError && <p className="mt-2 text-sm text-red-400">{actionError}</p>}
+        {devices.isLoading && <p className="mt-2 text-sm text-[var(--text-dim)]">{t("common:status.loading")}</p>}
+        {devices.isError && <p className="mt-2 text-sm text-red-400">{t("errors:network")}</p>}
         {devices.data && devices.data.devices.length === 0 && (
           <p className="mt-2 text-sm text-[var(--text-dim)]">{t("account:devices.empty")}</p>
         )}

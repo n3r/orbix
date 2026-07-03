@@ -66,4 +66,13 @@ describe("PairingStore", () => {
     const { store } = makeStore();
     expect(store.markApproved("XXXXXX", { deviceToken: "t", deviceId: "d" })).toBe(false);
   });
+
+  it("enforces MAX_PENDING across distinct IPs (dodging the per-IP rate limit)", () => {
+    const { store } = makeStore();
+    for (let i = 0; i < 50; i++) {
+      const res = store.initiate({ ...input, ip: "10.0.0." + i });
+      expect(res).not.toBe("rate_limited");
+    }
+    expect(store.initiate({ ...input, ip: "10.0.0.50" })).toBe("rate_limited");
+  });
 });

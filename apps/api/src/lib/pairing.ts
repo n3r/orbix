@@ -51,6 +51,11 @@ export class PairingStore {
         this.entries.delete(code);
       }
     }
+    for (const [bucket, hit] of this.hits) {
+      if (nowMs - hit.windowStartMs > WINDOW_MS) {
+        this.hits.delete(bucket);
+      }
+    }
   }
 
   initiate(input: { name: string; platform: string; ip: string }):

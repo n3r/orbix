@@ -60,6 +60,28 @@ describe("query-token auth on /play/*", () => {
     });
   });
 
+  it("serves a 206 partial range with ?token=", async () => {
+    await withTempFile(async (filePath) => {
+      const app = await buildApp(env);
+      stubAuth(app);
+      (app as any).prisma.mediaFile = {
+        findUnique: async () => ({
+          id: "f1", path: filePath, container: "mp4",
+          mediaItem: { rating: "PG-13" },
+        }),
+      };
+      const res = await app.inject({
+        method: "GET",
+        url: `/api/play/f1/direct?token=${RAW}`,
+        headers: { range: "bytes=0-99" },
+      });
+      expect(res.statusCode).toBe(206);
+      expect(res.headers["content-range"]).toMatch(/^bytes 0-99\//);
+      expect(res.headers["accept-ranges"]).toBe("bytes");
+      await app.close();
+    });
+  });
+
   it("401s without any credentials", async () => {
     const app = await buildApp(env);
     stubAuth(app);

@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { generateDeviceToken, hashDeviceToken } from "@orbix/core";
+import { generateDeviceToken } from "@orbix/core";
 import { Prisma } from "@orbix/db";
 import { requireAuth, requireAdmin } from "../lib/auth";
 import { requireNonKids } from "../lib/catalog-filter";
@@ -42,7 +42,8 @@ export default async function devicesRoute(app: FastifyInstance) {
     "/pair/pending/:code",
     { preHandler: [requireAuth(app), requireNonKids(app)] },
     async (req, reply) => {
-      const info = store.lookup(req.params.code.toUpperCase());
+      if (req.deviceId) return reply.code(403).send({ error: "forbidden" });
+      const info = store.lookup(req.params.code.trim().toUpperCase());
       if (!info) return reply.code(404).send({ error: "unknown_or_expired" });
       return info;
     },
@@ -52,6 +53,7 @@ export default async function devicesRoute(app: FastifyInstance) {
     "/pair/approve",
     { preHandler: [requireAuth(app), requireNonKids(app)] },
     async (req, reply) => {
+      if (req.deviceId) return reply.code(403).send({ error: "forbidden" });
       const code = typeof req.body?.code === "string" ? req.body.code.trim().toUpperCase() : "";
       const info = store.lookup(code);
       if (!info) return reply.code(404).send({ error: "unknown_or_expired" });

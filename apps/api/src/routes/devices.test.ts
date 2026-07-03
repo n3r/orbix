@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildApp } from "../app";
+import { hashDeviceToken } from "@orbix/core";
 import type { Env } from "@orbix/config";
 
 const env: Env = {
@@ -16,6 +17,25 @@ function stubSession(app: unknown) {
   };
   (app as any).prisma.account = { findUnique: async () => ({ isAdmin: true }), findFirst: async () => ({ id: "a1" }) };
   (app as any).prisma.profile = { findUnique: async () => null }; // no active profile → not kids
+}
+
+const RAW_DEVICE_TOKEN = "orb_paired-device";
+const DEVICE_HASH = hashDeviceToken(RAW_DEVICE_TOKEN);
+
+/** Bearer-authenticated device stub (mirrors src/plugins/session.test.ts). */
+function stubDeviceAuth(app: unknown) {
+  const device = {
+    id: "dev1", tokenHash: DEVICE_HASH, name: "Living Room", platform: "tvos",
+    activeProfileId: null, lastSeenAt: new Date(), createdAt: new Date(), revokedAt: null,
+  };
+  (app as any).prisma.deviceToken = {
+    findUnique: async ({ where }: any) => (where.tokenHash === DEVICE_HASH ? device : null),
+    update: async () => device,
+  };
+  (app as any).prisma.account = {
+    findFirst: async () => ({ id: "acct1" }),
+    findUnique: async () => ({ isAdmin: true }),
+  };
 }
 
 describe("pairing flow", () => {
@@ -75,6 +95,33 @@ describe("pairing flow", () => {
       method: "POST", url: "/api/pair/approve", cookies: { orbix_session: "s1" }, payload: { code: "ABCDEF" },
     });
     expect(unknown.statusCode).toBe(404);
+    await app.close();
+  });
+});
+
+describe("bearer-device callers cannot approve pairings", () => {
+  it("403s a bearer-authenticated GET /pair/pending/:code", async () => {
+    const app = await buildApp(env);
+    stubDeviceAuth(app);
+    const res = await app.inject({
+      method: "GET", url: "/api/pair/pending/ABCDEF",
+      headers: { authorization: `Bearer ${RAW_DEVICE_TOKEN}` },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toEqual({ error: "forbidden" });
+    await app.close();
+  });
+
+  it("403s a bearer-authenticated POST /pair/approve", async () => {
+    const app = await buildApp(env);
+    stubDeviceAuth(app);
+    const res = await app.inject({
+      method: "POST", url: "/api/pair/approve",
+      headers: { authorization: `Bearer ${RAW_DEVICE_TOKEN}` },
+      payload: { code: "ABCDEF" },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toEqual({ error: "forbidden" });
     await app.close();
   });
 });
