@@ -168,4 +168,18 @@ describe("isPrivateHost", () => {
   ])("allows (structural v4/v6 validation) %s", (ip) => {
     expect(isPrivateHost(ip)).toBe(false);
   });
+
+  it.each([
+    "::a9fe:a9fe", // ::169.254.169.254 — legacy v4-compatible form, link-local/cloud-metadata IP
+    "::7f00:1", // ::127.0.0.1 — legacy v4-compatible form, loopback
+    "::c0a8:1", // ::192.168.0.1 — legacy v4-compatible form, RFC1918
+    "::1", // loopback — regression guard: must stay blocked once the v4-compatible branch exists
+    "::", // unspecified — regression guard: must stay blocked once the v4-compatible branch exists
+  ])("blocks legacy IPv4-compatible IPv6 %s", (ip) => {
+    expect(isPrivateHost(ip)).toBe(true);
+  });
+
+  it("allows a public v4 address embedded in the legacy v4-compatible v6 form", () => {
+    expect(isPrivateHost("::0808:0808")).toBe(false); // ::8.8.8.8 — publicly routable, must not be blocked
+  });
 });

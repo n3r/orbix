@@ -195,6 +195,8 @@ function expandIPv6(raw: string): number[] | null {
  * - IPv6: loopback ::1, unspecified ::, link-local fe80::/10, ULA fc00::/7.
  * - v4-mapped v6 forms of any of the above, in dotted-quad
  *   (`::ffff:1.2.3.4`) or hex (`::ffff:AABB:CCDD`) notation.
+ * - legacy v4-compatible v6 forms (`::1.2.3.4`, i.e. hex `::AABB:CCDD` with
+ *   no `ffff` marker hextet) of any of the above.
  * IPv6 matching is compression-agnostic (`::1` and `0:0:0:0:0:0:0:1` alike).
  * Anything that isn't a syntactically valid IPv4 or IPv6 literal — including
  * plain hostnames — is treated as private: this is a security guard, so
@@ -221,6 +223,19 @@ export function isPrivateHost(ip: string): boolean {
     }
     if (hextets.every((h) => h === 0)) return true; // :: (unspecified)
     if (hextets.slice(0, 7).every((h) => h === 0) && hextets[7] === 1) return true; // ::1 (loopback)
+    // Legacy v4-compatible v6, e.g. ::a9fe:a9fe === ::169.254.169.254 — same
+    // embedding as the v4-mapped form above but without the 0xffff marker
+    // hextet. Checked after the ::/::1 special cases above (both of which
+    // also satisfy "hextets[0..5] all zero"), so this never needs to
+    // special-case them itself; they fall through here as embedded 0.0.0.0
+    // and 0.0.0.1, both already inside the blocked 0.0.0.0/8 range.
+    if (hextets.slice(0, 6).every((h) => h === 0)) {
+      const a = hextets[6]! >> 8;
+      const b = hextets[6]! & 0xff;
+      const c = hextets[7]! >> 8;
+      const d = hextets[7]! & 0xff;
+      return isPrivateIPv4([a, b, c, d]);
+    }
     if ((hextets[0]! & 0xffc0) === 0xfe80) return true; // fe80::/10 (link-local)
     if ((hextets[0]! & 0xfe00) === 0xfc00) return true; // fc00::/7 (ULA)
     return false;
