@@ -342,3 +342,122 @@ model EpisodeTranslation {
   @@id([episodeId, language])
   @@index([episodeId])
 }
+
+// ── TV live channels ─────────────────────────────────────────────────────────
+
+model TvSource {
+  id            String      @id @default(cuid())
+  kind          String      // "iptv-org" | "m3u"
+  name          String
+  url           String?     // m3u URL (null for iptv-org / uploaded file)
+  filePath      String?     // uploaded playlist stored under METADATA_DIR/tv/playlists
+  countries     String[]    @default([]) // iptv-org: enabled country codes (their codes, e.g. "RU","UK")
+  epgUrl        String?     // auto-detected url-tvg or manual
+  enabled       Boolean     @default(true)
+  status        String      @default("ok") // "ok" | "syncing" | "error"
+  statusMessage String?
+  lastSyncAt    DateTime?
+  createdAt     DateTime    @default(now())
+  channels      TvChannel[]
+}
+
+model TvChannel {
+  id          String        @id @default(cuid())
+  sourceId    String
+  source      TvSource      @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  extId       String        // iptv-org channel id ("ChannelOne.ru") or m3u-derived stable key
+  name        String        // cleaned display name
+  rawName     String?       // original playlist name ("RU| ПЕРВЫЙ HD 1080p")
+  altNames    String[]      @default([])
+  number      Int           // stable; assigned once, monotonically; never auto-renumbered
+  country     String?       // iptv-org country code
+  languages   String[]      @default([])
+  categories  String[]      @default([])
+  logoUrl     String?
+  logoPath    String?       // disk cache under METADATA_DIR, served via /api/images/*
+  website     String?
+  epgId       String?       // XMLTV id; defaults from extId(@mainFeed); admin-remappable
+  quality     String?       // best known ("1080p")
+  kidsAllowed Boolean       @default(false) // schema-ready; kids UI later
+  hidden      Boolean       @default(false)
+  addedAt     DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  streams     TvStream[]
+  programmes  TvProgramme[]
+  favorites   TvFavorite[]
+  playEvents  TvPlayEvent[]
+
+  @@unique([sourceId, extId])
+  @@index([country])
+  @@index([number])
+}
+
+model TvStream {
+  id          String    @id @default(cuid())
+  channelId   String
+  channel     TvChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  url         String
+  feedId      String?   // iptv-org feed id ("SD","HD","Plus1") — provenance only
+  quality     String?
+  label       String?   // "Geo-blocked" | "Not 24/7" | null
+  referrer    String?
+  userAgent   String?
+  priority    Int       @default(0) // lower tried first; main feed first
+  protocol    String    @default("hls") // "hls" | "dash" | "other" — only hls playable v1
+  status      String    @default("unknown") // "unknown" | "ok" | "degraded" | "dead"
+  failCount   Int       @default(0)
+  lastOkAt    DateTime?
+  lastCheckAt DateTime?
+
+  @@unique([channelId, url])
+  @@index([channelId, priority])
+}
+
+model TvProgramme {
+  id          String    @id @default(cuid())
+  channelId   String
+  channel     TvChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  start       DateTime
+  stop        DateTime
+  title       String
+  description String?
+  category    String?
+  lang        String?
+
+  @@unique([channelId, start])
+  @@index([channelId, stop])
+}
+
+model TvEpgSource {
+  id            String    @id @default(cuid())
+  name          String
+  url           String    // .xml or .xml.gz
+  enabled       Boolean   @default(true)
+  offsetMin     Int       @default(0) // the #1 EPG complaint (hours-off guides) gets a knob from day 1
+  status        String    @default("ok")
+  statusMessage String?
+  lastSyncAt    DateTime?
+  createdAt     DateTime  @default(now())
+}
+
+model TvFavorite {
+  id        String    @id @default(cuid())
+  profileId String
+  channelId String
+  channel   TvChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  position  Int       @default(0)
+  createdAt DateTime  @default(now())
+
+  @@unique([profileId, channelId])
+  @@index([profileId, position])
+}
+
+model TvPlayEvent {
+  id        String    @id @default(cuid())
+  profileId String
+  channelId String
+  channel   TvChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  at        DateTime  @default(now())
+
+  @@index([profileId, at])
+}
