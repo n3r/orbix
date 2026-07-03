@@ -51,8 +51,16 @@ export interface StrategySource2 {
 }
 
 export interface ClientCapabilities {
+  /**
+   * Direct-play containers as ffprobe format_name substrings. "mp4" implies
+   * the whole MP4 family (mov/m4v); "mkv" is aliased to "matroska".
+   */
   containers: string[];
   videoCodecs: string[];
+  /**
+   * Codecs the client decodes. AAC is the universal transcode target — every
+   * profile is assumed to include "aac".
+   */
   audioCodecs: string[];
   maxAudioChannels: number;
   hlsMultichannelAacBroken?: boolean;
@@ -62,6 +70,8 @@ function containerMatches(container: string | undefined, caps: string[]): boolea
   if (!container) return false;
   // "mp4" implies the whole MP4 family (ffprobe reports "mov,mp4,m4a,3gp,3g2,mj2").
   if (caps.includes("mp4") && MP4_FAMILY_RE.test(container)) return true;
+  // "mkv" is the conventional name; ffprobe reports "matroska,webm".
+  if (caps.includes("mkv") && /matroska/i.test(container)) return true;
   return caps.some((c) => container.toLowerCase().includes(c.toLowerCase()));
 }
 

@@ -28,6 +28,12 @@ describe("decidePlayback — web profile parity", () => {
       .toEqual({ mode: "direct" });
   });
 
+  it('accepts the conventional "mkv" container name via the matroska alias', () => {
+    const caps = { ...WEB, containers: ["mp4", "mkv"] };
+    expect(decidePlayback({ container: "matroska,webm", videoCodec: "h264", audioTracks: [aac2] }, caps))
+      .toEqual({ mode: "direct" });
+  });
+
   it("direct is NOT blocked by 5.1 AAC (progressive decode is native)", () => {
     expect(decidePlayback({ container: "mp4", videoCodec: "h264", audioTracks: [aac6] }, WEB))
       .toEqual({ mode: "direct" });
