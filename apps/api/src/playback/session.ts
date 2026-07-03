@@ -180,6 +180,8 @@ export class SessionManager {
       session.plan.mode === "transcode" ? "transcode" : "remux";
     const audioAction: "copy" | "aac" =
       "audioAction" in session.plan ? session.plan.audioAction : "aac";
+    const audioTrackIndex = "audioTrackIndex" in session.plan ? session.plan.audioTrackIndex : undefined;
+    const audioChannels = "audioChannels" in session.plan ? session.plan.audioChannels : undefined;
 
     // Read the encoder setting for transcode mode; fall back to "software" on
     // any error or unknown value so existing playback is never broken.
@@ -201,6 +203,8 @@ export class SessionManager {
       outDir: session.dir,
       mode,
       audioAction,
+      audioTrackIndex,
+      audioChannels,
       encoder: encoder as "software" | "vaapi" | "qsv" | "nvenc" | undefined,
       vaapiDevice: process.env.VAAPI_DEVICE || "/dev/dri/renderD128",
     });
@@ -343,5 +347,11 @@ export class SessionManager {
         this.removeSession(key, session),
       ),
     );
+  }
+
+  /** Tear down one session by its manager key (kills ffmpeg, removes dir). */
+  async remove(key: string): Promise<void> {
+    const session = this.sessions.get(key);
+    if (session) await this.removeSession(key, session);
   }
 }

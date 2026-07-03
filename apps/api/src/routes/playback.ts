@@ -1,9 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { decidePlayback, type AudioTrack, type ClientCapabilities } from "@orbix/core";
 import { requireAuth } from "../lib/auth";
+import { queryTokenAuth } from "../lib/device-auth";
 import { activeProfile, profileAllowsItem } from "../lib/catalog-filter";
 import { IMAGE_CODECS } from "./subtitles";
 import type { PlaySessionRegistry } from "../playback/registry";
+import type { SessionManager } from "../playback/session";
 
 interface SubTrackJson { index: number; codec?: string; language?: string }
 
@@ -25,7 +27,7 @@ function parseCapabilities(v: unknown): ClientCapabilities | null {
   };
 }
 
-export default function playbackRoute(deps: { registry: PlaySessionRegistry }) {
+export default function playbackRoute(deps: { registry: PlaySessionRegistry; manager: SessionManager }) {
   return async function (app: FastifyInstance) {
     app.post<{ Body: { fileId?: unknown; capabilities?: unknown; audioTrackIndex?: unknown } }>(
       "/playback/info",
@@ -107,6 +109,22 @@ export default function playbackRoute(deps: { registry: PlaySessionRegistry }) {
           })),
           subtitleTracks: subs,
         };
+      },
+    );
+
+    // ------------------------------------------------------------------
+    // POST /playback/:playSessionId/stop — tear down a play session early.
+    // Idempotent (navigator.sendBeacon retries, and the player may call this
+    // more than once) and accepts an empty body (sendBeacon sends none).
+    // ------------------------------------------------------------------
+    app.post<{ Params: { playSessionId: string } }>(
+      "/playback/:playSessionId/stop",
+      { preHandler: [queryTokenAuth(app), requireAuth(app)] },
+      async (req) => {
+        const { playSessionId } = req.params;
+        deps.registry.delete(playSessionId);
+        await deps.manager.remove(playSessionId);
+        return { ok: true };
       },
     );
   };

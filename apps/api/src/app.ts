@@ -57,6 +57,7 @@ export async function buildApp(env: Env, overrides?: { mountRuntime?: MountRunti
       }),
   });
   const playRegistry = new PlaySessionRegistry();
+  app.decorate("playSessions", playRegistry);
   app.addHook("onClose", async () => {
     await sessionManager.closeAll();
   });
@@ -76,7 +77,7 @@ export async function buildApp(env: Env, overrides?: { mountRuntime?: MountRunti
   await app.register(scanRoute, { prefix: "/api" });
   await app.register(catalogRoute, { prefix: "/api" });
   await app.register(streamRoute(env, { manager: sessionManager, registry: playRegistry }), { prefix: "/api" });
-  await app.register(playbackRoute({ registry: playRegistry }), { prefix: "/api" });
+  await app.register(playbackRoute({ registry: playRegistry, manager: sessionManager }), { prefix: "/api" });
   await app.register(subtitlesRoute, { prefix: "/api" });
   await app.register(playstateRoute, { prefix: "/api" });
   await app.register(discoveryRoute, { prefix: "/api" });

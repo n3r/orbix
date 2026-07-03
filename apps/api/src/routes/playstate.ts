@@ -55,6 +55,13 @@ export default async function playstateRoute(app: FastifyInstance) {
         update: { positionSec: positionSecInt, durationSec: durationSecInt, finished },
       });
 
+      // Liveness heartbeat: progress reports keep the play session (and its
+      // ffmpeg) from idle-reaping. Unknown/missing ids are fine — progress
+      // must never fail on session state.
+      if (typeof body.playSessionId === "string") {
+        app.playSessions?.get(body.playSessionId);
+      }
+
       // Best-effort: append a PlayEvent once per viewing session (dedup within 6h)
       try {
         const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);

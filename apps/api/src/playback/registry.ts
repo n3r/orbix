@@ -78,3 +78,7 @@ export class PlaySessionRegistry {
     return this.entries.size;
   }
 }
+
+declare module "fastify" {
+  interface FastifyInstance { playSessions?: PlaySessionRegistry }
+}

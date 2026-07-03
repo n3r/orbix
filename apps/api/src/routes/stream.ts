@@ -1,11 +1,11 @@
 import fs from "node:fs";
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import { decideStrategy } from "@orbix/core";
+import { decideStrategy, buildVodPlaylist } from "@orbix/core";
 import { requireAuth } from "../lib/auth";
 import { queryTokenAuth } from "../lib/device-auth";
 import { activeProfile, profileAllowsItem, assertFileAllowed } from "../lib/catalog-filter";
 import { SessionManager, SegmentTimeoutError } from "../playback/session";
-import type { PlaySessionRegistry } from "../playback/registry";
+import type { PlaySessionRegistry, PlaySessionEntry } from "../playback/registry";
 
 const DEFAULT_PROFILE = "default";
 const DEFAULT_SEG_SEC = 6;
@@ -82,12 +82,57 @@ async function resolveSession(
   return session;
 }
 
+/** Echo the auth token query (if the request used one) into child playlist URIs. */
+function tokenSuffix(req: FastifyRequest): string {
+  const token = (req.query as { token?: unknown } | undefined)?.token;
+  return typeof token === "string" && token.length > 0 ? `&token=${encodeURIComponent(token)}` : "";
+}
+
+/**
+ * A registry entry is only servable by the HLS routes when it was negotiated
+ * for an HLS mode (remux/transcode) with a known duration. `/playback/info`
+ * also creates entries for direct-play files (mode "direct") and for
+ * not-yet-probed files (durationSec <= 0) — those are legitimate registry
+ * entries, just not ones the HLS playlist/segment routes know how to serve,
+ * so they must 404 the same as an unknown id rather than emit a broken
+ * playlist.
+ */
+function isPlayableEntry(entry: PlaySessionEntry | null, fileId: string): entry is PlaySessionEntry {
+  return !!entry && entry.fileId === fileId && entry.plan.mode !== "direct" && entry.durationSec > 0;
+}
+
+/**
+ * Session-aware counterpart to resolveSession: resolves a registry entry by
+ * playSessionId (instead of trusting the fileId alone) and hands the manager
+ * a stable per-session key so each negotiated playback attempt gets its own
+ * isolated ffmpeg + temp dir.
+ */
+async function resolveByPlaySession(
+  app: FastifyInstance,
+  deps: { manager: SessionManager; registry: PlaySessionRegistry },
+  fileId: string,
+  playSessionId: string,
+  reply: { code: (n: number) => { send: (b: unknown) => unknown } },
+) {
+  const entry = deps.registry.get(playSessionId);
+  if (!isPlayableEntry(entry, fileId)) {
+    reply.code(404).send({ error: "session_expired" });
+    return null;
+  }
+  return deps.manager.getOrCreate(playSessionId, {
+    inputPath: entry.inputPath,
+    plan: entry.plan,
+    durationSec: entry.durationSec,
+    segSec: DEFAULT_SEG_SEC,
+  });
+}
+
 export default function streamRoute(
   env: { TRANSCODE_DIR: string; MAX_TRANSCODE_SESSIONS?: number },
   deps: { manager: SessionManager; registry: PlaySessionRegistry },
 ) {
   return async function (app: FastifyInstance) {
-    const { manager, registry: _registry } = deps;
+    const { manager, registry } = deps;
 
     // ------------------------------------------------------------------
     // GET /play/:fileId/decision
@@ -227,9 +272,27 @@ export default function streamRoute(
       { preHandler: [queryTokenAuth(app), requireAuth(app)] },
       async (req, reply) => {
         const { fileId } = req.params;
+        const playSessionId = (req.query as { playSessionId?: string }).playSessionId;
 
         // Kids-safety gate: check before serving the master playlist.
         if (!await assertFileAllowed(app, req, fileId, reply)) return;
+
+        if (playSessionId) {
+          const entry = registry.get(playSessionId);
+          if (!isPlayableEntry(entry, fileId)) {
+            return reply.code(404).send({ error: "session_expired" });
+          }
+          const master = [
+            "#EXTM3U",
+            "#EXT-X-STREAM-INF:BANDWIDTH=2000000",
+            `index.m3u8?playSessionId=${playSessionId}${tokenSuffix(req)}`,
+          ].join("\n");
+
+          return reply
+            .code(200)
+            .header("Content-Type", "application/vnd.apple.mpegurl")
+            .send(master);
+        }
 
         const file = await app.prisma.mediaFile.findUnique({
           where: { id: fileId },
@@ -256,6 +319,24 @@ export default function streamRoute(
       { preHandler: [queryTokenAuth(app), requireAuth(app)] },
       async (req, reply) => {
         const { fileId } = req.params;
+        const playSessionId = (req.query as { playSessionId?: string }).playSessionId;
+
+        if (playSessionId) {
+          const session = await resolveByPlaySession(app, { manager, registry }, fileId, playSessionId, reply);
+          if (!session) return;
+
+          return reply
+            .code(200)
+            .header("Content-Type", "application/vnd.apple.mpegurl")
+            .send(
+              buildVodPlaylist(
+                session.durationSec,
+                session.segSec,
+                `playSessionId=${playSessionId}${tokenSuffix(req)}`,
+              ),
+            );
+        }
+
         const session = await resolveSession(app, manager, fileId, req, reply);
         if (!session) return;
 
@@ -274,7 +355,10 @@ export default function streamRoute(
       { preHandler: [queryTokenAuth(app), requireAuth(app)] },
       async (req, reply) => {
         const { fileId } = req.params;
-        const session = await resolveSession(app, manager, fileId, req, reply);
+        const playSessionId = (req.query as { playSessionId?: string }).playSessionId;
+        const session = playSessionId
+          ? await resolveByPlaySession(app, { manager, registry }, fileId, playSessionId, reply)
+          : await resolveSession(app, manager, fileId, req, reply);
         if (!session) return;
 
         let initPath: string;
@@ -307,7 +391,10 @@ export default function streamRoute(
         if (!m) return reply.code(400).send({ error: "bad_segment" });
         const n = parseInt(m[1], 10);
 
-        const session = await resolveSession(app, manager, fileId, req, reply);
+        const playSessionId = (req.query as { playSessionId?: string }).playSessionId;
+        const session = playSessionId
+          ? await resolveByPlaySession(app, { manager, registry }, fileId, playSessionId, reply)
+          : await resolveSession(app, manager, fileId, req, reply);
         if (!session) return;
 
         let segPath: string;
