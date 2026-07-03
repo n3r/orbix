@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import path from "node:path";
-import { cacheImage } from "./images";
+import { cacheImage, cacheImageFromUrl } from "./images";
 
 // ---------------------------------------------------------------------------
 // Fake helpers — NO real network, NO real disk.
@@ -143,5 +143,23 @@ describe("cacheImage", () => {
     expect(result).toBe("poster/img.jpg");
     expect(writeCalls[0].absPath).toBe(path.join("/meta", "poster/img.jpg"));
     expect(fetchCalls[0]).toContain("/deep/path/img.jpg");
+  });
+});
+
+describe("cacheImageFromUrl (channel logos)", () => {
+  it("caches a channel logo from an absolute URL under channel/", async () => {
+    const { fetchImpl, calls: fetchCalls } = makeFetchSpy();
+    const { writeFile, calls: writeCalls } = makeWriteSpy();
+
+    const rel = await cacheImageFromUrl("https://logos.example/ru/1tv.png", "channel", {
+      fetchImpl,
+      writeFile,
+      exists: async () => false,
+      baseDir: "/meta",
+    });
+
+    expect(rel).toBe("channel/1tv.png");
+    expect(writeCalls[0].absPath).toBe(path.join("/meta", "channel/1tv.png"));
+    expect(fetchCalls[0]).toBe("https://logos.example/ru/1tv.png");
   });
 });

@@ -1,6 +1,6 @@
 import path from "node:path";
 
-export type ImageKind = "poster" | "backdrop" | "logo" | "still";
+export type ImageKind = "poster" | "backdrop" | "logo" | "still" | "channel";
 
 interface ImageDeps {
   fetchImpl: typeof fetch;
@@ -17,6 +17,9 @@ const DEFAULT_SIZE: Record<ImageKind, string> = {
   // a hero title treatment while staying small on disk.
   logo: "w500",
   still: "w300",
+  // TV channel logos are cached from absolute URLs via cacheImageFromUrl,
+  // which ignores size — this entry only keeps the Record total.
+  channel: "w500",
 };
 
 /**
