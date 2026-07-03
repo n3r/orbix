@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { hashDeviceToken } from "@orbix/core";
 
 const LAST_SEEN_THROTTLE_MS = 60_000;
@@ -30,4 +30,28 @@ export async function resolveDeviceToken(
   }
 
   return { deviceId: device.id, accountId: account.id };
+}
+
+/**
+ * preHandler for streaming/subtitle routes: AVPlayer fetches playlists,
+ * segments, and subtitle renditions with no cookies and no headers, so these
+ * routes also accept the device token as a ?token= query param (embedded in
+ * generated playlist URIs). Runs before requireAuth in the preHandler array;
+ * does nothing when the request is already authenticated.
+ */
+export function queryTokenAuth(app: FastifyInstance) {
+  return async (req: FastifyRequest, _reply: FastifyReply) => {
+    if (req.accountId) return;
+    const token = (req.query as { token?: unknown } | undefined)?.token;
+    if (typeof token !== "string" || token.length === 0) return;
+    try {
+      const resolved = await resolveDeviceToken(app, token);
+      if (resolved) {
+        req.accountId = resolved.accountId;
+        req.deviceId = resolved.deviceId;
+      }
+    } catch (err) {
+      req.log.error({ err }, "query token lookup failed");
+    }
+  };
 }

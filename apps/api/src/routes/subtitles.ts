@@ -3,6 +3,7 @@ import { promisify } from "node:util";
 import type { FastifyInstance } from "fastify";
 import { srtToVtt } from "@orbix/core";
 import { requireAuth } from "../lib/auth";
+import { queryTokenAuth } from "../lib/device-auth";
 import { assertFileAllowed } from "../lib/catalog-filter";
 
 const execFileAsync = promisify(execFile);
@@ -30,7 +31,7 @@ export default async function subtitlesRoute(app: FastifyInstance) {
   // ------------------------------------------------------------------
   app.get<{ Params: { fileId: string } }>(
     "/play/:fileId/subs",
-    { preHandler: requireAuth(app) },
+    { preHandler: [queryTokenAuth(app), requireAuth(app)] },
     async (req, reply) => {
       const { fileId } = req.params;
 
@@ -62,7 +63,7 @@ export default async function subtitlesRoute(app: FastifyInstance) {
   // ------------------------------------------------------------------
   app.get<{ Params: { fileId: string; index: string } }>(
     "/play/:fileId/subs/:index",
-    { preHandler: requireAuth(app) },
+    { preHandler: [queryTokenAuth(app), requireAuth(app)] },
     async (req, reply) => {
       const { fileId } = req.params;
 

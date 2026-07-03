@@ -2,6 +2,7 @@ import fs from "node:fs";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { decideStrategy, getSetting } from "@orbix/core";
 import { requireAuth } from "../lib/auth";
+import { queryTokenAuth } from "../lib/device-auth";
 import { activeProfile, profileAllowsItem, assertFileAllowed } from "../lib/catalog-filter";
 import { SessionManager, SegmentTimeoutError } from "../playback/session";
 
@@ -101,7 +102,7 @@ export default function streamRoute(env: { TRANSCODE_DIR: string; MAX_TRANSCODE_
     // ------------------------------------------------------------------
     app.get<{ Params: { fileId: string } }>(
       "/play/:fileId/decision",
-      { preHandler: requireAuth(app) },
+      { preHandler: [queryTokenAuth(app), requireAuth(app)] },
       async (req, reply) => {
         const { fileId } = req.params;
 
@@ -150,7 +151,7 @@ export default function streamRoute(env: { TRANSCODE_DIR: string; MAX_TRANSCODE_
     // ------------------------------------------------------------------
     app.get<{ Params: { fileId: string } }>(
       "/play/:fileId/direct",
-      { preHandler: requireAuth(app) },
+      { preHandler: [queryTokenAuth(app), requireAuth(app)] },
       async (req, reply) => {
         const { fileId } = req.params;
 
@@ -231,7 +232,7 @@ export default function streamRoute(env: { TRANSCODE_DIR: string; MAX_TRANSCODE_
     // ------------------------------------------------------------------
     app.get<{ Params: { fileId: string } }>(
       "/play/:fileId/master.m3u8",
-      { preHandler: requireAuth(app) },
+      { preHandler: [queryTokenAuth(app), requireAuth(app)] },
       async (req, reply) => {
         const { fileId } = req.params;
 
@@ -260,7 +261,7 @@ export default function streamRoute(env: { TRANSCODE_DIR: string; MAX_TRANSCODE_
     // ------------------------------------------------------------------
     app.get<{ Params: { fileId: string } }>(
       "/play/:fileId/index.m3u8",
-      { preHandler: requireAuth(app) },
+      { preHandler: [queryTokenAuth(app), requireAuth(app)] },
       async (req, reply) => {
         const { fileId } = req.params;
         const session = await resolveSession(app, manager, fileId, req, reply);
@@ -278,7 +279,7 @@ export default function streamRoute(env: { TRANSCODE_DIR: string; MAX_TRANSCODE_
     // ------------------------------------------------------------------
     app.get<{ Params: { fileId: string } }>(
       "/play/:fileId/init.mp4",
-      { preHandler: requireAuth(app) },
+      { preHandler: [queryTokenAuth(app), requireAuth(app)] },
       async (req, reply) => {
         const { fileId } = req.params;
         const session = await resolveSession(app, manager, fileId, req, reply);
@@ -306,7 +307,7 @@ export default function streamRoute(env: { TRANSCODE_DIR: string; MAX_TRANSCODE_
     // ------------------------------------------------------------------
     app.get<{ Params: { fileId: string; seg: string } }>(
       "/play/:fileId/:seg",
-      { preHandler: requireAuth(app) },
+      { preHandler: [queryTokenAuth(app), requireAuth(app)] },
       async (req, reply) => {
         const { fileId, seg } = req.params;
 
