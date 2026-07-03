@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { planTmdbDedup, type DedupeCandidate } from "./dedupe";
+import { planTmdbDedup, planSeriesDedup, type DedupeCandidate } from "./dedupe";
 
 const item = (over: Partial<DedupeCandidate> & { id: string }): DedupeCandidate => ({
   libraryId: "lib1",
@@ -75,5 +75,59 @@ describe("planTmdbDedup", () => {
     const target = item({ id: "a", tmdbId: 2048, addedAt: 100 });
     const other = item({ id: "b", tmdbId: 603, addedAt: 200 });
     expect(planTmdbDedup(target, [other])).toEqual({ action: "keep" });
+  });
+});
+
+describe("planSeriesDedup", () => {
+  const base = { libraryId: "lib", addedAt: 100 };
+
+  it("collides on a shared tvdbId", () => {
+    const plan = planSeriesDedup(
+      { ...base, id: "b", tvdbId: 275274, tmdbId: null, addedAt: 200 },
+      [{ ...base, id: "a", tvdbId: 275274, tmdbId: 60625 }],
+    );
+    expect(plan).toEqual({ action: "merge", canonicalId: "a", obsoleteIds: ["b"] });
+  });
+
+  it("collides on a shared tmdbId when tvdb ids are absent (TMDB-fallback rows)", () => {
+    const plan = planSeriesDedup(
+      { ...base, id: "b", tvdbId: null, tmdbId: 60625, addedAt: 200 },
+      [{ ...base, id: "a", tvdbId: 275274, tmdbId: 60625 }],
+    );
+    expect(plan).toEqual({ action: "merge", canonicalId: "a", obsoleteIds: ["b"] });
+  });
+
+  it("keeps distinct series apart", () => {
+    const plan = planSeriesDedup(
+      { ...base, id: "b", tvdbId: 79551, tmdbId: 19566 },
+      [{ ...base, id: "a", tvdbId: 447184, tmdbId: 90228 }],
+    );
+    expect(plan).toEqual({ action: "keep" });
+  });
+
+  it("never merges across libraries", () => {
+    const plan = planSeriesDedup(
+      { ...base, id: "b", tvdbId: 275274, tmdbId: null },
+      [{ id: "a", libraryId: "other", tvdbId: 275274, tmdbId: null, addedAt: 1 }],
+    );
+    expect(plan).toEqual({ action: "keep" });
+  });
+
+  it("collapses a whole group onto the earliest-added item", () => {
+    const plan = planSeriesDedup(
+      { ...base, id: "c", tvdbId: 78650, tmdbId: null, addedAt: 300 },
+      [
+        { ...base, id: "b", tvdbId: 78650, tmdbId: 236, addedAt: 200 },
+        { ...base, id: "a", tvdbId: 78650, tmdbId: 236, addedAt: 100 },
+      ],
+    );
+    expect(plan).toEqual({ action: "merge", canonicalId: "a", obsoleteIds: ["b", "c"] });
+  });
+
+  it("keeps items with no provider ids", () => {
+    const plan = planSeriesDedup({ ...base, id: "b", tvdbId: null, tmdbId: null }, [
+      { ...base, id: "a", tvdbId: null, tmdbId: null },
+    ]);
+    expect(plan).toEqual({ action: "keep" });
   });
 });

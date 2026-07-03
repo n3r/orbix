@@ -19,6 +19,7 @@ export * from "./metadata/fanart";
 export * from "./metadata/frame-fallback";
 export * from "./metadata/refresh";
 export * from "./metadata/dedupe";
+export * from "./metadata/season-shape";
 export * from "./playback/strategy";
 export * from "./playback/playlist";
 export * from "./playback/ffargs";

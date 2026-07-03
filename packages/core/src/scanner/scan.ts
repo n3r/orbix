@@ -48,6 +48,11 @@ export async function scanSource(
     }
 
     const parsed = parseMediaPath(file.path);
+    // Extras/trailers/samples: not library items — don't probe, don't ingest.
+    if (parsed.skip) {
+      skipped++;
+      continue;
+    }
     const tech = await deps.probe(file.path);
     const { itemId, created } = await deps.upsertItemAndFile({
       libraryId: opts.libraryId,

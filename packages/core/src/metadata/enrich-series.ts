@@ -4,6 +4,7 @@ import type { ExternalRatings } from "./omdb";
 import type { EnrichResult, MetadataTranslation } from "./enrich";
 import { isRealTranslation } from "./localize";
 import { resolveTitle } from "./resolve";
+import type { LocalSeasonShape } from "./season-shape";
 
 /** Minimal client surface needed to fetch localized series/season/episode text. */
 export type TranslateSeriesClient = Pick<TmdbTvLike, "tv" | "tvSeason">;
@@ -86,7 +87,7 @@ export interface SaveSeriesInput {
  * show with two local seasons doesn't trigger 20 season requests.
  */
 export async function enrichSeries(
-  item: { id: string; title: string; year?: number; tmdbId?: number },
+  item: { id: string; title: string; year?: number; tmdbId?: number; titleVariants?: string[] },
   deps: {
     client: TmdbTvLike;
     cacheImage: (tmdbPath: string, kind: ImageKind) => Promise<string>;
@@ -94,6 +95,8 @@ export async function enrichSeries(
     resolveLogo?: (input: { tmdbId: number; imdbId?: string }) => Promise<string | undefined>;
     fetchRatings?: (imdbId: string) => Promise<ExternalRatings | undefined>;
     localSeasonNumbers?: number[];
+    /** File-backed local season structure — enables namesake disambiguation. */
+    localShape?: LocalSeasonShape[];
     /** Per-language clients used to fetch localized series/season/episode text. */
     translateClients?: Map<string, TranslateSeriesClient>;
   },
@@ -101,11 +104,28 @@ export async function enrichSeries(
   // Same ladder/deep-check resolver as movies (resolve.ts), with TV adapters.
   const tmdbId =
     item.tmdbId ??
-    (await resolveTitle(item.title, item.year, {
-      search: async (query, yr, language) =>
-        (await deps.client.searchTvs(query, yr, language)).map((c) => ({ ...c, id: c.tmdbId })),
-      allTitles: (id) => deps.client.allTvTitles(id),
-    }));
+    (await resolveTitle(
+      item.title,
+      item.year,
+      {
+        search: async (query, yr, language) =>
+          (await deps.client.searchTvs(query, yr, language)).map((c) => ({ ...c, id: c.tmdbId })),
+        allTitles: (id) => deps.client.allTvTitles(id),
+      },
+      {
+        ...(item.titleVariants ? { variants: item.titleVariants } : {}),
+        ...(deps.localShape
+          ? {
+              localShape: deps.localShape,
+              seasonShape: async (id: number) =>
+                (await deps.client.tv(id)).seasons.map((s) => ({
+                  seasonNumber: s.seasonNumber,
+                  episodeCount: s.episodeCount,
+                })),
+            }
+          : {}),
+      },
+    ));
   if (!tmdbId) return { matched: false };
 
   const tv = await deps.client.tv(tmdbId);

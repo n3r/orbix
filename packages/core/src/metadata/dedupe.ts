@@ -61,3 +61,50 @@ export function planTmdbDedup(
     obsoleteIds: rest.map((c) => c.id),
   };
 }
+
+export interface SeriesDedupeCandidate {
+  id: string;
+  libraryId: string;
+  tvdbId: number | null;
+  tmdbId: number | null;
+  /** Epoch ms; earlier = smaller. The earliest-added item wins as canonical. */
+  addedAt: number;
+}
+
+/**
+ * Series flavor of the dedupe plan. Season packs of one show routinely parse
+ * to different pre-enrich titles ("Rick and Morty" / "Rick and Morty (2013)" /
+ * "Rick.And.Morty.1080"), each becoming its own series row; enrichment is the
+ * first point their shared identity is known. Series carry TWO provider ids —
+ * a TVDB-first row and a TMDB-fallback row of the same show must still
+ * collide — so the collision key is: same non-null tvdbId OR same non-null
+ * tmdbId, within one library.
+ */
+export function planSeriesDedup(
+  item: SeriesDedupeCandidate,
+  others: SeriesDedupeCandidate[],
+): DedupePlan {
+  if (item.tvdbId == null && item.tmdbId == null) return { action: "keep" };
+
+  const group = [
+    item,
+    ...others.filter(
+      (o) =>
+        o.id !== item.id &&
+        o.libraryId === item.libraryId &&
+        ((item.tvdbId != null && o.tvdbId === item.tvdbId) ||
+          (item.tmdbId != null && o.tmdbId === item.tmdbId)),
+    ),
+  ];
+  if (group.length < 2) return { action: "keep" };
+
+  const sorted = [...group].sort(
+    (a, b) => a.addedAt - b.addedAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+  );
+  const [canonical, ...rest] = sorted;
+  return {
+    action: "merge",
+    canonicalId: canonical!.id,
+    obsoleteIds: rest.map((c) => c.id),
+  };
+}

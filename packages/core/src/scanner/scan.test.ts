@@ -89,3 +89,26 @@ describe("scanSource", () => {
     expect(result.itemIds).toEqual(uniqueIds);
   });
 });
+
+describe("extras skipping at scan time", () => {
+  const opts = { libraryId: "lib-1", root: "/m" };
+  const extrasFile = {
+    path: "/m/Family Guy/1 Season (SerGoLeOne)/FOX.com Promos/Don't Vote.mkv",
+    mtime: new Date("2024-01-03"),
+    size: 300,
+  };
+
+  it("never ingests (or probes) a parse-skipped extras file", async () => {
+    const { deps, repo } = makeDeps([fileA, extrasFile]);
+    let probed = 0;
+    deps.probe = async () => {
+      probed++;
+      return stubTech;
+    };
+    const result = await scanSource(opts, deps);
+    expect(result.added).toBe(1);
+    expect(result.skipped).toBe(1);
+    expect(repo.has(extrasFile.path)).toBe(false);
+    expect(probed).toBe(1); // only fileA
+  });
+});
