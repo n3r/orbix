@@ -5,6 +5,8 @@ import type { Env } from "@orbix/config";
 import dbPlugin from "./plugins/db";
 import sessionPlugin from "./plugins/session";
 import { queuePlugin } from "./plugins/queue";
+import { tvQueuePlugin } from "./plugins/tv-queue";
+import { randomUUID } from "node:crypto";
 import { mountsPlugin } from "./plugins/mounts";
 import type { MountRuntime } from "./lib/mount-runtime";
 import health from "./routes/health";
@@ -40,6 +42,7 @@ export async function buildApp(env: Env, overrides?: { mountRuntime?: MountRunti
   await app.register(dbPlugin);
   await app.register(sessionPlugin);
   await app.register(queuePlugin(env, { runtime }));
+  await app.register(tvQueuePlugin(env));
   await app.register(mountsPlugin(env, { runtime }));
   await app.register(health); // root — used by the Docker healthcheck
   // All app API routes live under /api so Fastify can serve them same-origin
@@ -90,6 +93,19 @@ export async function buildApp(env: Env, overrides?: { mountRuntime?: MountRunti
     }
   }, REFRESH_INTERVAL_MS);
   refreshTimer.unref(); // don't block process shutdown
+
+  // ── Periodic TV catalog sync (daily; skips cleanly when TV is unconfigured) ──
+  const TV_SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 h
+  const tvSyncTimer = setInterval(async () => {
+    try {
+      const enabled = await app.prisma.tvSource.count({ where: { enabled: true } });
+      if (enabled === 0) return; // no enabled TvSource rows — nothing to enqueue
+      await app.tvQueue.add("tv-sync", { jobId: randomUUID() });
+    } catch (err) {
+      app.log.error({ err }, "Scheduled tv-sync enqueue failed");
+    }
+  }, TV_SYNC_INTERVAL_MS);
+  tvSyncTimer.unref(); // don't block process shutdown
 
   // Serve the built SPA last so its catch-all fallback sits below the API routes.
   await app.register(staticWebPlugin, {});
