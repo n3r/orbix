@@ -21,6 +21,7 @@ import catalogRoute from "./routes/catalog";
 import streamRoute from "./routes/stream";
 import subtitlesRoute from "./routes/subtitles";
 import playstateRoute from "./routes/playstate";
+import wishlistRoute from "./routes/wishlist";
 import discoveryRoute from "./routes/discovery";
 import similarRoute from "./routes/similar";
 import seriesRoute from "./routes/series";
@@ -56,6 +57,7 @@ export async function buildApp(env: Env, overrides?: { mountRuntime?: MountRunti
   await app.register(streamRoute(env), { prefix: "/api" });
   await app.register(subtitlesRoute, { prefix: "/api" });
   await app.register(playstateRoute, { prefix: "/api" });
+  await app.register(wishlistRoute, { prefix: "/api" });
   await app.register(discoveryRoute, { prefix: "/api" });
   await app.register(similarRoute, { prefix: "/api" });
   await app.register(seriesRoute, { prefix: "/api" });
