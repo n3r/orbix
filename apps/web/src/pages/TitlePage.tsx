@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useSearchParams } from "react-router";
 import { apiJson, ApiError } from "@/lib/api";
+import { useToggleWishlist, useWishlistIds } from "@/lib/queries";
 import type { TitleDetail } from "@/lib/types";
 import TitleHero from "@/components/TitleHero";
 import SimilarRail from "@/components/SimilarRail";
@@ -29,6 +30,10 @@ export default function TitlePage() {
     queryFn: () => apiJson<TitleDetail>(`/items/${id}`),
     retry: false,
   });
+
+  const wishlistIds = useWishlistIds();
+  const toggleWishlist = useToggleWishlist();
+  const inWishlist = id && wishlistIds.data ? wishlistIds.data.ids.includes(id) : undefined;
 
   const onPlayEpisode = useCallback((ep: PlayEpisode) => {
     setPlayTarget({ fileId: ep.fileId, episodeId: ep.episodeId, title: ep.title });
@@ -96,7 +101,17 @@ export default function TitlePage() {
 
   return (
     <main className="flex w-full flex-col">
-      <TitleHero item={item} canPlay={canPlay} playLabel={t("title:play")} onPlay={handleHeroPlay} />
+      <TitleHero
+        item={item}
+        canPlay={canPlay}
+        playLabel={t("title:play")}
+        onPlay={handleHeroPlay}
+        inWishlist={inWishlist}
+        wishlistLabel={inWishlist ? t("title:inWishlist") : t("title:addToWishlist")}
+        onToggleWishlist={() => {
+          if (id) toggleWishlist.mutate({ itemId: id, add: !inWishlist });
+        }}
+      />
 
       {/* Full-page player overlay (portaled to <body>) */}
       {playTarget && id && (

@@ -19,6 +19,7 @@ export const NAMESPACES = [
   "catalog",
   "search",
   "title",
+  "wishlist",
   "player",
   "errors",
 ] as const;

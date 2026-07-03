@@ -6,6 +6,7 @@ import ProfilesPage from "./pages/ProfilesPage";
 import HomePage from "./pages/HomePage";
 import LibraryPage from "./pages/LibraryPage";
 import SearchPage from "./pages/SearchPage";
+import WishlistPage from "./pages/WishlistPage";
 import TitlePage from "./pages/TitlePage";
 import FixMatchPage from "./pages/FixMatchPage";
 import AdminLibrariesPage from "./pages/AdminLibrariesPage";
@@ -24,6 +25,7 @@ export const router = createBrowserRouter([
       { path: "/", element: <HomePage /> },
       { path: "/library/:libraryId", element: <LibraryPage /> },
       { path: "/search", element: <SearchPage /> },
+      { path: "/wishlist", element: <WishlistPage /> },
       { path: "/title/:id", element: <TitlePage /> },
       { path: "/title/:id/fix", element: <FixMatchPage /> },
       {

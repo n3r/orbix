@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiJson, apiFetch, ApiError } from "./api";
 import type { AuthMe, HomeRow, MediaCard, MenuConfig, MenuItem, Profile, TitleDetail } from "./types";
 
@@ -68,4 +68,41 @@ export function itemDetailOptions(id: string) {
 /** Full title detail; shared cache key ["item", id] (used by the home billboard). */
 export function useItemDetail(id: string | undefined) {
   return useQuery({ ...itemDetailOptions(id ?? ""), enabled: !!id });
+}
+
+/** The active profile's wishlist as poster cards, newest-first. */
+export function useWishlist() {
+  return useQuery({ queryKey: ["wishlist", "items"], queryFn: () => apiJson<MediaCard[]>("/wishlist") });
+}
+
+/** Wishlist membership ids — drives the title-page toggle. */
+export function useWishlistIds() {
+  return useQuery({ queryKey: ["wishlist", "ids"], queryFn: () => apiJson<{ ids: string[] }>("/wishlist/ids") });
+}
+
+/** Add/remove a title, updating the ids cache optimistically. */
+export function useToggleWishlist() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ itemId, add }: { itemId: string; add: boolean }) => {
+      const res = await apiFetch(`/wishlist/${itemId}`, { method: add ? "POST" : "DELETE" });
+      if (!res.ok) throw new ApiError(res.status);
+    },
+    onMutate: async ({ itemId, add }) => {
+      await qc.cancelQueries({ queryKey: ["wishlist"] });
+      const prev = qc.getQueryData<{ ids: string[] }>(["wishlist", "ids"]);
+      if (prev) {
+        qc.setQueryData(["wishlist", "ids"], {
+          ids: add ? [...new Set([...prev.ids, itemId])] : prev.ids.filter((x) => x !== itemId),
+        });
+      }
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(["wishlist", "ids"], ctx.prev);
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ["wishlist"] });
+    },
+  });
 }

@@ -4,6 +4,8 @@
   "unmatchedNotice": "Metadaten noch nicht zugeordnet – scanne mit einem TMDB-Token, um sie anzureichern.",
   "fixMatch": "Zuordnung / Poster korrigieren (Administrator)",
   "play": "Abspielen",
+  "addToWishlist": "Zu meiner Liste hinzufügen",
+  "inWishlist": "In meiner Liste",
   "playNoMedia": "Abspielen (keine Medien)",
   "section": {
     "overview": "Übersicht",
