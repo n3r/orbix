@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { enrichItem } from "./enrich";
 import type { TmdbLike, SaveMetadataInput } from "./enrich";
-import type { TmdbMovie, TmdbCredits, TmdbKeyword, TmdbSearchResult } from "./tmdb";
+import type { TmdbMovie, TmdbCredits, TmdbKeyword, TmdbSearchResult, TmdbSearchCandidate } from "./tmdb";
 import type { ImageKind } from "./images";
 
 // ---------------------------------------------------------------------------
@@ -41,16 +41,34 @@ const fakeKeywords: TmdbKeyword[] = [{ tmdbId: 9, name: "dystopia" }];
 
 function makeFakeClient(
   searchResult: TmdbSearchResult | null = { tmdbId: MATRIX_ID, title: "The Matrix", year: 1999 },
-  options: { certification?: string | null; certThrows?: boolean } = {},
-): TmdbLike & { searchCalls: number } {
+  options: {
+    certification?: string | null;
+    certThrows?: boolean;
+    /** Per-query candidate override for the query-ladder resolver. */
+    searchMovies?: (query: string, year?: number) => TmdbSearchCandidate[];
+  } = {},
+): TmdbLike & { searchCalls: number; searchMoviesCalls: number } {
   let searchCalls = 0;
+  let searchMoviesCalls = 0;
+  // Default: one candidate mirroring searchResult (a strong string match for the
+  // existing "The Matrix" tests), or none when searchResult is null.
+  const defaultCandidates: TmdbSearchCandidate[] = searchResult
+    ? [{ tmdbId: searchResult.tmdbId, title: searchResult.title, year: searchResult.year, voteCount: 20000 }]
+    : [];
   return {
     get searchCalls() {
       return searchCalls;
     },
+    get searchMoviesCalls() {
+      return searchMoviesCalls;
+    },
     async searchMovie(_title: string, _year?: number): Promise<TmdbSearchResult | null> {
       searchCalls++;
       return searchResult;
+    },
+    async searchMovies(query: string, year?: number): Promise<TmdbSearchCandidate[]> {
+      searchMoviesCalls++;
+      return options.searchMovies ? options.searchMovies(query, year) : defaultCandidates;
     },
     async movie(_id: number): Promise<TmdbMovie> {
       return fakeMovie;
@@ -201,8 +219,9 @@ describe("enrichItem", () => {
 
     expect(result.matched).toBe(true);
     expect(result.tmdbId).toBe(MATRIX_ID);
-    // searchMovie should NOT have been called since tmdbId was embedded
+    // No TMDB search of any kind since tmdbId was embedded
     expect(client.searchCalls).toBe(0);
+    expect(client.searchMoviesCalls).toBe(0);
   });
 
   it("Test 4: releaseCertification returns a value → saveMetadata receives rating", async () => {
@@ -289,5 +308,98 @@ describe("enrichItem", () => {
 
     expect(result.matched).toBe(true);
     expect(saveCalls[0].translations).toEqual([]);
+  });
+
+  it("Test 9: ladder rescue — cleans release noise so a noisy title matches", async () => {
+    // Old behavior: searchMovie("Body of Lies Remux") → null → unmatched.
+    const client = makeFakeClient(null, {
+      searchMovies: (query) =>
+        query === "Body of Lies"
+          ? [{ tmdbId: 8064, title: "Body of Lies", year: 2008, voteCount: 800 }]
+          : [],
+    });
+    const { cacheImage } = makeCacheImageSpy();
+    const { saveMetadata, calls: saveCalls } = makeSaveMetadataSpy();
+
+    const result = await enrichItem(
+      { id: "item-9", title: "Body of Lies Remux" },
+      { client, cacheImage, saveMetadata },
+    );
+
+    expect(result.matched).toBe(true);
+    expect(result.tmdbId).toBe(8064);
+    expect(saveCalls).toHaveLength(1);
+  });
+
+  it("Test 10: Cyrillic — matches the film via its originalTitle after cleaning", async () => {
+    const client = makeFakeClient(null, {
+      searchMovies: (query) =>
+        query === "Горько! 2"
+          ? [{ tmdbId: 253235, title: "Gorko 2", originalTitle: "Горько! 2", year: 2014, voteCount: 300 }]
+          : [],
+    });
+    const { cacheImage } = makeCacheImageSpy();
+    const { saveMetadata } = makeSaveMetadataSpy();
+
+    const result = await enrichItem(
+      { id: "item-10", title: "Горько! 2 Blu-Ray (" },
+      { client, cacheImage, saveMetadata },
+    );
+
+    expect(result.matched).toBe(true);
+    expect(result.tmdbId).toBe(253235);
+  });
+
+  it("Test 11: transliteration rescued via year-gated rule C", async () => {
+    // "Zheleznyj chelovek 2" shares almost no characters with "Iron Man 2",
+    // but it is the #1 year-filtered hit with an exact year + real votes.
+    const client = makeFakeClient(null, {
+      searchMovies: (query) =>
+        query === "Zheleznyj chelovek 2"
+          ? [{ tmdbId: 10138, title: "Iron Man 2", originalTitle: "Iron Man 2", year: 2010, voteCount: 15000 }]
+          : [],
+    });
+    const { cacheImage } = makeCacheImageSpy();
+    const { saveMetadata } = makeSaveMetadataSpy();
+
+    const result = await enrichItem(
+      { id: "item-11", title: "Zheleznyj chelovek 2", year: 2010 },
+      { client, cacheImage, saveMetadata },
+    );
+
+    expect(result.matched).toBe(true);
+    expect(result.tmdbId).toBe(10138);
+  });
+
+  it("Test 12: a clean common title resolves in a single search call", async () => {
+    const client = makeFakeClient();
+    const { cacheImage } = makeCacheImageSpy();
+    const { saveMetadata } = makeSaveMetadataSpy();
+
+    const result = await enrichItem(
+      { id: "item-12", title: "The Matrix", year: 1999 },
+      { client, cacheImage, saveMetadata },
+    );
+
+    expect(result.matched).toBe(true);
+    expect(client.searchMoviesCalls).toBe(1);
+  });
+
+  it("Test 13: low-similarity candidate is NOT accepted without a year (false-positive guard)", async () => {
+    const client = makeFakeClient(null, {
+      searchMovies: () => [
+        { tmdbId: 10138, title: "Iron Man 2", year: 2010, voteCount: 15000 },
+      ],
+    });
+    const { cacheImage } = makeCacheImageSpy();
+    const { saveMetadata, calls: saveCalls } = makeSaveMetadataSpy();
+
+    const result = await enrichItem(
+      { id: "item-13", title: "Zheleznyj chelovek 2" }, // no year → rule C cannot fire
+      { client, cacheImage, saveMetadata },
+    );
+
+    expect(result.matched).toBe(false);
+    expect(saveCalls).toHaveLength(0);
   });
 });

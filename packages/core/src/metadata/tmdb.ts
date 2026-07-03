@@ -26,6 +26,11 @@ export interface TmdbSearchCandidate {
   title: string;
   year?: number;
   posterPath?: string;
+  /** Original-language title + language + popularity — used by match scoring. */
+  originalTitle?: string;
+  originalLanguage?: string;
+  popularity?: number;
+  voteCount?: number;
 }
 
 export interface TmdbGenreRef {
@@ -107,8 +112,12 @@ export interface TmdbKeyword {
 interface RawSearchResult {
   id: number;
   title: string;
+  original_title?: string;
+  original_language?: string;
   release_date?: string;
   poster_path?: string | null;
+  popularity?: number;
+  vote_count?: number;
 }
 
 interface RawMovie {
@@ -299,6 +308,10 @@ export class TmdbClient {
       title: r.title,
       ...(r.release_date ? { year: Number(r.release_date.slice(0, 4)) } : {}),
       ...(r.poster_path != null ? { posterPath: r.poster_path } : {}),
+      ...(r.original_title != null ? { originalTitle: r.original_title } : {}),
+      ...(r.original_language != null ? { originalLanguage: r.original_language } : {}),
+      ...(r.popularity != null ? { popularity: r.popularity } : {}),
+      ...(r.vote_count != null ? { voteCount: r.vote_count } : {}),
     }));
   }
 

@@ -92,5 +92,42 @@ describe("parseMediaPath", () => {
       expect(r.seasonNumber).toBe(3);
       expect(r.episodeNumber).toBe(5);
     });
+
+    it("detects a bare 'Серия N' mini-series (no season folder), defaulting season to 1", () => {
+      const r = parseMediaPath("/m/Films/12 Стульев/12 Стульев. Серия 3.mkv");
+      expect(r.title).toBe("12 Стульев");
+      expect(r.seasonNumber).toBe(1);
+      expect(r.episodeNumber).toBe(3);
+    });
+
+    it("detects the first episode of a bare mini-series", () => {
+      const r = parseMediaPath("/m/Films/12 Стульев/12 Стульев. Серия 1.mkv");
+      expect(r.seasonNumber).toBe(1);
+      expect(r.episodeNumber).toBe(1);
+    });
+
+    it("detects the Ukrainian 'Серія' variant", () => {
+      const r = parseMediaPath("/m/Films/Показ/Показ. Серія 2.mkv");
+      expect(r.seasonNumber).toBe(1);
+      expect(r.episodeNumber).toBe(2);
+    });
+
+    it("lets an explicit Season folder override the default mini-series season", () => {
+      const r = parseMediaPath("/tv/Show (2020)/Season 02/Show. Серия 5.mkv");
+      expect(r.seasonNumber).toBe(2);
+      expect(r.episodeNumber).toBe(5);
+    });
+
+    it("does not treat a bare trailing number as an episode", () => {
+      const r = parseMediaPath("/m/Apollo 13 (1995)/Apollo 13.mkv");
+      expect(r.seasonNumber).toBeUndefined();
+      expect(r.episodeNumber).toBeUndefined();
+    });
+
+    it("does not treat 'Vol. N' as an episode", () => {
+      const r = parseMediaPath("/m/Kill Bill Vol. 1 (2003)/Kill Bill Vol. 1.mkv");
+      expect(r.seasonNumber).toBeUndefined();
+      expect(r.episodeNumber).toBeUndefined();
+    });
   });
 });

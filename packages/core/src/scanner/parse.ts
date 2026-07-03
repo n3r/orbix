@@ -63,6 +63,19 @@ function extractEpisodeNum(s: string): number | undefined {
   return m ? parseInt(m[1], 10) : undefined;
 }
 
+// Explicit "серия N" (RU) / "серія N" (UK) marker, in either order. Used to
+// detect a bare mini-series episode ("Title. Серия 3") that lives directly in a
+// (movie) library with no season folder. Unlike extractEpisodeNum this ONLY
+// matches the explicit keyword — never a leading/trailing bare number — so real
+// movies with numbers ("Apollo 13", "Kill Bill Vol. 1") stay movies.
+const SERIYA_LEADING_RE = /(?:^|[\s._-])сер(?:и[ияюей]|і[яї])[\s._-]*(\d{1,3})/i;
+const SERIYA_TRAILING_RE = /(\d{1,3})[\s._-]*сер(?:и[ияюей]|і[яї])(?:[\s._-]|$)/i;
+
+function seriyaEpisode(s: string): number | undefined {
+  const m = SERIYA_LEADING_RE.exec(s) ?? SERIYA_TRAILING_RE.exec(s);
+  return m ? parseInt(m[1], 10) : undefined;
+}
+
 interface EpisodeMarker {
   seasonNumber: number;
   episodeNumber: number;
@@ -86,6 +99,11 @@ function detectEpisode(filenameNoExt: string, folder: string): EpisodeMarker | n
     const ep = extractEpisodeNum(filenameNoExt);
     if (ep !== undefined) return { seasonNumber: 0, episodeNumber: ep };
   }
+
+  // Bare mini-series with no season folder: "Title. Серия 3" → season 1, ep 3.
+  // Lowest precedence, so an explicit SxxExx / season folder always wins.
+  const seriya = seriyaEpisode(filenameNoExt);
+  if (seriya !== undefined) return { seasonNumber: 1, episodeNumber: seriya };
 
   return null;
 }

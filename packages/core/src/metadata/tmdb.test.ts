@@ -82,6 +82,35 @@ describe("TmdbClient.searchMovies", () => {
     const candidates = await client.searchMovies("Nothing");
     expect(candidates).toEqual([]);
   });
+
+  it("maps original title, language, popularity and vote count for scoring", async () => {
+    const { fake } = makeFetch({
+      results: [
+        {
+          id: 10138,
+          title: "Iron Man 2",
+          original_title: "Iron Man 2",
+          original_language: "en",
+          release_date: "2010-04-28",
+          poster_path: "/p.jpg",
+          popularity: 42.5,
+          vote_count: 15000,
+        },
+      ],
+    });
+    const client = new TmdbClient("tok", fake);
+    const [c] = await client.searchMovies("Iron Man 2", 2010);
+    expect(c).toEqual({
+      tmdbId: 10138,
+      title: "Iron Man 2",
+      originalTitle: "Iron Man 2",
+      originalLanguage: "en",
+      year: 2010,
+      posterPath: "/p.jpg",
+      popularity: 42.5,
+      voteCount: 15000,
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
