@@ -25,5 +25,11 @@
     "seasons": "{{count}} saisons",
     "timeLeftMinutes": "{{m}} min restantes",
     "timeLeftHours": "{{h}} h {{m}} min restantes"
+  },
+  "home": {
+    "emptyTitle": "Votre bibliothèque est vide",
+    "emptyBody": "Ajoutez une bibliothèque et lancez une analyse pour remplir votre accueil.",
+    "errorTitle": "Impossible de charger votre accueil",
+    "errorBody": "Une erreur s'est produite lors du chargement. Vérifiez votre connexion et réessayez."
   }
 }

@@ -25,5 +25,11 @@
     "seasons": "{{count}} temporadas",
     "timeLeftMinutes": "faltam {{m}} min",
     "timeLeftHours": "faltam {{h}} h {{m}} min"
+  },
+  "home": {
+    "emptyTitle": "Sua biblioteca está vazia",
+    "emptyBody": "Adicione uma biblioteca e faça uma varredura para preencher sua página inicial.",
+    "errorTitle": "Não foi possível carregar sua página inicial",
+    "errorBody": "Algo deu errado ao carregar. Verifique sua conexão e tente novamente."
   }
 }

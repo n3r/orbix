@@ -14,5 +14,6 @@
     "loadFailed": "Failed to load profiles.",
     "selectFailed": "Failed to select profile.",
     "pinNotSupported": "This profile requires a PIN. PIN entry is not yet supported."
-  }
+  },
+  "emptyHint": "Create your first profile to start watching."
 }

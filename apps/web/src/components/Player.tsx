@@ -14,6 +14,7 @@ import { DefaultVideoLayout, defaultLayoutIcons } from "@vidstack/react/player/l
 import "@vidstack/react/player/styles/default/theme.css";
 import "@vidstack/react/player/styles/default/layouts/video.css";
 import Hls from "hls.js";
+import { Button } from "@orbix/ui";
 import { apiFetch } from "@/lib/api";
 
 interface Decision {
@@ -100,13 +101,17 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
   const [selectedSubtitle, setSelectedSubtitle] = useState("off");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Bumped by "Try again": re-runs the decision fetch and remounts the player.
+  const [attempt, setAttempt] = useState(0);
 
   const playerRef = useRef<MediaPlayerInstance>(null);
   const resumedRef = useRef(false);
   const pendingSeekRef = useRef<number | null>(null);
 
-  // Fetch decision, subtitle tracks, and saved progress on mount
+  // Fetch decision, subtitle tracks, and saved progress on mount / retry
   useEffect(() => {
+    setLoading(true);
+    setError(null);
     void (async () => {
       try {
         const [decisionRes, subsRes, progressRes] = await Promise.all([
@@ -139,7 +144,7 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
         setLoading(false);
       }
     })();
-  }, [fileId, mediaItemId, progressQuery, t]);
+  }, [fileId, mediaItemId, progressQuery, t, attempt]);
 
   useEffect(() => {
     if (selectedSubtitle === "off") return;
@@ -222,6 +227,19 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
     pendingSeekRef.current = player.state.currentTime;
   }, []);
 
+  // A runtime playback failure (codec/append/segment error mid-play) would
+  // otherwise leave a black frame forever. Surface it and let the user retry
+  // from where it stopped.
+  const handlePlaybackError = useCallback(() => {
+    rememberPlaybackTime();
+    setError(t("player:error.playback"));
+  }, [rememberPlaybackTime, t]);
+
+  const handleRetry = useCallback(() => {
+    resumedRef.current = false;
+    setAttempt((n) => n + 1);
+  }, []);
+
   if (loading) {
     return (
       <div className="grid h-full w-full place-items-center text-sm text-[var(--text-dim)]">
@@ -232,8 +250,13 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
 
   if (error || !decision) {
     return (
-      <div className="grid h-full w-full place-items-center text-sm text-red-400">
-        {error ?? t("player:error.generic")}
+      <div className="grid h-full w-full place-items-center p-6">
+        <div className="flex max-w-sm flex-col items-center gap-4 text-center">
+          <p className="text-base font-medium text-[var(--text)]">
+            {error ?? t("player:error.generic")}
+          </p>
+          <Button onClick={handleRetry}>{t("common:actions.retry")}</Button>
+        </div>
       </div>
     );
   }
@@ -289,7 +312,7 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
 
   return (
     <MediaPlayer
-      key={sourceUrl}
+      key={`${sourceUrl}#${attempt}`}
       ref={playerRef}
       title={title}
       src={{ src: sourceUrl, type: sourceType }}
@@ -301,6 +324,7 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
       onProviderChange={onProviderChange}
       onCanPlay={handleCanPlay}
       onPause={handlePause}
+      onError={handlePlaybackError}
     >
       <MediaProvider>
         {selectedTrack && (

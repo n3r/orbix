@@ -30,5 +30,6 @@
   "episodeNumber": "Episodio {{number}}",
   "episodesHeading": "Episodios",
   "notInLibrary": "No está en la biblioteca",
-  "noEpisodes": "No se encontraron episodios para esta temporada."
+  "noEpisodes": "No se encontraron episodios para esta temporada.",
+  "similar": "Más como esto"
 }

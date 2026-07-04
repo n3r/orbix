@@ -14,5 +14,6 @@
     "loadFailed": "Échec du chargement des profils.",
     "selectFailed": "Échec de la sélection du profil.",
     "pinNotSupported": "Ce profil nécessite un code PIN. La saisie du code PIN n'est pas encore prise en charge."
-  }
+  },
+  "emptyHint": "Créez votre premier profil pour commencer à regarder."
 }

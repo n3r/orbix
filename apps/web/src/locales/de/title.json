@@ -30,5 +30,6 @@
   "episodeNumber": "Folge {{number}}",
   "episodesHeading": "Folgen",
   "notInLibrary": "Nicht in der Bibliothek",
-  "noEpisodes": "Keine Folgen für diese Staffel gefunden."
+  "noEpisodes": "Keine Folgen für diese Staffel gefunden.",
+  "similar": "Ähnliche Titel"
 }

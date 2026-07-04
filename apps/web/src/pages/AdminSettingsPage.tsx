@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
-import { Button, Card, Input } from "@orbix/ui";
+import { Button, Card, Input, Skeleton } from "@orbix/ui";
 import { apiFetch } from "@/lib/api";
 import { errorMessage } from "@/lib/i18n/tError";
 import type { CapabilityReport } from "@orbix/core";
@@ -165,8 +165,25 @@ export default function AdminSettingsPage() {
 
   if (loading) {
     return (
-      <main>
-        <p className="text-[var(--text-dim)]">{t("common:status.loading")}</p>
+      <main className="flex flex-col gap-8">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-8 w-40" rounded="sm" />
+          <Skeleton className="h-4 w-28" rounded="sm" />
+        </div>
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Card key={i}>
+            <Skeleton className="mb-4 h-6 w-48" rounded="sm" />
+            <div className="flex flex-col gap-4">
+              {Array.from({ length: 2 }).map((__, j) => (
+                <div key={j} className="flex flex-col gap-2">
+                  <Skeleton className="h-4 w-32" rounded="sm" />
+                  <Skeleton className="h-10 w-full" rounded="sm" />
+                </div>
+              ))}
+            </div>
+          </Card>
+        ))}
+        <Skeleton className="h-10 w-32" rounded="sm" />
       </main>
     );
   }

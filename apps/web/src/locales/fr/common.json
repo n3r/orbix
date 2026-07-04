@@ -1,5 +1,7 @@
 {
-  "app": { "name": "Orbix" },
+  "app": {
+    "name": "Orbix"
+  },
   "language": "Langue",
   "actions": {
     "save": "Enregistrer",
@@ -17,5 +19,9 @@
     "loading": "Chargement…",
     "saving": "Enregistrement…",
     "empty": "Rien ici pour l'instant."
+  },
+  "confirmDelete": {
+    "title": "Supprimer « {{name}} » ?",
+    "body": "Cette action est irréversible."
   }
 }

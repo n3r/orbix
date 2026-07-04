@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { useQuery } from "@tanstack/react-query";
-import { cn } from "@orbix/ui";
+import { Skeleton, cn } from "@orbix/ui";
 import { apiJson } from "@/lib/api";
 import type { SeasonSummary, EpisodeCard } from "@/lib/types";
 
@@ -50,7 +50,7 @@ export default function SeasonEpisodeList({
   const initial = ordered.find((s) => s.seasonNumber > 0) ?? ordered[0];
   const [selected, setSelected] = useState<number>(initial?.seasonNumber ?? 1);
 
-  const { data } = useQuery({
+  const { data, isPending } = useQuery({
     queryKey: ["episodes", seriesId, selected],
     queryFn: () =>
       apiJson<{ episodes: EpisodeCard[] }>(`/items/${seriesId}/seasons/${selected}/episodes`),
@@ -104,7 +104,18 @@ export default function SeasonEpisodeList({
       </div>
 
       {/* Episode grid: still on top, "# Title" below */}
-      {episodes.length === 0 ? (
+      {isPending ? (
+        // Skeleton while the selected season loads — never show "No episodes"
+        // for a season that simply hasn't loaded yet.
+        <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <li key={i} className="flex flex-col gap-2">
+              <Skeleton rounded="sm" className="aspect-video w-full" />
+              <Skeleton rounded="sm" className="h-4 w-3/4" />
+            </li>
+          ))}
+        </ul>
+      ) : episodes.length === 0 ? (
         <p className="py-4 text-sm text-[var(--text-dim)]">{t("title:noEpisodes")}</p>
       ) : (
         <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">

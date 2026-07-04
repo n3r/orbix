@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { Button, Card, Input } from "@orbix/ui";
+import { Button, Card, Input, Skeleton } from "@orbix/ui";
 import { apiJson } from "@/lib/api";
 import type { TvAdminChannel } from "@/lib/types";
 import { regionName } from "@/lib/tv";
@@ -38,7 +38,7 @@ export function TvChannelManagerCard() {
     return () => clearTimeout(h);
   }, [q, country]);
 
-  const { data } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["tv-admin-channels", debouncedQ, debouncedCountry, page],
     queryFn: () => {
       const qs = new URLSearchParams({
@@ -107,6 +107,14 @@ export function TvChannelManagerCard() {
             </tr>
           </thead>
           <tbody className="text-[var(--text)]">
+            {isLoading &&
+              Array.from({ length: 8 }).map((_, i) => (
+                <tr key={`sk-${i}`} className="border-t border-[var(--surface-2)]">
+                  <td className="px-2 py-1.5" colSpan={7}>
+                    <Skeleton className="h-8 w-full" />
+                  </td>
+                </tr>
+              ))}
             {(data?.channels ?? []).map((c) => {
               const draft = drafts[c.id] ?? {};
               return (

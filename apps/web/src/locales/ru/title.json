@@ -34,5 +34,6 @@
   "episodeNumber": "Эпизод {{number}}",
   "episodesHeading": "Эпизоды",
   "notInLibrary": "Нет в библиотеке",
-  "noEpisodes": "Эпизоды для этого сезона не найдены."
+  "noEpisodes": "Эпизоды для этого сезона не найдены.",
+  "similar": "Похожее"
 }

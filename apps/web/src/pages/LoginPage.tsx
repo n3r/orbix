@@ -24,8 +24,11 @@ export default function LoginPage() {
       });
       if (res.ok) {
         navigate("/profiles", { replace: true });
-      } else {
+      } else if (res.status === 401) {
         setError(t("errors:invalid_credentials"));
+      } else {
+        // A 500 / DB-down is not a credentials problem — don't misdirect the user.
+        setError(t("errors:unknown"));
       }
     } catch {
       setError(t("errors:network"));
@@ -70,7 +73,11 @@ export default function LoginPage() {
               placeholder={t("auth:login.passwordPlaceholder")}
             />
           </div>
-          {error && <p className="text-sm text-red-400">{error}</p>}
+          {error && (
+            <p role="alert" className="text-sm text-[var(--danger)]">
+              {error}
+            </p>
+          )}
           <Button type="submit" disabled={loading}>
             {loading ? t("auth:login.submitting") : t("auth:login.submit")}
           </Button>

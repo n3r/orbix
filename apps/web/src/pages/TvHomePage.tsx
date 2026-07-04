@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
-import { Button } from "@orbix/ui";
+import { Button, Skeleton } from "@orbix/ui";
 import { useAuthMe, useTvHome } from "@/lib/queries";
 import type { TvChannelCard } from "@/lib/types";
 import ChannelRail from "@/components/tv/ChannelRail";
@@ -9,9 +9,21 @@ import LiveTvOverlay from "@/components/tv/LiveTvOverlay";
 import { regionName } from "@/lib/tv";
 import { TvIcon } from "@/components/shell/icons";
 
-/** Category ids are lowercase data values ("news") — display-capitalize only. */
-function categoryLabel(id: string): string {
-  return id.charAt(0).toUpperCase() + id.slice(1);
+/** One loading rail: a heading bar over a row of 16:9 channel-tile placeholders. */
+function TvRailSkeleton() {
+  return (
+    <section className="w-full">
+      <Skeleton className="mb-2 ml-[4vw] h-6 w-40" rounded="sm" />
+      <div className="flex gap-2 overflow-hidden px-[4vw] py-2">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <Skeleton
+            key={i}
+            className="aspect-video w-[44vw] shrink-0 sm:w-[30vw] md:w-[23.5vw] lg:w-[19vw] xl:w-[15.5vw]"
+          />
+        ))}
+      </div>
+    </section>
+  );
 }
 
 function EmptyState({ isAdmin }: { isAdmin: boolean }) {
@@ -47,7 +59,19 @@ export default function TvHomePage() {
     setPlaying({ channels: context, id: channel.id });
 
   if (isLoading)
-    return <div className="p-8 text-[var(--text-dim)]">{t("common:status.loading")}</div>;
+    return (
+      <div className="flex flex-col gap-6 pb-12 md:gap-9">
+        <div className="flex items-center justify-between px-[4vw] pt-4">
+          <h1 className="text-2xl font-bold text-[var(--text)]">{t("tv:title")}</h1>
+          <Link to="/tv/guide">
+            <Button variant="ghost">{t("tv:guide")}</Button>
+          </Link>
+        </div>
+        {Array.from({ length: 3 }).map((_, i) => (
+          <TvRailSkeleton key={i} />
+        ))}
+      </div>
+    );
 
   const home = data ?? { recents: [], favorites: [], countries: [], categories: [] };
   const empty =
@@ -90,7 +114,9 @@ export default function TvHomePage() {
             c.channels.length > 0 ? (
               <ChannelRail
                 key={c.id}
-                title={categoryLabel(c.id)}
+                title={t(`tv:categories.${c.id}`, {
+                  defaultValue: c.id.charAt(0).toUpperCase() + c.id.slice(1),
+                })}
                 channels={c.channels}
                 onPlay={openPlayer}
               />

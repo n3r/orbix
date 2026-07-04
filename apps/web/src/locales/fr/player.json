@@ -25,6 +25,7 @@
   "error": {
     "decision": "Impossible d'obtenir la décision de lecture",
     "network": "Erreur réseau lors du chargement du lecteur",
-    "generic": "Échec du chargement du lecteur"
+    "generic": "Échec du chargement du lecteur",
+    "playback": "La lecture s'est interrompue de façon inattendue."
   }
 }

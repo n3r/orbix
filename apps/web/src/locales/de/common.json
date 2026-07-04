@@ -1,5 +1,7 @@
 {
-  "app": { "name": "Orbix" },
+  "app": {
+    "name": "Orbix"
+  },
   "language": "Sprache",
   "actions": {
     "save": "Speichern",
@@ -17,5 +19,9 @@
     "loading": "Wird geladen…",
     "saving": "Wird gespeichert…",
     "empty": "Hier ist noch nichts."
+  },
+  "confirmDelete": {
+    "title": "„{{name}}“ löschen?",
+    "body": "Dies kann nicht rückgängig gemacht werden."
   }
 }

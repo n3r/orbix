@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
-import { Button, Card, Input, Avatar, Select, cn, focusRing } from "@orbix/ui";
+import { Button, Card, Input, Avatar, Select, Skeleton, cn, focusRing } from "@orbix/ui";
 import { apiFetch } from "@/lib/api";
 import { errorMessage } from "@/lib/i18n/tError";
 import { SUPPORTED_LANGUAGES, LANGUAGE_LABELS, isLanguageCode } from "@/lib/i18n/languages";
@@ -19,6 +19,8 @@ export default function ProfilesPage() {
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [pendingId, setPendingId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [newName, setNewName] = useState("");
   const [newLanguage, setNewLanguage] = useState(
@@ -43,6 +45,8 @@ export default function ProfilesPage() {
       setSelectError(t("profiles:errors.loadFailed"));
     } catch {
       setSelectError(t("errors:network"));
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -75,7 +79,9 @@ export default function ProfilesPage() {
   }
 
   async function handleSelectProfile(profile: Profile) {
+    if (pendingId) return;
     setSelectError(null);
+    setPendingId(profile.id);
     const res = await apiFetch(`/profiles/${profile.id}/select`, {
       method: "POST",
     });
@@ -83,9 +89,11 @@ export default function ProfilesPage() {
       // Full reload (like logout) so the TanStack Query cache is dropped and the
       // guard re-reads the new orbix_profile cookie. A client navigate would
       // re-enter RequireProfile with stale profile-scoped cache → bounce back to
-      // /profiles and briefly show the previous profile's data.
+      // /profiles and briefly show the previous profile's data. Leave the tile in
+      // its pending state — the page is about to unload.
       window.location.assign("/");
     } else {
+      setPendingId(null);
       const body = (await res.json()) as { error?: string };
       if (body.error === "pin_required") {
         setSelectError(t("profiles:errors.pinNotSupported"));
@@ -102,22 +110,39 @@ export default function ProfilesPage() {
       </div>
       <h1 className="text-3xl font-bold text-[var(--text)]">{t("profiles:title")}</h1>
 
-      {profiles.length > 0 && (
+      {loading ? (
         <div className="flex flex-wrap justify-center gap-6">
-          {profiles.map((profile) => (
-            <button
-              key={profile.id}
-              onClick={() => handleSelectProfile(profile)}
-              className={cn(
-                "flex flex-col items-center gap-3 rounded-[var(--radius)] p-4 hover:bg-[var(--surface)] transition-colors cursor-pointer",
-                focusRing,
-              )}
-            >
-              <Avatar name={profile.name} src={profile.avatar ?? undefined} size={80} />
-              <span className="text-[var(--text)] font-medium">{profile.name}</span>
-            </button>
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="flex flex-col items-center gap-3 p-4">
+              <Skeleton rounded="full" className="h-20 w-20" />
+              <Skeleton rounded="sm" className="h-4 w-16" />
+            </div>
           ))}
         </div>
+      ) : profiles.length > 0 ? (
+        <div className="flex flex-wrap justify-center gap-6">
+          {profiles.map((profile) => {
+            const pending = pendingId === profile.id;
+            return (
+              <button
+                key={profile.id}
+                onClick={() => handleSelectProfile(profile)}
+                disabled={pending}
+                aria-busy={pending}
+                className={cn(
+                  "flex flex-col items-center gap-3 rounded-[var(--radius)] p-4 hover:bg-[var(--surface)] transition-colors cursor-pointer",
+                  pending && "pointer-events-none opacity-50",
+                  focusRing,
+                )}
+              >
+                <Avatar name={profile.name} src={profile.avatar ?? undefined} size={80} />
+                <span className="text-[var(--text)] font-medium">{profile.name}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="max-w-sm text-center text-[var(--text-dim)]">{t("profiles:emptyHint")}</p>
       )}
 
       {selectError && <p className="text-sm text-red-400">{selectError}</p>}

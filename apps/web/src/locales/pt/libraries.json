@@ -63,5 +63,7 @@
     "createFailed": "Falha ao criar a biblioteca",
     "renameFailed": "Falha ao renomear a biblioteca",
     "addSourceFailed": "Falha ao adicionar a origem"
-  }
+  },
+  "deleteLibraryConfirm": "Isso exclui permanentemente “{{name}}” e todos os seus itens. Não pode ser desfeito.",
+  "deleteSourceConfirm": "Remover esta fonte? Seus itens deixarão de ser rastreados."
 }
