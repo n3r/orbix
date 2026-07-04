@@ -331,7 +331,7 @@ export default function AdminLibrariesPage() {
       <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold text-[var(--text)]">{t("libraries:title")}</h1>
+            <h2 className="text-3xl font-bold text-[var(--text)]">{t("libraries:title")}</h2>
             <Link to="/account/settings" className="text-sm text-[var(--text-dim)] hover:text-[var(--text)]">{t("libraries:settingsLink")}</Link>
           </div>
           <p className="mt-1 text-sm text-[var(--text-dim)]">
@@ -391,7 +391,7 @@ export default function AdminLibrariesPage() {
                 </form>
               ) : (
                 <>
-                  <h2 className="truncate text-lg font-semibold text-[var(--text)]">{lib.name}</h2>
+                  <h3 className="truncate text-lg font-semibold text-[var(--text)]">{lib.name}</h3>
                   <p className="mt-0.5 truncate text-xs text-[var(--text-dim)]">
                     {t("libraries:stats.sources", { count: summary.enabledSourceCount, total: summary.sourceCount })}
                     {" · "}
@@ -413,9 +413,9 @@ export default function AdminLibrariesPage() {
                 [t("libraries:stats.files"), summary.files],
                 [t("libraries:stats.sourceErrors"), summary.sourceErrorCount],
               ].map(([label, value]) => (
-                <div key={String(label)} className="rounded-[var(--radius-sm)] border border-[var(--surface-2)] bg-[var(--bg)]/35 px-2 py-1.5">
-                  <dt className="truncate text-[11px] uppercase text-[var(--text-dim)]">{label}</dt>
-                  <dd className="text-base font-semibold text-[var(--text)]">{value}</dd>
+                <div key={String(label)} className="flex flex-col-reverse rounded-[var(--radius-sm)] bg-[var(--surface-2)]/60 px-2.5 py-2">
+                  <dt className="mt-1.5 truncate text-[11px] font-medium tracking-wide text-[var(--text-dim)]">{label}</dt>
+                  <dd className="text-lg font-semibold leading-none tabular-nums text-[var(--text)]">{value}</dd>
                 </div>
               ))}
             </dl>
@@ -453,7 +453,7 @@ export default function AdminLibrariesPage() {
           {isExpanded && (
             <div className="mt-4 grid gap-4 border-t border-[var(--surface-2)] pt-4 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.8fr)]">
               <div>
-                <h3 className="mb-2 text-sm font-medium text-[var(--text)]">{t("libraries:source.heading")}</h3>
+                <h4 className="mb-2 text-sm font-medium text-[var(--text)]">{t("libraries:source.heading")}</h4>
                 {lib.sources.length === 0 ? (
                   <p className="text-sm text-[var(--text-dim)]">{t("libraries:source.empty")}</p>
                 ) : (

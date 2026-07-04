@@ -27,8 +27,8 @@ export default function BoxArtCard({
     <Link
       to={`/title/${item.id}`}
       className={cn(
-        "relative block shrink-0 snap-start overflow-hidden rounded-md bg-[var(--surface)]",
-        "transition-transform delay-75 duration-200 hover:z-10 hover:scale-[1.06] hover:shadow-xl hover:shadow-black/50",
+        "relative block shrink-0 snap-start overflow-hidden rounded-[var(--radius)] bg-[var(--surface)]",
+        "transition-transform delay-75 duration-200 hover:z-10 hover:scale-[1.04] hover:shadow-lg hover:shadow-black/40",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]",
         "motion-reduce:transition-none motion-reduce:hover:transform-none",
         className,

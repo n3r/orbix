@@ -4,6 +4,7 @@ import type { TFunction } from "i18next";
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton, cn } from "@orbix/ui";
 import { apiJson } from "@/lib/api";
+import { PlayIcon } from "@/components/shell/icons";
 import type { SeasonSummary, EpisodeCard } from "@/lib/types";
 
 export interface PlayEpisode {
@@ -157,8 +158,8 @@ export default function SeasonEpisodeList({
                       </div>
                     )}
                     {playable && (
-                      <span className="absolute inset-0 flex items-center justify-center bg-black/30 text-3xl text-white opacity-0 transition-opacity group-hover:opacity-100">
-                        ▶
+                      <span className="absolute inset-0 flex items-center justify-center bg-black/30 text-white opacity-0 transition-opacity group-hover:opacity-100">
+                        <PlayIcon className="h-10 w-10" />
                       </span>
                     )}
                     {pct > 0 && (

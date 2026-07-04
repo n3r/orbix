@@ -38,13 +38,20 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center p-8">
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden p-8">
+      {/* One brand moment: a subtle orbit glow behind the card (stays calm). */}
+      <div aria-hidden className="pointer-events-none absolute -top-32 left-1/2 h-96 w-96 -translate-x-1/2 rounded-full bg-[var(--accent)]/15 blur-3xl" />
       <div className="absolute right-4 top-4">
         <LanguageSwitcher />
       </div>
-      <Card className="w-full max-w-sm">
-        <h1 className="mb-6 text-2xl font-bold text-[var(--text)]">{t("auth:login.title")}</h1>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <div className="relative w-full max-w-sm">
+        <p className="mb-6 text-center text-2xl font-extrabold uppercase tracking-[0.25em] text-[var(--accent)]">
+          {t("common:app.name")}
+        </p>
+        <Card>
+          <h1 className="text-2xl font-bold text-[var(--text)]">{t("auth:login.title")}</h1>
+          <p className="mb-6 mt-1 text-sm text-[var(--text-dim)]">{t("auth:login.subtitle")}</p>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
             <label htmlFor="email" className="text-sm font-medium text-[var(--text-dim)]">
               {t("auth:fields.email")}
@@ -82,7 +89,8 @@ export default function LoginPage() {
             {loading ? t("auth:login.submitting") : t("auth:login.submit")}
           </Button>
         </form>
-      </Card>
+        </Card>
+      </div>
     </main>
   );
 }

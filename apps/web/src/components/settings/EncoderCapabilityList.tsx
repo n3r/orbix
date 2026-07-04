@@ -7,9 +7,11 @@ function Badge({ available }: { available: boolean }) {
     <span
       className={
         "rounded px-2 py-0.5 text-xs font-medium " +
+        // "unavailable" is informational, not an error — keep red reserved for
+        // real failures; show it as a neutral/dim chip instead.
         (available
-          ? "bg-green-500/15 text-green-400"
-          : "bg-red-500/10 text-red-400")
+          ? "bg-[var(--success)]/15 text-[var(--success)]"
+          : "bg-[var(--surface-3)] text-[var(--text-dim)]")
       }
     >
       {available
@@ -57,8 +59,8 @@ export default function EncoderCapabilityList({
   const { t } = useTranslation();
   const toolsOk = report.ffmpeg.present && report.ffprobe.present;
   return (
-    <div className="mt-3 rounded border border-[var(--border,#333)] p-3">
-      <div className="divide-y divide-[var(--border,#333)]">
+    <div className="mt-3 rounded border border-[var(--surface-2)] p-3">
+      <div className="divide-y divide-[var(--surface-2)]">
         {report.encoders.map((enc) => (
           <Row key={enc.key} enc={enc} current={current} />
         ))}
