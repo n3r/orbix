@@ -321,3 +321,24 @@ describe("mixed-script and spelling-variant rescue rungs", () => {
     expect(attempts.some((a) => a.query === "SpiderMan Homecoming")).toBe(true);
   });
 });
+
+describe("review hardening — bracket titles, dedup, channel tails", () => {
+  it("preserves a bracket-title sequel where a bare number follows ([REC] 2)", () => {
+    // Must not strip "[REC]" leaving a bare "2" as the primary query.
+    const attempts = buildQueryLadder({ title: "[REC] 2", year: 2009 });
+    expect(attempts[0]!.query).toBe("REC 2");
+    expect(attempts.some((a) => a.query === "2")).toBe(false);
+  });
+
+  it("still strips a leading [group] before a letter-led title", () => {
+    expect(cleanSearchTitle("[DS27]Zootopia+")).toBe("Zootopia+");
+    expect(cleanSearchTitle("[Beatrice-Raws] Tonari no Totoro")).toBe("Tonari no Totoro");
+  });
+
+  it("dedups accent/fullwidth variants but keeps a homoglyph-repaired attempt distinct", () => {
+    const q = buildQueryLadder({ title: "Миньoны", year: 2015 }).map((a) => `${a.query}|${a.year ?? ""}`);
+    // repaired all-Cyrillic attempt survives the dedup
+    expect(q).toContain("Миньоны|2015");
+    expect(q).toContain("Миньoны|2015");
+  });
+});

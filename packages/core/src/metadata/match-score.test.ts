@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   normalizeForMatch,
+  repairHomoglyphs,
   levenshtein,
   titleSimilarity,
   scoreCandidate,
@@ -14,11 +15,11 @@ describe("normalizeForMatch", () => {
     expect(normalizeForMatch("Léon (Director's Cut)")).toBe("leon director s cut");
   });
 
-  it("keeps Cyrillic comparable to itself (homoglyph twins fold to Latin)", () => {
-    // The output alphabet folds visual twins (о→o, р→p …); what matters is
-    // that any two spellings of the same Cyrillic word normalize identically.
+  it("keeps a pure-Cyrillic title in Cyrillic (no cross-script fold)", () => {
+    // Homoglyph folding is MIXED-script only, so a pure-Cyrillic title is left
+    // in Cyrillic and can never collide with a Latin lookalike.
+    expect(normalizeForMatch("Горько! 2")).toBe("горько 2");
     expect(normalizeForMatch("Горько! 2")).toBe(normalizeForMatch("горько 2"));
-    expect(normalizeForMatch("Горько! 2")).toBe("гopькo 2");
   });
 
   it("folds fullwidth characters (common in CJK filenames)", () => {
@@ -205,5 +206,25 @@ describe("Latin/Cyrillic homoglyph folding", () => {
 
   it("does not conflate genuinely different Cyrillic words with Latin ones", () => {
     expect(normalizeForMatch("щит")).not.toBe(normalizeForMatch("shield"));
+  });
+});
+
+describe("mixed-script homoglyph repair (review hardening)", () => {
+  it("repairs a lone Latin twin inside a Cyrillic word toward Cyrillic", () => {
+    expect(repairHomoglyphs("Миньoны")).toBe("Миньоны"); // Latin o → Cyrillic о
+    expect(normalizeForMatch("Миньoны")).toBe(normalizeForMatch("Миньоны"));
+  });
+
+  it("repairs a lone Cyrillic twin inside a Latin word toward Latin", () => {
+    expect(repairHomoglyphs("Lilо")).toBe("Lilo"); // Cyrillic о → Latin o
+  });
+
+  it("leaves a genuine bilingual token intact (minority > 2 letters)", () => {
+    expect(repairHomoglyphs("BBC-Космос")).toBe("BBC-Космос");
+  });
+
+  it("never folds a pure single-script token", () => {
+    expect(repairHomoglyphs("сор")).toBe("сор");
+    expect(normalizeForMatch("сор")).not.toBe(normalizeForMatch("cop"));
   });
 });

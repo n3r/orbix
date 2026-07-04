@@ -38,10 +38,8 @@ const S_SEP_RE = /[sS](\d{1,2})[._](\d{1,3})(?=\D|$)/; // S05_15 / S05.15 (no E)
 const SS_EE_RE = /(?:^|[\s._-])(\d{2})[-–](\d{2})(?=[\s._-]|$)/;
 // Bare episode tag without a season: ".e01." / " E05 " (digits required, both
 // sides separator-delimited, so "WALL-E", "E.T." and hex tags never match).
-// The boundary admits any non-alphanumeric ("Nu_Pogody!E01"), so only a real
-// word character in front ("WALL-E", hex tags) blocks the tag.
-const BARE_E_RE = /(?:^|[^\p{L}\p{N}])[eE](\d{1,3})(?=[\s._-]|$)/u;
-const SPECIALS_FOLDER_RE = /^(?:specials?|спец[\s._-]?выпуски?|пилоты?|pilots?)$/i;
+const BARE_E_RE = /(?:^|[\s._-])[eE](\d{1,3})(?=[\s._-]|$)/;
+const SPECIALS_FOLDER_RE = /^(?:specials?|спец[\s._-]?выпуски?)$/i;
 const SPECIAL_KEYWORD_RE = /(?:^|[\s._-])specials?(?=[\s._-]|$)/i;
 
 // Library-root-ish folder names that can never be a show title — used when a
@@ -49,8 +47,12 @@ const SPECIAL_KEYWORD_RE = /(?:^|[\s._-])specials?(?=[\s._-]|$)/i;
 // Composable: optional genre words ("Documentary", "Cartoons", "Детские")
 // before a media word ("Series", "Фильмы"), plus bare genre roots — so
 // "Documentary Series" / "Cartoons Series" / "TV Shows" are all generic.
+// A library-root-ish name that can never be a show title. Genre words may
+// precede a media word ("Documentary Series", "Cartoons Series", "TV Shows").
+// Deliberately excludes "library"/"collection" — those are plausible real
+// show-folder names, and blanking them would strip a legitimate title.
 const GENERIC_ROOT_RE =
-  /^(?:(?:documentary|documentaries|cartoons?|animations?|animated|anime|kids?|children'?s?|детск(?:ие|ое)|аниме|документальн\w*|мульт\w*|познавательн\w*|tv|hd|uhd|4k)[\s._-]+)*(?:series|serials?|tv(?:[\s._-]?shows?)?|shows?|сериалы|кино|movies?|films?|фильмы|мультфильмы|мультсериалы|документалки|video|видео|media|library|collection|коллекция)$|^(?:documentary|documentaries|cartoons?|anime|аниме|мульт(?:ики|фильмы|сериалы)?|документалистика|документальное)$/i;
+  /^(?:(?:documentary|documentaries|cartoons?|animations?|animated|anime|kids?|children'?s?|детск(?:ие|ое)|аниме|документальн\w*|мульт\w*|познавательн\w*|tv|hd|uhd|4k)[\s._-]+)*(?:series|serials?|tv(?:[\s._-]?shows?)?|shows?|сериалы|кино|movies?|films?|фильмы|мультфильмы|мультсериалы|документалки|video|видео|media)$|^(?:documentary|documentaries|cartoons?|anime|аниме|мульт(?:ики|фильмы|сериалы)?|документалистика|документальное)$/i;
 
 // Season markers ANYWHERE in a folder name — real libraries wrap the season in
 // junk ("Сезон 4 (Season 4) 2001-2002", "Family Guy Season 11 (WEB-DL 1080p)",
@@ -192,7 +194,10 @@ const GROUP_TAG_RE = /^\[([^\]]+)\]\s*/;
 // ("[BDRemux Rutracker.org]"). Same idea as metadata/search-title.ts, kept
 // local: scanner/ and metadata/ deliberately don't import from each other.
 const TRACKER_TAG_RE = /rutracker|nnmclub|kinozal|rarbg|hdclub|rutor|torrent/i;
-const DOMAIN_TAG_RE = /[\w-]+\.(?:org|com|net|to|se|me|tv|info|ru|su|ua|by|ws|cc|io|club|fun|top|pw|biz)\b/i;
+// Piracy-tracker TLDs only. Deliberately NOT the generic new-gTLDs
+// (.fun/.club/.io/.top…) — those collide with real fansub group names
+// ("[Judas.fun]") and title words.
+const DOMAIN_TAG_RE = /[\w-]+\.(?:org|com|net|to|se|me|tv|info|ru|su|ua|by)\b/i;
 
 /** Case- and separator-insensitive key for the folder-echo comparison. */
 function echoKey(s: string): string {
@@ -364,7 +369,7 @@ const SERIES_NOISE_TAIL_RE =
 function cleanSeriesTitle(raw: string): string {
   if (!raw) return raw;
   let s = raw;
-  s = s.replace(/^\s*\[[^\]]*\][\s._-]*(?=\S)/, "");
+  s = s.replace(/^\s*\[[^\]\s]*\][\s._-]*(?=\p{L})/u, "");
   s = s.replace(/[[({][^[\]{}()]*[)\]}]/g, (seg) => (DOMAIN_TAG_RE.test(seg) || TRACKER_TAG_RE.test(seg) ? " " : seg));
   s = s.replace(/[([]\s*(?:все[\s._-]*сезоны|all[\s._-]*seasons?)\s*[)\]]/gi, " ");
   s = s.replace(/(?:^|[\s._-])(?:the[\s._-]+)?complete[\s._-]+(?:series|collection|edition|seasons?)(?=[\s._-]|$)/gi, " ");
@@ -473,7 +478,11 @@ function detectEpisode(filenameNoExt: string, folder: string): EpisodeMarker | n
   const seriya = seriyaEpisode(filenameNoExt);
   if (seriya !== undefined) return { seasonNumber: 1, episodeNumber: seriya };
 
-  // "(N из M)" mini-series counters, both word orders.
+  // "(N из M)" mini-series counters, both word orders. Deliberately NOT
+  // year-guarded (unlike the bare "Episode N" keyword below): the counter is
+  // an explicit serialization marker and real localized doc series carry a
+  // year with it ("Chudesa.Solnechnoj.Sistemy.(2.serija.iz.5).2010"). A
+  // franchise mislabeled "Рэмбо.1982.(1.из.4)" is the rare cost.
   const iz = izEpisode(filenameNoExt);
   if (iz !== undefined) return { seasonNumber: folderSeason ?? 1, episodeNumber: iz };
 
@@ -630,8 +639,9 @@ export function parseMediaPath(fullPath: string, ctx?: ScanContext): ParsedMedia
     // A pack directly under the library root has no usable parent — fall back
     // to the episode-filename title below instead of "Series"/"TV".
     if (idx > 0 && GENERIC_ROOT_RE.test(showFolder)) showFolder = "";
-    // A leading "[Group]" release tag is never part of a show folder's name.
-    showFolder = showFolder.replace(/^\[[^\]]*\][\s._-]*(?=\S)/, "");
+    // A leading whitespace-free "[Group]" release tag before a letter-led title
+    // is never part of a show folder's name.
+    showFolder = showFolder.replace(/^\[[^\]\s]*\][\s._-]*(?=\p{L})/u, "");
 
     let folderTitle = showFolder ? filenameParse(showFolder, false).title?.trim() || "" : "";
     // Same library mangling as the movie branch: a multi-word Cyrillic show

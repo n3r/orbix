@@ -39,10 +39,31 @@ const ORDINAL_REST_RE = /^[\s._)-]*(\d{1,3})(?:[.)\]\s_-]+(.*))?$/;
 /** A CD/part split of one movie — its numbering is never episodes. */
 const SPLIT_PREFIX_RE = /(?:^|[\s._-])(?:cd|dis[ck]|dvd|pt|part|часть|chast)[\s._-]*$/i;
 
-const YEAR_TOKEN_RE = /(?:^|[\s.(_[-])((?:19|20)\d{2})(?=[\s.)_\]-]|$)/g;
+// A release-noise token. When a year sits next to one ("…HDTVRip.2017.…",
+// "…1969.BDRip") it is a release tag; a year with only prose neighbours
+// ("01 - The 1969 Landing") is part of an episode title. Distinguishing the
+// two is what keeps a numbered documentary run whose titles mention years from
+// being misread as a collection of separate films.
+const NOISE_TOKEN_RE =
+  /^(?:bd|bdrip|bdremux|blu-?ray|brrip|web|webrip|webdl|hdtv|hdtvrip|dvd|dvdrip|hdrip|satrip|iptvrip|tvrip|vhsrip|dcprip|remux|x26[45]|h26[45]|hevc|avc|xvid|divx|\d{3,4}[pi]|4k|uhd|hdr|hdr10|sdr|rus|eng|dub|sub|союзмультфильм)$/i;
+const YEAR_ONLY_RE = /^(?:19|20)\d{2}$/;
 
-function fileYears(nameNoExt: string): number[] {
-  return [...nameNoExt.matchAll(YEAR_TOKEN_RE)].map((m) => parseInt(m[1]!, 10));
+/**
+ * Years in a filename that read as RELEASE tags: a 4-digit year with a
+ * release-noise token immediately before or after it. A collection of separate
+ * films carries a distinct release year per file; an episode run whose titles
+ * merely mention years does not.
+ */
+function releaseYears(nameNoExt: string): number[] {
+  const tokens = nameNoExt.split(/[\s._()[\]-]+/).filter(Boolean);
+  const out: number[] = [];
+  for (let i = 0; i < tokens.length; i++) {
+    if (!YEAR_ONLY_RE.test(tokens[i]!)) continue;
+    const prevNoise = i > 0 && NOISE_TOKEN_RE.test(tokens[i - 1]!);
+    const nextNoise = i + 1 < tokens.length && NOISE_TOKEN_RE.test(tokens[i + 1]!);
+    if (prevNoise || nextNoise) out.push(parseInt(tokens[i]!, 10));
+  }
+  return out;
 }
 
 function stripExt(name: string): string {
@@ -71,28 +92,25 @@ function dirKey(s: string): string {
 /**
  * Season number implied by a directory's own name: a bare 1–2 digit folder
  * ("01"), a year folder ("2003" → season 2003, the date-based convention), or
- * a numeric-tail disc/volume folder ("RUGRATS_10") when at least one sibling
- * shares the same stem with a different number.
+ * a numeric-tail disc/volume folder ("RUGRATS_10"). The disc case requires the
+ * stem to recur across ≥3 sibling folders (RUGRATS_1…RUGRATS_12) — a two- or
+ * three-film sequel set ("Rambo 2"/"Rambo 3") is NOT a disc series and must
+ * not inject a season hint. `stemCounts` maps a normalized stem to how many
+ * sibling dirs carry it (precomputed once per parent — see buildScanContext).
  */
-function dirSeasonHint(name: string, siblings: string[]): number | undefined {
+function dirSeasonHint(name: string, stemCounts: Map<string, number>): number | undefined {
   if (BARE_SEASON_DIR_RE.test(name)) return parseInt(name, 10);
   if (YEAR_DIR_RE.test(name)) return parseInt(name, 10);
   const m = NUMERIC_TAIL_DIR_RE.exec(name);
-  if (m) {
-    const stem = dirKey(m[1]!);
-    const n = parseInt(m[2]!, 10);
-    for (const sib of siblings) {
-      if (sib === name) continue;
-      const sm = NUMERIC_TAIL_DIR_RE.exec(sib);
-      if (sm && dirKey(sm[1]!) === stem && parseInt(sm[2]!, 10) !== n) return n;
-    }
-  }
+  if (m && (stemCounts.get(dirKey(m[1]!)) ?? 0) >= 3) return parseInt(m[2]!, 10);
   return undefined;
 }
 
 interface Candidate {
   base: string;
   number: string;
+  /** Text after the ordinal ("Prologue" in "00 - Prologue"); "" for bare rips. */
+  tail: string;
   years: number[];
 }
 
@@ -103,8 +121,9 @@ interface Candidate {
  * Episodes need evidence beyond "numbers exist" — a naked unpadded trilogy
  * ("1 Братство кольца") must stay movies. The accepted signals: zero-padded
  * numbering (a list convention), a long run (≥5), a shared identical release
- * year, or (for 2-file padded runs) a season-shaped directory. Files carrying
- * DISTINCT years are always a collection of separate movies.
+ * year, or (for a padded 2-file run) a shared release year or a season/year
+ * directory. Files carrying DISTINCT release years are always a collection of
+ * separate movies.
  */
 function analyzeFiles(names: string[], seasonHint: number | undefined): Pick<DirAnalysis, "run" | "listIndex"> {
   if (names.length < 2) return {};
@@ -121,12 +140,12 @@ function analyzeFiles(names: string[], seasonHint: number | undefined): Pick<Dir
       nonConforming++; // falls back to the normal parse (a movie/extra)
       continue;
     }
-    candidates.push({ base: names[i]!, number: m[1]!, years: fileYears(bases[i]!) });
+    candidates.push({ base: names[i]!, number: m[1]!, tail: m[2]?.trim() ?? "", years: releaseYears(bases[i]!) });
   }
-  // A couple of odd siblings ("SP10 - Holiday Special" among "070 - …") must
-  // not dissolve a 60-file run — but numbers among a mostly non-numbered
-  // folder prove nothing.
-  if (!candidates.length || nonConforming * 4 > candidates.length) return {};
+  // A stray sibling or two ("SP10 - Holiday Special" among "070 - …", a lone
+  // "Behind The Scenes.mkv" beside a 3-part run) must not dissolve the run, but
+  // strays outnumbering half the ordinals means the folder isn't really a run.
+  if (!candidates.length || nonConforming * 2 > candidates.length) return {};
 
   const numbers = candidates.map((c) => parseInt(c.number, 10));
   if (new Set(numbers).size !== numbers.length) return {};
@@ -140,16 +159,22 @@ function analyzeFiles(names: string[], seasonHint: number | undefined): Pick<Dir
   const n = candidates.length;
   const padded = candidates.some((c) => c.number.length >= 2 && c.number.startsWith("0"));
   const sharedYear = distinctYears.size === 1 && candidates.every((c) => c.years.length > 0);
-  const isRun =
-    (n >= 3 && (padded || n >= 5 || sharedYear)) ||
-    (n === 2 && padded && (sharedYear || seasonHint != null));
+  // A 2-file run needs corroboration (padding alone is weak): a shared release
+  // year, or a season/year directory. The disc-folder seasonHint is already
+  // gated to real disc series (≥3 same-stem siblings), so a 2-film sequel set
+  // ("Rambo 2"/"Rambo 3") never supplies it.
+  const isRun = n >= 3 ? padded || n >= 5 || sharedYear : padded && (sharedYear || seasonHint != null);
   if (!isRun) return {};
 
+  // A zero-based shift (t00 → E1) is only right for TITLE-LESS disc rips
+  // (MakeMKV "A1_t00"); a titled run that starts at "00 - Prologue" keeps its
+  // real numbering (00 stays a special/prologue, not everything shifted +1).
   const min = Math.min(...numbers);
+  const titled = candidates.some((c) => c.tail !== "");
+  const shift = min === 0 && !titled ? 1 : 0;
   const run = new Map<string, RunEntry>();
   for (let i = 0; i < candidates.length; i++) {
-    // Zero-based rips (MakeMKV t00…) shift to 1-based episode numbers.
-    run.set(candidates[i]!.base, { episodeNumber: numbers[i]! + (min === 0 ? 1 : 0) });
+    run.set(candidates[i]!.base, { episodeNumber: numbers[i]! + shift });
   }
   return { run };
 }
@@ -165,23 +190,31 @@ export function buildScanContext(root: string, filePaths: string[]): ScanContext
     const dir = dirname(p);
     let list = byDir.get(dir);
     if (!list) byDir.set(dir, (list = []));
-    list.push(basename(p));
+    // NFC-compose the basename: parseMediaPath keys its lookups with the
+    // NFC filename, so scan-context must key its maps the same way or every
+    // lookup misses for decomposed (macOS/SMB) Cyrillic/accented names.
+    list.push(basename(p).normalize("NFC"));
   }
 
-  // Sibling directory names per parent, for numeric-tail season detection.
-  const siblingsByParent = new Map<string, string[]>();
+  // Per parent directory, how many child dirs share each numeric-tail stem
+  // ("RUGRATS_" → 12). Precomputed once so dirSeasonHint is O(1), not an
+  // O(children²) sibling scan for pathological numeric-tailed layouts.
+  const stemCountsByParent = new Map<string, Map<string, number>>();
   for (const dir of byDir.keys()) {
+    const m = NUMERIC_TAIL_DIR_RE.exec(basename(dir).normalize("NFC"));
+    if (!m) continue;
     const parent = dirname(dir);
-    let list = siblingsByParent.get(parent);
-    if (!list) siblingsByParent.set(parent, (list = []));
-    list.push(basename(dir));
+    let counts = stemCountsByParent.get(parent);
+    if (!counts) stemCountsByParent.set(parent, (counts = new Map()));
+    const stem = dirKey(m[1]!);
+    counts.set(stem, (counts.get(stem) ?? 0) + 1);
   }
 
   const normalizedRoot = root.replace(/\/+$/, "");
   const dirs = new Map<string, DirAnalysis>();
   for (const [dir, names] of byDir) {
-    const name = basename(dir);
-    const seasonHint = dirSeasonHint(name, siblingsByParent.get(dirname(dir)) ?? []);
+    const name = basename(dir).normalize("NFC");
+    const seasonHint = dirSeasonHint(name, stemCountsByParent.get(dirname(dir)) ?? new Map());
     const analysis: DirAnalysis = dir === normalizedRoot ? {} : analyzeFiles(names, seasonHint);
     if (seasonHint != null) analysis.seasonHint = seasonHint;
     if (analysis.run || analysis.listIndex || analysis.seasonHint != null) dirs.set(dir, analysis);

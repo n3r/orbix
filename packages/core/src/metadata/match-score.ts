@@ -25,20 +25,45 @@ export const TITLE_WEAK = 0.55;
  * filenames), lowercase, and reduce runs of non-alphanumerics to single
  * spaces. Cyrillic/CJK letters are not decomposed, so they survive intact.
  */
-// Cyrillic lowercase letters whose glyph is identical to a Latin one. Release
-// names mix scripts freely ("\u041c\u0438\u043d\u044co\u043d\u044b" with a Latin o, "Lil\u043e" with a Cyrillic
-// \u043e) \u2014 folding the twins to Latin makes both sides of a comparison agree.
-// Only exact visual twins are folded; \u0432/\u0431/\u0438 etc. stay Cyrillic.
-const HOMOGLYPHS: Record<string, string> = {
+// Latin\u2194Cyrillic visual twins (both cases). Release names splice visually
+// identical letters across scripts ("\u041c\u0438\u043d\u044co\u043d\u044b" with a Latin o, "Lil\u043e" with a
+// Cyrillic \u043e); provider indexes don't fold them, so the polluted spelling is
+// unsearchable and two spellings of the same title don't compare equal.
+const LAT_TO_CYR: Record<string, string> = {
+  a: "\u0430", e: "\u0435", o: "\u043e", p: "\u0440", c: "\u0441", y: "\u0443", x: "\u0445",
+  A: "\u0410", E: "\u0415", O: "\u041e", P: "\u0420", C: "\u0421", Y: "\u0423", X: "\u0425", B: "\u0412", H: "\u041d", K: "\u041a", M: "\u041c", T: "\u0422",
+};
+const CYR_TO_LAT: Record<string, string> = {
   \u0430: "a", \u0435: "e", \u043e: "o", \u0440: "p", \u0441: "c", \u0443: "y", \u0445: "x",
+  \u0410: "A", \u0415: "E", \u041e: "O", \u0420: "P", \u0421: "C", \u0423: "Y", \u0425: "X", \u0412: "B", \u041d: "H", \u041a: "K", \u041c: "M", \u0422: "T",
 };
 
-export function normalizeForMatch(s: string): string {
+/**
+ * Repair mixed-script homoglyph pollution: within each whitespace-delimited
+ * token that mixes Latin and Cyrillic, fold the MINORITY-script twin letters
+ * toward the majority \u2014 but only when the minority is typo-sized (\u22642 letters),
+ * so a genuine bilingual token (a Latin acronym glued to a Cyrillic word,
+ * "BBC-\u041a\u043e\u0441\u043c\u043e\u0441") is left intact. Pure single-script tokens are never touched,
+ * so two different real titles in different scripts can never collide.
+ */
+export function repairHomoglyphs(s: string): string {
   return s
+    .split(/(\s+)/)
+    .map((word) => {
+      const cyr = (word.match(/\p{Script=Cyrillic}/gu) ?? []).length;
+      const lat = (word.match(/\p{Script=Latin}/gu) ?? []).length;
+      if (!cyr || !lat || Math.min(cyr, lat) > 2) return word;
+      const map = cyr >= lat ? LAT_TO_CYR : CYR_TO_LAT;
+      return [...word].map((ch) => map[ch] ?? ch).join("");
+    })
+    .join("");
+}
+
+export function normalizeForMatch(s: string): string {
+  return repairHomoglyphs(s)
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
-    .replace(/[\u0430\u0435\u043e\u0440\u0441\u0443\u0445]/g, (ch) => HOMOGLYPHS[ch]!)
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim();
 }

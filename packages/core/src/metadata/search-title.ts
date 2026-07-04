@@ -1,4 +1,4 @@
-import { normalizeForMatch } from "./match-score";
+import { normalizeForMatch, repairHomoglyphs } from "./match-score";
 import { dominantScript, tmdbLanguageForScript, scriptRuns } from "./script";
 import { looksRomanizedSlavic, reverseTransliterateRu } from "./translit";
 
@@ -63,7 +63,9 @@ const NOISE_RE: RegExp[] = [
 
 // Bracket segments whose contents look like a tracker / release-site tag.
 const TRACKER_WORDS = /(?:rutracker|nnmclub|kinozal|rarbg|hdclub|rutor|torrent)/i;
-const DOMAIN_RE = /[\w-]+\.(?:org|com|net|to|se|me|tv|info|ru|su|ua|by|ws|cc|io|club|fun|top|pw|biz)\b/i;
+// Piracy-tracker TLDs only — NOT generic new-gTLDs (.fun/.club/.io…) that
+// collide with fansub group names and real title words.
+const DOMAIN_RE = /[\w-]+\.(?:org|com|net|to|se|me|tv|info|ru|su|ua|by)\b/i;
 const BRACKET_SEGMENT_RE = /[[({][^[\]{}()]*[)\]}]/g;
 
 function noiseKey(token: string): string {
@@ -88,10 +90,11 @@ function stripNoise(raw: string): string {
   const composed = raw.normalize("NFC");
 
   // 0.5. A LEADING bracket group is a release tag ("[Beatrice-Raws] Tonari no
-  // Totoro", "[DS27]Zootopia+") — but only when a title follows (a fully
-  // bracketed name like "[REC]" survives) and the tag is whitespace-free (a
-  // bracket-wrapped TITLE, "[Taxi 1998] [tags]", contains spaces).
-  const untagged = composed.replace(/^\s*\[[^\]\s]*\][\s._-]*(?=\S)/, "");
+  // Totoro", "[DS27]Zootopia+") — but only when a LETTER-led title follows: a
+  // fully bracketed name ("[REC]") or a bracket-title sequel ("[REC] 2", where
+  // a bare number follows) is preserved, and the tag must be whitespace-free
+  // (a bracket-wrapped TITLE like "[Taxi 1998] [tags]" contains spaces).
+  const untagged = composed.replace(/^\s*\[[^\]\s]*\][\s._-]*(?=\p{L})/u, "");
 
   // 1. Drop bracket segments that are clearly tracker/site tags.
   const debracketed = untagged.replace(BRACKET_SEGMENT_RE, (seg) =>
@@ -139,14 +142,16 @@ export function cleanSearchTitle(raw: string): string {
 }
 
 /**
- * Ladder-dedup key: case/punctuation-insensitive but WITHOUT homoglyph
- * folding — a homoglyph-repaired query must survive as its own attempt (the
- * provider's index is what needs the exact spelling), while "Exo-Squad" and
- * "Exo Squad" still collapse into one search.
+ * Ladder-dedup key: folds accents and fullwidth forms (so "Amélie"/"Amelie"
+ * and "Ｇｏｄｚｉｌｌａ"/"Godzilla" collapse into one search) but NOT homoglyphs —
+ * a homoglyph-repaired query must survive as its own attempt, since the
+ * provider's index needs that exact spelling. Strictly less aggressive than a
+ * homoglyph fold, so it can never drop a needed attempt.
  */
 export function queryKey(q: string): string {
   return q
-    .normalize("NFC")
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim();
@@ -181,33 +186,6 @@ const CHANNEL_PREFIX_RE =
 
 // Quality tokens that ride along with a channel prefix ("BBC HD Supervolcano").
 const CHANNEL_QUALITY_RE = /^(?:(?:hd|uhd|sd|4k)[\s.:\-—_]+)+/i;
-
-// ── Mixed-script homoglyph repair ────────────────────────────────────────────
-// Release names splice visually identical letters across scripts ("Миньoны"
-// with a Latin o, "Lilо" with a Cyrillic о). Provider search indexes do NOT
-// fold homoglyphs, so the polluted spelling returns nothing — repair each
-// mixed word toward its majority script and search that too.
-const LAT_TO_CYR: Record<string, string> = {
-  a: "а", e: "е", o: "о", p: "р", c: "с", y: "у", x: "х",
-  A: "А", E: "Е", O: "О", P: "Р", C: "С", Y: "У", X: "Х", B: "В", H: "Н", K: "К", M: "М", T: "Т",
-};
-const CYR_TO_LAT: Record<string, string> = {
-  а: "a", е: "e", о: "o", р: "p", с: "c", у: "y", х: "x",
-  А: "A", Е: "E", О: "O", Р: "P", С: "C", У: "Y", Х: "X", В: "B", Н: "H", К: "K", М: "M", Т: "T",
-};
-
-function repairHomoglyphs(s: string): string {
-  return s
-    .split(/(\s+)/)
-    .map((word) => {
-      const cyr = (word.match(/\p{Script=Cyrillic}/gu) ?? []).length;
-      const lat = (word.match(/\p{Script=Latin}/gu) ?? []).length;
-      if (!cyr || !lat) return word;
-      const map = cyr >= lat ? LAT_TO_CYR : CYR_TO_LAT;
-      return [...word].map((ch) => map[ch] ?? ch).join("");
-    })
-    .join("");
-}
 
 function firstNTokens(s: string, n: number): string {
   return s.split(/\s+/).filter(Boolean).slice(0, n).join(" ");

@@ -769,21 +769,17 @@ describe("ordinal-run episode detection (sibling context)", () => {
   });
 
   it("MakeMKV disc rips (A1_tNN) in numbered disc folders → disc-numbered seasons", () => {
-    const paths = [
-      `${CART}/Ох уж эти детки/RUGRATS_10/A1_t00.mkv`,
-      `${CART}/Ох уж эти детки/RUGRATS_10/A1_t01.mkv`,
-      `${CART}/Ох уж эти детки/RUGRATS_10/A1_t02.mkv`,
-      `${CART}/Ох уж эти детки/RUGRATS_1/A1_t00.mkv`,
-      `${CART}/Ох уж эти детки/RUGRATS_1/A1_t01.mkv`,
-      `${CART}/Ох уж эти детки/RUGRATS_1/A1_t02.mkv`,
-    ];
+    // A disc-numbered season needs ≥3 same-stem sibling disc folders (a real
+    // disc series) — a two-folder sequel set must not qualify.
+    const disc = (n: number) => [0, 1, 2].map((e) => `${CART}/Ох уж эти детки/RUGRATS_${n}/A1_t0${e}.mkv`);
+    const paths = [...disc(1), ...disc(2), ...disc(10)];
     const ctx = ctxOf(CART, paths);
-    const r = parseMediaPath(paths[0]!, ctx);
+    const r = parseMediaPath(`${CART}/Ох уж эти детки/RUGRATS_10/A1_t00.mkv`, ctx);
     expect(r.title).toBe("Ох уж эти детки");
     expect(r.seasonNumber).toBe(10);
     expect(r.episodeNumber).toBe(1); // zero-based t00 shifts to 1-based
-    expect(parseMediaPath(paths[2]!, ctx).episodeNumber).toBe(3);
-    expect(parseMediaPath(paths[3]!, ctx).seasonNumber).toBe(1);
+    expect(parseMediaPath(`${CART}/Ох уж эти детки/RUGRATS_10/A1_t02.mkv`, ctx).episodeNumber).toBe(3);
+    expect(parseMediaPath(`${CART}/Ох уж эти детки/RUGRATS_1/A1_t00.mkv`, ctx).seasonNumber).toBe(1);
   });
 
   it("prefix_NN_suffix runs (In_space_01_rus) → episodes with the folder as title", () => {
@@ -994,10 +990,14 @@ describe("episode word-markers without sibling context", () => {
     expect(r.seasonNumber).toBeUndefined();
   });
 
-  it("bare E-tag after a non-separator boundary (Nu_Pogody!E01)", () => {
-    const r = parseMediaPath(
-      `${CART}/Nu_Pogody!.BDRip.1080p.2xRus/Nu_Pogody!E01.BDRip.1080p.by_genkasper.mkv`,
-    );
+  it("E-tag glued to a title-terminal '!' is detected via sibling context (Nu_Pogody!E01)", () => {
+    // "Nu_Pogody!E01" — no separator before E — is NOT matched by BARE_E_RE
+    // (deliberately conservative, so a movie "Title!E5 2020" can't misfire);
+    // the ordinal run "Nu_Pogody!E01/E02/E03…" is recognized by scan context.
+    const base = `${CART}/Nu_Pogody!.BDRip.1080p.2xRus`;
+    const paths = [1, 2, 3].map((e) => `${base}/Nu_Pogody!E0${e}.BDRip.1080p.by_genkasper.mkv`);
+    const ctx = ctxOf(CART, paths);
+    const r = parseMediaPath(paths[0]!, ctx);
     expect(r.seasonNumber).toBe(1);
     expect(r.episodeNumber).toBe(1);
     expect(r.title).toBe("Nu Pogody!");
@@ -1156,12 +1156,115 @@ describe("run-detection refinements", () => {
     expect(r.titleVariants).toContain("Le ranch");
   });
 
-  it("routes a Пилот folder to season-0 provisional specials", () => {
+  it("does NOT treat a 'Пилот'/'Pilots' folder as a specials marker (aviation-movie safety)", () => {
+    // "Pilots"/"Пилот" is a plausible movie-collection folder ("Aviation/
+    // Pilots/Top Gun.mkv"), so it is deliberately NOT a season-0 marker — the
+    // few letter-numbered MythBusters pilot files stay unmatched movies rather
+    // than risk routing real films into a phantom series.
     const r = parseMediaPath(
       `${DOC}/Разрушители легенд (Все сезоны)/Пилот/A. Реактивное Шевроле.avi`,
     );
-    expect(r.title).toBe("Разрушители легенд");
-    expect(r.seasonNumber).toBe(0);
-    expect(r.episodeNumber).toBeGreaterThanOrEqual(900);
+    expect(r.seasonNumber).toBeUndefined();
+    const mov = parseMediaPath("/media/Films/Aviation/Pilots/Top Gun.mkv");
+    expect(mov.seasonNumber).toBeUndefined();
+    expect(mov.title).toBe("Top Gun");
+  });
+});
+
+describe("review hardening — cartoon/docu round 2", () => {
+  it("NFC-composes the run/listIndex lookup so decomposed (NFD) runs still match", () => {
+    // buildScanContext keys maps by NFC basename; parseMediaPath looks them up
+    // by NFC filename. A decomposed on-disk name must still hit.
+    const nfd = (s: string) => s.normalize("NFD");
+    const dir = `${CART}/${nfd("Смешарики")}`;
+    const names = ["01. Крош идёт", "02. Ёжик спит", "03. Нюша поёт", "04. Бараш"];
+    const paths = names.map((n) => `${dir}/${nfd(n)}.mkv`);
+    const ctx = ctxOf(CART, paths);
+    const r = parseMediaPath(paths[0]!, ctx);
+    expect(r.seasonNumber).toBe(1);
+    expect(r.episodeNumber).toBe(1);
+  });
+
+  it("keeps a numbered documentary run whose titles MENTION years as episodes", () => {
+    // Years inside episode titles ("The 1969 Landing") are not release tags,
+    // so distinct in-title years must not dissolve the run into a collection.
+    const base = `${DOC}/Space Race`;
+    const paths = [
+      `${base}/01 - The 1957 Sputnik.mkv`,
+      `${base}/02 - The 1969 Landing.mkv`,
+      `${base}/03 - The 1986 Disaster.mkv`,
+      `${base}/04 - The 2011 Finale.mkv`,
+    ];
+    const ctx = ctxOf(DOC, paths);
+    const r = parseMediaPath(paths[1]!, ctx);
+    expect(r.seasonNumber).toBe(1);
+    expect(r.episodeNumber).toBe(2);
+  });
+
+  it("still treats a run with per-file RELEASE years (year+noise) as a movie collection", () => {
+    const base = `${CART}/Winnie shorts`;
+    const paths = [
+      `${base}/1.Vinni-Pukh.1969.BDRip.720p.mkv`,
+      `${base}/2.Vinni-Pukh.idyot.1971.BDRip.720p.mkv`,
+      `${base}/3.Vinni-Pukh.den.1972.BDRip.720p.mkv`,
+    ];
+    const ctx = ctxOf(CART, paths);
+    expect(parseMediaPath(paths[0]!, ctx).seasonNumber).toBeUndefined();
+  });
+
+  it("tolerates one stray sibling in a 3-file run", () => {
+    const base = `${DOC}/Miniseries`;
+    const paths = [
+      `${base}/01 - Part One.mkv`,
+      `${base}/02 - Part Two.mkv`,
+      `${base}/03 - Part Three.mkv`,
+      `${base}/Behind The Scenes.mkv`,
+    ];
+    const ctx = ctxOf(DOC, paths);
+    expect(parseMediaPath(paths[0]!, ctx).episodeNumber).toBe(1);
+    expect(parseMediaPath(paths[2]!, ctx).episodeNumber).toBe(3);
+  });
+
+  it("does not +1-shift a titled run that starts at 00 (00 stays a prologue)", () => {
+    const base = `${DOC}/Series With Prologue`;
+    const paths = [
+      `${base}/00 - Prologue.mkv`,
+      `${base}/01 - Episode One.mkv`,
+      `${base}/02 - Episode Two.mkv`,
+    ];
+    const ctx = ctxOf(DOC, paths);
+    expect(parseMediaPath(paths[0]!, ctx).episodeNumber).toBe(0);
+    expect(parseMediaPath(paths[1]!, ctx).episodeNumber).toBe(1);
+  });
+
+  it("does not turn a two-film sequel folder into a disc-numbered season", () => {
+    // 'Rambo 2'/'Rambo 3' are 2 same-stem siblings (< 3) → no disc seasonHint,
+    // so two padded parts inside stay movies.
+    const paths = [
+      "/media/Films/Rambo 2/01.mkv",
+      "/media/Films/Rambo 2/02.mkv",
+      "/media/Films/Rambo 3/01.mkv",
+      "/media/Films/Rambo 3/02.mkv",
+    ];
+    const ctx = ctxOf("/media/Films", paths);
+    expect(parseMediaPath(paths[0]!, ctx).seasonNumber).toBeUndefined();
+  });
+
+  it("does not read a generic new-gTLD in a fansub tag as a tracker domain", () => {
+    const p = "/media/Anime/Show/[Judas.fun] Show - 12.mkv";
+    const r = parseMediaPath(p, ctxOf("/media/Anime", [p]));
+    expect(r.seasonNumber).toBe(1);
+    expect(r.episodeNumber).toBe(12);
+  });
+
+  it("does not turn a movie with a '!EN' fragment into an episode", () => {
+    const r = parseMediaPath("/media/Films/Surprise!E5 2020.mkv");
+    expect(r.seasonNumber).toBeUndefined();
+  });
+
+  it("keeps a real show folder literally named 'Collection' (not blanked as generic)", () => {
+    const p = "/media/Series/Collection/Season 01/Collection.S01E01.mkv";
+    const r = parseMediaPath(p, ctxOf("/media/Series", [p]));
+    expect(r.title).toBe("Collection");
   });
 });
