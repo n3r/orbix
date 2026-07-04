@@ -97,7 +97,7 @@ export interface BackfillResult {
 }
 
 /**
- * Backfill: find all matched MediaItems that lack an Embedding row and embed them.
+ * Backfill: find all matched/manual MediaItems that lack an Embedding row and embed them.
  *
  * Stops early (without throwing) if the embedder becomes unavailable.
  * Per-item errors are logged and skipped so the backfill continues best-effort.
@@ -111,7 +111,7 @@ export async function backfillEmbeddings(
     SELECT m.id
     FROM "MediaItem" m
     LEFT JOIN "Embedding" e ON e."mediaItemId" = m.id
-    WHERE m."matchState" = 'matched'
+    WHERE m."matchState" IN ('matched', 'manual')
       AND e."mediaItemId" IS NULL
   `;
 

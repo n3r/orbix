@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { itemSimilarity } from "@orbix/core";
+import { rankSimilarItems, type SimilarRankItem } from "@orbix/core";
 import { requireAuth } from "../lib/auth";
 import { activeProfile, kidsRatingWhere, profileAllowsItem } from "../lib/catalog-filter";
 
@@ -13,7 +13,7 @@ interface Card {
   matchState: string;
 }
 
-// Full feature select used for the Jaccard fallback (genres/keywords/cast/director).
+// Full local feature select used for hybrid recommendation ranking.
 const featureSelect = {
   id: true,
   title: true,
@@ -21,6 +21,11 @@ const featureSelect = {
   posterPath: true,
   matchState: true,
   rating: true,
+  runtimeSec: true,
+  tmdbScore: true,
+  imdbRating: true,
+  rtRating: true,
+  metacritic: true,
   genres: { select: { genre: { select: { name: true } } } },
   keywords: { select: { keyword: { select: { name: true } } } },
   credits: {
@@ -36,13 +41,19 @@ type FeatureRow = {
   posterPath: string | null;
   matchState: string;
   rating: string | null;
+  runtimeSec: number | null;
+  tmdbScore: number | null;
+  imdbRating: number | null;
+  rtRating: number | null;
+  metacritic: number | null;
   genres: { genre: { name: string } }[];
   keywords: { keyword: { name: string } }[];
   credits: { role: string; department: string; order: number; person: { name: string } }[];
 };
 
-function toFeatures(item: FeatureRow) {
+function toRankItem(item: FeatureRow, vectorScore?: number): SimilarRankItem {
   return {
+    id: item.id,
     genres: item.genres.map((g) => g.genre.name),
     keywords: item.keywords.map((k) => k.keyword.name),
     cast: item.credits
@@ -50,6 +61,14 @@ function toFeatures(item: FeatureRow) {
       .slice(0, 10)
       .map((c) => c.person.name),
     director: item.credits.find((c) => c.department === "crew" && c.role === "Director")?.person.name,
+    year: item.year,
+    runtimeSec: item.runtimeSec,
+    rating: item.rating,
+    tmdbScore: item.tmdbScore,
+    imdbRating: item.imdbRating,
+    rtRating: item.rtRating,
+    metacritic: item.metacritic,
+    ...(vectorScore !== undefined ? { vectorScore } : {}),
   };
 }
 
@@ -83,52 +102,74 @@ export default async function similarRoute(app: FastifyInstance) {
 
       // ── Embeddings path: nearest neighbours of the anchor's vector ───────────
       // The CROSS JOIN to the anchor's own Embedding row means: if the anchor has
-      // no embedding yet, the query returns zero rows and we degrade to Jaccard.
+      // no embedding yet, the query returns zero rows and we degrade to metadata.
+      const vectorScores = new Map<string, number>();
       try {
-        const rows = await app.prisma.$queryRaw<{ id: string }[]>`
-          SELECT mi.id
+        const rows = await app.prisma.$queryRaw<{ id: string; distance: number }[]>`
+          SELECT mi.id, (e.vector <=> anchor.vector) AS distance
           FROM "MediaItem" mi
           JOIN "Embedding" e ON e."mediaItemId" = mi.id
           JOIN "Embedding" anchor ON anchor."mediaItemId" = ${id}
           WHERE mi.id <> ${id}
+            AND mi."matchState" IN ('matched', 'manual')
           ORDER BY e.vector <=> anchor.vector
-          LIMIT ${LIMIT * 3}
+          LIMIT ${LIMIT * 8}
         `;
         if (rows.length > 0) {
           const ids = rows.map((r) => r.id);
-          const cards = await app.prisma.mediaItem.findMany({
+          for (const row of rows) {
+            vectorScores.set(row.id, Math.max(0, 1 - Number(row.distance)));
+          }
+          const vectorCandidates = (await app.prisma.mediaItem.findMany({
             where: { id: { in: ids }, ...(ratingFilter ?? {}) },
-            select: { id: true, title: true, year: true, posterPath: true, matchState: true },
+            select: featureSelect,
+          })) as FeatureRow[];
+          const ranked = rankSimilarItems({
+            anchor: toRankItem(anchor as FeatureRow),
+            candidates: vectorCandidates.map((candidate) =>
+              toRankItem(candidate, vectorScores.get(candidate.id)),
+            ),
+            limit: LIMIT,
+            diversityPenalty: 0.16,
           });
-          const order = new Map(ids.map((x, i) => [x, i] as const));
-          const items = cards
-            .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))
-            .slice(0, LIMIT)
-            .map(toCard);
-          if (items.length > 0) return reply.send({ items });
+
+          if (ranked.length >= LIMIT) {
+            const order = new Map(ranked.map((entry, index) => [entry.id, index] as const));
+            const items = vectorCandidates
+              .filter((candidate) => order.has(candidate.id))
+              .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))
+              .map(toCard);
+            return reply.send({ items });
+          }
         }
       } catch (err) {
         // pgvector missing, embedder unavailable, or anchor has no vector — degrade.
-        app.log.debug({ err }, "[similar] embeddings path unavailable, using Jaccard fallback");
+        app.log.debug({ err }, "[similar] embeddings path unavailable, using metadata fallback");
       }
 
-      // ── Fallback: weighted Jaccard over the matched catalog (cap 1000) ───────
+      // ── Fallback/supplement: hybrid metadata ranking over the matched catalog.
       const candidates = (await app.prisma.mediaItem.findMany({
         where: {
           id: { not: id },
           matchState: { in: ["matched", "manual"] },
           ...(ratingFilter ?? {}),
         },
+        orderBy: [{ year: "desc" }, { id: "asc" }],
         take: 1000,
         select: featureSelect,
       })) as FeatureRow[];
 
-      const anchorFeatures = toFeatures(anchor as FeatureRow);
+      const ranked = rankSimilarItems({
+        anchor: toRankItem(anchor as FeatureRow),
+        candidates: candidates.map((candidate) => toRankItem(candidate, vectorScores.get(candidate.id))),
+        limit: LIMIT,
+        diversityPenalty: 0.16,
+      });
+      const order = new Map(ranked.map((entry, index) => [entry.id, index] as const));
       const items = candidates
-        .map((c) => ({ c, score: itemSimilarity(anchorFeatures, toFeatures(c)) }))
-        .sort((a, b) => b.score - a.score || (b.c.year ?? 0) - (a.c.year ?? 0))
-        .slice(0, LIMIT)
-        .map(({ c }) => toCard(c));
+        .filter((candidate) => order.has(candidate.id))
+        .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))
+        .map(toCard);
 
       return reply.send({ items });
     },

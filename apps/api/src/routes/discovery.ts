@@ -86,9 +86,15 @@ export default async function discoveryRoute(app: FastifyInstance) {
         id: true,
         title: true,
         year: true,
+        runtimeSec: true,
+        rating: true,
         posterPath: true,
         backdropPath: true,
         addedAt: true,
+        tmdbScore: true,
+        imdbRating: true,
+        rtRating: true,
+        metacritic: true,
         translations: { where: { language: lang }, select: { title: true } },
         genres: {
           select: { genre: { select: { name: true } } },
@@ -193,6 +199,14 @@ export default async function discoveryRoute(app: FastifyInstance) {
           title: item.title,
           features: { genres, keywords, cast, director },
           playedByProfile: playedIds.has(item.id),
+          year: item.year,
+          runtimeSec: item.runtimeSec,
+          addedAt: item.addedAt,
+          rating: item.rating,
+          tmdbScore: item.tmdbScore,
+          imdbRating: item.imdbRating,
+          rtRating: item.rtRating,
+          metacritic: item.metacritic,
         };
       });
 
