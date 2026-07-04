@@ -11,7 +11,10 @@ import SwiftUI
 /// this type only presents it and wires the concerns a real player needs a
 /// long-lived owner for:
 ///
-/// - Seeking to the resume position once the item reaches `.readyToPlay`.
+/// - Seeking to the resume position once the item reaches `.readyToPlay`,
+///   then explicitly calling `player.play()` — Apple's canonical tvOS
+///   pattern — rather than relying on `AVPlayerViewController`'s implicit
+///   autostart-on-ready behavior.
 /// - A ~10s periodic progress report (+ one whenever the player pauses) via
 ///   `PlaybackController.reportProgress`.
 /// - Tearing every observer down in `dismantleUIViewController` — no leaked
@@ -188,12 +191,27 @@ struct PlayerViewController: UIViewControllerRepresentable {
             statusObservation = nil
         }
 
+        /// Runs at most once per `attach` — guarded by `didSeekToResume`,
+        /// which is set `true` before either branch below, so a later KVO
+        /// callback (e.g. a subsequent `.status` change) short-circuits at
+        /// the guard above rather than re-seeking or re-triggering `play()`.
+        /// Seeks to the saved resume position if there is one, then
+        /// explicitly calls `player.play()` — Apple's canonical tvOS
+        /// pattern — instead of depending on `AVPlayerViewController`'s
+        /// implicit autostart. The resume seek uses the completion-handler
+        /// overload so `play()` fires only once the seek has actually
+        /// landed, avoiding a brief flash of the pre-seek frame.
         private func seekToResumeIfReady() {
-            guard !didSeekToResume, let item = attachedPlayer?.currentItem, item.status == .readyToPlay else { return }
+            guard !didSeekToResume, let player = attachedPlayer, let item = player.currentItem, item.status == .readyToPlay else { return }
             didSeekToResume = true
-            guard resumeSeconds > 0 else { return }
+            guard resumeSeconds > 0 else {
+                player.play()
+                return
+            }
             let target = CMTime(seconds: resumeSeconds, preferredTimescale: 600)
-            item.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero)
+            item.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
+                player.play()
+            }
         }
 
         private func reportProgressIfPaused() {
@@ -276,6 +294,14 @@ struct PlayerScreen: View {
                         videoTitle: title
                     )
                     .ignoresSafeArea()
+                    // Belt-and-suspenders alongside the identical modifier
+                    // on the outer `ZStack` below: once playback is ready,
+                    // `AVPlayerViewController`'s own view is what actually
+                    // holds focus, so if its responder chain ever consumes
+                    // the Menu press before it reaches an ancestor's
+                    // `onExitCommand`, this closer copy still catches it.
+                    // `dismiss()` is idempotent, so having both is harmless.
+                    .onExitCommand { dismiss() }
                 } else {
                     // One-frame gap before the `.task(id:)` below constructs
                     // the player — deliberately not built inline in this
@@ -288,6 +314,16 @@ struct PlayerScreen: View {
             }
         }
         .task { await controller.start() }
+        // tvOS's `.fullScreenCover` does not auto-dismiss on a Menu press,
+        // and the embedded (non-modally-presented) `AVPlayerViewController`
+        // has no presenting view controller of its own to dismiss — so
+        // without this, Menu suspends the app with the cover still up:
+        // `PlayerViewController.dismantleUIViewController` never runs, and
+        // the final progress PUT + `/stop` in `Coordinator.teardown()` never
+        // fire (silent data loss, plus a stuck player on return to the app).
+        // Calling `dismiss()` here collapses the cover, which *does*
+        // guarantee `dismantleUIViewController` → `teardown()` runs.
+        .onExitCommand { dismiss() }
         .accessibilityIdentifier("playerScreen")
     }
 
