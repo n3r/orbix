@@ -1,6 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiJson, apiFetch, ApiError } from "./api";
-import type { AuthMe, HomeRow, MediaCard, MenuConfig, MenuItem, Profile, TitleDetail } from "./types";
+import type {
+  AuthMe, HomeRow, MediaCard, MenuConfig, MenuItem, Profile, TitleDetail,
+  TvChannelCard, TvGuideResponse, TvHome, TvProgramme,
+} from "./types";
 
 export interface SetupStatus { complete: boolean }
 export interface ActiveProfile {
@@ -104,5 +107,63 @@ export function useToggleWishlist() {
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: ["wishlist"] });
     },
+  });
+}
+
+/* ── TV — live channels ────────────────────────────────────────────────── */
+
+export function useTvHome() {
+  return useQuery({ queryKey: ["tv-home"], queryFn: () => apiJson<TvHome>("/tv/home") });
+}
+
+export interface TvGuideParams {
+  country?: string;
+  category?: string;
+  favorites?: boolean;
+  q?: string;
+  limit?: number;
+}
+
+/** Windowed guide list: pages of `limit` (default 100) via offset paging. */
+export function useTvGuide(params: TvGuideParams) {
+  const limit = params.limit ?? 100;
+  return useInfiniteQuery({
+    queryKey: ["tv-guide", params],
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) => {
+      const qs = new URLSearchParams();
+      if (params.country) qs.set("country", params.country);
+      if (params.category) qs.set("category", params.category);
+      if (params.favorites) qs.set("favorites", "1");
+      if (params.q) qs.set("q", params.q);
+      qs.set("offset", String(pageParam));
+      qs.set("limit", String(limit));
+      return apiJson<TvGuideResponse>(`/tv/guide?${qs}`);
+    },
+    getNextPageParam: (last: TvGuideResponse, all: TvGuideResponse[]) => {
+      const loaded = all.reduce((n, p) => n + p.channels.length, 0);
+      return loaded < last.total ? loaded : undefined;
+    },
+  });
+}
+
+export function useTvChannel(id: string | undefined) {
+  return useQuery({
+    queryKey: ["tv-channel", id],
+    enabled: !!id,
+    queryFn: () => apiJson<TvChannelCard>(`/tv/channels/${id}`),
+  });
+}
+
+export function useTvFavorites() {
+  return useQuery({ queryKey: ["tv-favorites"], queryFn: () => apiJson<TvChannelCard[]>("/tv/favorites") });
+}
+
+/** Day schedule for the channel page (empty until the EPG phase). */
+export function useTvProgrammes(id: string | undefined) {
+  return useQuery({
+    queryKey: ["tv-programmes", id],
+    enabled: !!id,
+    queryFn: () => apiJson<{ programmes: TvProgramme[] }>(`/tv/channels/${id}/programmes`),
   });
 }

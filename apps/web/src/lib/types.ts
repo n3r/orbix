@@ -139,3 +139,85 @@ export interface TitleDetail extends Ratings {
   files: TitleFile[];
   seasons?: SeasonSummary[];
 }
+
+/* ── TV — live channels (mirrors /api/tv/* shapes) ─────────────────────── */
+
+/** One programme slot for now/next display (phase 3 EPG fills these). */
+export interface TvProgrammeSlot {
+  title: string;
+  start: string;
+  stop: string;
+}
+
+/** Channel card shared by /tv/home rails, /tv/guide rows and /tv/channels/:id. */
+export interface TvChannelCard {
+  id: string;
+  number: number;
+  name: string;
+  country: string | null;
+  categories: string[];
+  quality: string | null;
+  logo: string | null;
+  healthy: boolean;
+  favorite: boolean;
+  /** Present on guide rows (null until the EPG phase lands). */
+  now?: TvProgrammeSlot | null;
+  next?: TvProgrammeSlot | null;
+}
+
+export interface TvHome {
+  recents: TvChannelCard[];
+  favorites: TvChannelCard[];
+  countries: { code: string; channels: TvChannelCard[] }[];
+  categories: { id: string; channels: TvChannelCard[] }[];
+}
+
+/** Windowed guide page (offset paging — never the whole catalog). */
+export interface TvGuideResponse {
+  total: number;
+  channels: TvChannelCard[];
+}
+
+export interface TvPlaySource {
+  streamId: string;
+  src: string; // "/api/tv/proxy/<streamId>/index.m3u8"
+  quality: string | null;
+  label: string | null;
+}
+
+export interface TvPlayResponse {
+  channel: {
+    id: string;
+    number: number;
+    name: string;
+    logo: string | null;
+    country: string | null;
+    quality: string | null;
+  };
+  nowNext: null;
+  sources: TvPlaySource[];
+}
+
+/** One entry of a channel's day schedule. */
+export interface TvProgramme {
+  id: string;
+  start: string;
+  stop: string;
+  title: string;
+  description: string | null;
+  category: string | null;
+}
+
+/** Admin: one configured TV source (iptv-org catalog or an M3U playlist). */
+export interface TvSource {
+  id: string;
+  kind: "iptv-org" | "m3u";
+  name: string;
+  url: string | null;
+  countries: string[];
+  epgUrl: string | null;
+  enabled: boolean;
+  status: string;
+  statusMessage: string | null;
+  lastSyncAt: string | null;
+}
