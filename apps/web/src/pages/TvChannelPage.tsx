@@ -1,10 +1,8 @@
 import { useState } from "react";
 import { useParams } from "react-router";
 import { useTranslation } from "react-i18next";
-import { useQueryClient } from "@tanstack/react-query";
 import { Button, cn } from "@orbix/ui";
-import { apiFetch } from "@/lib/api";
-import { useTvChannel, useTvProgrammes } from "@/lib/queries";
+import { useTvChannel, useTvProgrammes, useToggleTvFavorite } from "@/lib/queries";
 import { formatTvTime, tvDayString } from "@/lib/tv-time";
 import LiveTvOverlay from "@/components/tv/LiveTvOverlay";
 import { channelHue, channelInitials, regionName } from "@/lib/tv";
@@ -14,30 +12,18 @@ import { HeartIcon, PlayIcon } from "@/components/shell/icons";
 export default function TvChannelPage() {
   const { id } = useParams<{ id: string }>();
   const { t, i18n } = useTranslation();
-  const queryClient = useQueryClient();
   const channel = useTvChannel(id);
   const [dayOffset, setDayOffset] = useState<0 | 1>(0);
   const day = tvDayString(dayOffset);
   const programmes = useTvProgrammes(id, day);
   const [watching, setWatching] = useState(false);
+  const toggleFavorite = useToggleTvFavorite();
 
   if (channel.isLoading)
     return <div className="p-8 text-[var(--text-dim)]">{t("common:status.loading")}</div>;
 
   const c = channel.data;
   if (!c) return <div className="p-8 text-[var(--text-dim)]">{t("tv:channel.notFound")}</div>;
-
-  const toggleFavorite = async () => {
-    try {
-      await apiFetch(`/tv/favorites/${c.id}`, { method: c.favorite ? "DELETE" : "PUT" });
-    } catch {
-      return;
-    }
-    void queryClient.invalidateQueries({ queryKey: ["tv-channel", c.id] });
-    void queryClient.invalidateQueries({ queryKey: ["tv-home"] });
-    void queryClient.invalidateQueries({ queryKey: ["tv-guide"] });
-    void queryClient.invalidateQueries({ queryKey: ["tv-favorites"] });
-  };
 
   const badges = [
     regionName(c.country, i18n.language),
@@ -83,7 +69,7 @@ export default function TvChannelPage() {
         </div>
         <button
           type="button"
-          onClick={() => void toggleFavorite()}
+          onClick={() => toggleFavorite.mutate({ channelId: c.id, isFavorite: c.favorite })}
           aria-label={c.favorite ? t("tv:card.unfavorite") : t("tv:card.favorite")}
           className={cn(
             "grid h-10 w-10 shrink-0 place-items-center rounded-full border border-[var(--surface-2)] transition-colors",

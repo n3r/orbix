@@ -163,6 +163,27 @@ export function useTvFavorites() {
 }
 
 /**
+ * Toggle a channel's favorite flag. Shared by ChannelCard and TvChannelPage
+ * so the two stay in lockstep on which views need refreshing. On success,
+ * invalidates every TV query whose payload embeds `favorite`. Errors (e.g. a
+ * network hiccup) are left for the caller to swallow — no user-facing error
+ * UI, matching the prior inline behavior.
+ */
+export function useToggleTvFavorite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ channelId, isFavorite }: { channelId: string; isFavorite: boolean }) =>
+      apiFetch(`/tv/favorites/${channelId}`, { method: isFavorite ? "DELETE" : "PUT" }),
+    onSuccess: (_res, { channelId }) => {
+      void qc.invalidateQueries({ queryKey: ["tv-home"] });
+      void qc.invalidateQueries({ queryKey: ["tv-guide"] });
+      void qc.invalidateQueries({ queryKey: ["tv-favorites"] });
+      void qc.invalidateQueries({ queryKey: ["tv-channel", channelId] });
+    },
+  });
+}
+
+/**
  * Day schedule for the channel page. `day` is a local "YYYY-MM-DD" (see
  * `tvDayString` in `@/lib/tv-time`) — omit for the API's default (today).
  * Keeps the previous day's data visible while a new day loads (Today/Tomorrow

@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@orbix/ui";
-import { apiFetch } from "@/lib/api";
+import { useToggleTvFavorite } from "@/lib/queries";
 import type { TvChannelCard } from "@/lib/types";
 import { channelHue, channelInitials } from "@/lib/tv";
 import { HeartIcon } from "@/components/shell/icons";
@@ -24,20 +23,8 @@ export default function ChannelCard({
   className?: string;
 }) {
   const { t } = useTranslation();
-  const queryClient = useQueryClient();
+  const toggleFavorite = useToggleTvFavorite();
   const [imgFailed, setImgFailed] = useState(false);
-
-  const toggleFavorite = async () => {
-    try {
-      await apiFetch(`/tv/favorites/${channel.id}`, { method: channel.favorite ? "DELETE" : "PUT" });
-    } catch {
-      return; // network hiccup — leave state untouched
-    }
-    void queryClient.invalidateQueries({ queryKey: ["tv-home"] });
-    void queryClient.invalidateQueries({ queryKey: ["tv-guide"] });
-    void queryClient.invalidateQueries({ queryKey: ["tv-favorites"] });
-    void queryClient.invalidateQueries({ queryKey: ["tv-channel", channel.id] });
-  };
 
   const hue = channelHue(channel.id);
 
@@ -117,7 +104,7 @@ export default function ChannelCard({
       {/* Favorite heart — painted above the play hit-area (later sibling). */}
       <button
         type="button"
-        onClick={() => void toggleFavorite()}
+        onClick={() => toggleFavorite.mutate({ channelId: channel.id, isFavorite: channel.favorite })}
         aria-label={channel.favorite ? t("tv:card.unfavorite") : t("tv:card.favorite")}
         className={cn(
           "absolute right-1.5 top-1.5 grid h-7 w-7 place-items-center rounded-full bg-black/50 text-white",
