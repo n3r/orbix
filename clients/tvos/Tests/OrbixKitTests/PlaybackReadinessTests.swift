@@ -95,8 +95,15 @@ final class PlaybackReadinessTests: XCTestCase {
         // playbackInfo succeeded.
         let asset = AVURLAsset(url: streamURL)
         let item = AVPlayerItem(asset: asset)
+        // AVPlayerItem.status only advances once the item is attached to an
+        // AVPlayer that drives the asset load — exactly what AVPlayer(url:) does
+        // inside SpikeListView. Without a player, status stays .unknown forever.
+        let player = AVPlayer(playerItem: item)
+        player.isMuted = true
 
         let status = await waitForTerminalStatus(of: item, timeout: 20)
+        // Reference the player after the await so it isn't deallocated mid-wait.
+        player.pause()
         switch status {
         case .readyToPlay:
             break
