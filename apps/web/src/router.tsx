@@ -17,6 +17,7 @@ import AdminSettingsPage from "./pages/AdminSettingsPage";
 import AccountLayout from "./pages/account/AccountLayout";
 import AccountOverview from "./pages/account/AccountOverview";
 import AccountMenuPage from "./pages/account/AccountMenuPage";
+import AccountTvPage from "./pages/account/AccountTvPage";
 
 export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -40,6 +41,7 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <AccountOverview /> },
           { path: "menu", element: <AccountMenuPage /> },
+          { path: "tv", element: <AccountTvPage /> },
           { path: "library", element: <AdminLibrariesPage /> },
           { path: "settings", element: <AdminSettingsPage /> },
         ],
