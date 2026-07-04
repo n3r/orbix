@@ -18,6 +18,16 @@ describe("normalizeChannelName", () => {
   it("keeps timeshift digits distinct", () => {
     expect(normalizeChannelName("Первый канал +1")).not.toBe(normalizeChannelName("Первый канал"));
   });
+  it("preserves precomposed Cyrillic й/ё instead of folding them via NFD", () => {
+    // й (U+0439) canonically decomposes to и (U+0438) + combining breve under
+    // NFD — a plain diacritic-strip would wrongly turn it into и.
+    expect(normalizeChannelName("Первый HD")).toBe("первый");
+    expect(normalizeChannelName("Первый HD").endsWith("й")).toBe(true); // й, not и
+    expect(normalizeChannelName("Ёлка")).toBe("ёлка");
+  });
+  it("still folds Latin diacritics (no regression from the Cyrillic guard)", () => {
+    expect(normalizeChannelName("Câble TV")).toBe("cable tv");
+  });
 });
 
 describe("matchEpgChannels", () => {
@@ -34,6 +44,14 @@ describe("matchEpgChannels", () => {
       xmltv,
     );
     expect(out.get("c1")).toBe("zdf.de");
+  });
+
+  it("pass 1: epgId match is case-insensitive", () => {
+    const out = matchEpgChannels(
+      [{ id: "c1", epgId: "ZDF.DE", name: "Whatever", altNames: [] }],
+      xmltv,
+    );
+    expect(out.get("c1")).toBe("zdf.de"); // value is the xmltv id's real casing
   });
 
   it("pass 2: unique normalized-name match via name or altNames", () => {

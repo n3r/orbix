@@ -13,7 +13,13 @@ const JUNK_TOKENS =
  */
 export function normalizeChannelName(s: string): string {
   let out = s.normalize("NFC").toLowerCase();
-  out = out.normalize("NFD").replace(/[̀-ͯ]/g, ""); // strip combining marks
+  // й/ё canonically decompose under NFD (и+combining-breve, е+combining-diaeresis),
+  // which would collide with the distinct letters и/е once combining marks are
+  // stripped below. Shield them with PUA sentinels first; toLowerCase() above
+  // already folded Й/Ё to й/ё, so only the lowercase forms need protecting.
+  out = out.replace(/й/g, "\uE000").replace(/ё/g, "\uE001");
+  out = out.normalize("NFD").replace(/[\u0300-\u036F]/g, ""); // strip combining marks
+  out = out.replace(/\uE000/g, "й").replace(/\uE001/g, "ё");
   out = out.replace(/\[[^\]]*\]|\([^)]*\)/g, " "); // [Not 24/7], (1080p), (backup)…
   out = out.replace(JUNK_TOKENS, " ");
   out = out.replace(/[^\p{L}\p{N}]+/gu, " "); // punctuation/symbols → space
@@ -22,19 +28,25 @@ export function normalizeChannelName(s: string): string {
 
 /**
  * Map TvChannel.id -> xmltv channel id.
- * Pass 1: exact epgId match. Pass 2: unique normalized-name match — skipped
- * when the name is ambiguous on either side. Pass 2 never overrides pass 1.
+ * Pass 1: case-insensitive epgId match. Pass 2: unique normalized-name match —
+ * skipped when the name is ambiguous on either side. Pass 2 never overrides
+ * pass 1.
  */
 export function matchEpgChannels(
   channels: { id: string; epgId: string | null; name: string; altNames: string[] }[],
   xmltvChannels: XmltvChannelName[],
 ): Map<string, string> {
   const out = new Map<string, string>();
-  const xmltvIds = new Set(xmltvChannels.map((c) => c.id));
+  // Keyed lowercase so tvg-id/xmltv-id casing mismatches still match (real IPTV
+  // interop quirk); valued with the xmltv id's real casing so the result stays
+  // a valid xmltv channel id, not whatever case the M3U source happened to use.
+  const xmltvIdsByLower = new Map(xmltvChannels.map((c) => [c.id.toLowerCase(), c.id]));
 
-  // Pass 1 — exact epgId
+  // Pass 1 — exact epgId, case-insensitive
   for (const ch of channels) {
-    if (ch.epgId && xmltvIds.has(ch.epgId)) out.set(ch.id, ch.epgId);
+    if (!ch.epgId) continue;
+    const xmltvId = xmltvIdsByLower.get(ch.epgId.toLowerCase());
+    if (xmltvId) out.set(ch.id, xmltvId);
   }
 
   // Pass 2 — unique normalized-name
