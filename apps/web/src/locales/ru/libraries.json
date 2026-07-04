@@ -1,17 +1,40 @@
 {
   "title": "Библиотеки",
+  "overview": "{{libraries}} библиотек · {{items}} тайтлов · {{missing}} без метаданных",
   "settingsLink": "Настройки",
   "adding": "Добавление…",
+  "empty": "Библиотеки пока не настроены.",
   "deleteLibrary": "Удалить библиотеку",
   "add": {
     "heading": "Добавить библиотеку",
     "namePlaceholder": "Название библиотеки"
+  },
+  "rename": {
+    "button": "Переименовать",
+    "nameLabel": "Название библиотеки"
+  },
+  "actions": {
+    "manageSources": "Источники",
+    "hideSources": "Скрыть источники"
+  },
+  "stats": {
+    "items": "Тайтлы",
+    "enriched": "Обогащено",
+    "missingMetadata": "Нет метаданных",
+    "missingArtwork": "Нет обложек",
+    "files": "Файлы",
+    "sourceErrors": "Ошибки источников",
+    "sources": "{{count}}/{{total}} источников активно",
+    "lastScan": "Последнее сканирование: {{value}}",
+    "neverScanned": "Никогда"
   },
   "section": {
     "addButton": "Добавить раздел",
     "namePlaceholder": "Название раздела (например, Фильмы)"
   },
   "source": {
+    "heading": "Источники",
+    "empty": "Источники не настроены.",
     "addButton": "Добавить источник",
     "pathPlaceholder": "/путь/к/папке/с/медиа",
     "kindLocal": "Local",
@@ -40,6 +63,7 @@
   "errors": {
     "loadFailed": "Не удалось загрузить библиотеки",
     "createFailed": "Не удалось создать библиотеку",
+    "renameFailed": "Не удалось переименовать библиотеку",
     "addSourceFailed": "Не удалось добавить источник"
   }
 }

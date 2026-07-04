@@ -1,17 +1,40 @@
 {
   "title": "Bibliothèques",
+  "overview": "{{libraries}} bibliothèques · {{items}} titres · {{missing}} sans métadonnées",
   "settingsLink": "Paramètres",
   "adding": "Ajout…",
+  "empty": "Aucune bibliothèque configurée.",
   "deleteLibrary": "Supprimer la bibliothèque",
   "add": {
     "heading": "Ajouter une bibliothèque",
     "namePlaceholder": "Nom de la bibliothèque"
+  },
+  "rename": {
+    "button": "Renommer",
+    "nameLabel": "Nom de la bibliothèque"
+  },
+  "actions": {
+    "manageSources": "Sources",
+    "hideSources": "Masquer les sources"
+  },
+  "stats": {
+    "items": "Titres",
+    "enriched": "Enrichis",
+    "missingMetadata": "Métadonnées manquantes",
+    "missingArtwork": "Images manquantes",
+    "files": "Fichiers",
+    "sourceErrors": "Erreurs de source",
+    "sources": "{{count}}/{{total}} sources actives",
+    "lastScan": "Dernière analyse : {{value}}",
+    "neverScanned": "Jamais"
   },
   "section": {
     "addButton": "Ajouter une section",
     "namePlaceholder": "Nom de la section (par ex. Films)"
   },
   "source": {
+    "heading": "Sources",
+    "empty": "Aucune source configurée.",
     "addButton": "Ajouter une source",
     "pathPlaceholder": "/chemin/vers/dossier/média",
     "kindLocal": "Local",
@@ -38,6 +61,7 @@
   "errors": {
     "loadFailed": "Échec du chargement des bibliothèques",
     "createFailed": "Échec de la création de la bibliothèque",
+    "renameFailed": "Échec du renommage de la bibliothèque",
     "addSourceFailed": "Échec de l'ajout de la source"
   }
 }

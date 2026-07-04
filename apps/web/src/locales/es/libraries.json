@@ -1,17 +1,40 @@
 {
   "title": "Bibliotecas",
+  "overview": "{{libraries}} bibliotecas · {{items}} títulos · {{missing}} sin metadatos",
   "settingsLink": "Ajustes",
   "adding": "Añadiendo…",
+  "empty": "Aún no hay bibliotecas configuradas.",
   "deleteLibrary": "Eliminar biblioteca",
   "add": {
     "heading": "Añadir biblioteca",
     "namePlaceholder": "Nombre de la biblioteca"
+  },
+  "rename": {
+    "button": "Renombrar",
+    "nameLabel": "Nombre de la biblioteca"
+  },
+  "actions": {
+    "manageSources": "Orígenes",
+    "hideSources": "Ocultar orígenes"
+  },
+  "stats": {
+    "items": "Títulos",
+    "enriched": "Enriquecidos",
+    "missingMetadata": "Faltan metadatos",
+    "missingArtwork": "Falta arte",
+    "files": "Archivos",
+    "sourceErrors": "Errores de origen",
+    "sources": "{{count}}/{{total}} orígenes activos",
+    "lastScan": "Último escaneo: {{value}}",
+    "neverScanned": "Nunca"
   },
   "section": {
     "addButton": "Añadir sección",
     "namePlaceholder": "Nombre de la sección (p. ej. Películas)"
   },
   "source": {
+    "heading": "Orígenes",
+    "empty": "No hay orígenes configurados.",
     "addButton": "Añadir origen",
     "pathPlaceholder": "/ruta/a/la/carpeta/multimedia",
     "kindLocal": "Local",
@@ -38,6 +61,7 @@
   "errors": {
     "loadFailed": "No se pudieron cargar las bibliotecas",
     "createFailed": "No se pudo crear la biblioteca",
+    "renameFailed": "No se pudo renombrar la biblioteca",
     "addSourceFailed": "No se pudo añadir el origen"
   }
 }

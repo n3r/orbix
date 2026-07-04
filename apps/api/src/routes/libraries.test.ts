@@ -29,10 +29,26 @@ interface SourceRow {
   enabled: boolean; status: string; statusMessage: string | null; lastScanAt: Date | null;
 }
 interface LibRow { id: string; name: string; order: number; createdAt: Date }
+interface MediaItemRow { id: string; libraryId: string; matchState: string; posterPath: string | null }
+interface MediaFileRow { id: string; mediaItemId: string }
+
+function mediaItemMatches(row: MediaItemRow, where?: Record<string, unknown>): boolean {
+  if (!where) return true;
+  if (typeof where.libraryId === "string" && row.libraryId !== where.libraryId) return false;
+  if (typeof where.matchState === "string" && row.matchState !== where.matchState) return false;
+  if (where.matchState && typeof where.matchState === "object" && "in" in where.matchState) {
+    const values = (where.matchState as { in?: unknown }).in;
+    if (Array.isArray(values) && !values.includes(row.matchState)) return false;
+  }
+  if ("posterPath" in where && where.posterPath === null && row.posterPath !== null) return false;
+  return true;
+}
 
 function fakePrisma() {
   const libs: LibRow[] = [];
   const sources: SourceRow[] = [];
+  const items: MediaItemRow[] = [];
+  const files: MediaFileRow[] = [];
   let n = 0;
   const id = () => `id${++n}`;
   return {
@@ -99,7 +115,18 @@ function fakePrisma() {
         return {};
       },
     },
-    _raw: { libs, sources },
+    mediaItem: {
+      count: async (args: { where?: Record<string, unknown> }) => items.filter((row) => mediaItemMatches(row, args.where)).length,
+    },
+    mediaFile: {
+      count: async (args: { where?: { mediaItem?: { libraryId?: string } } }) => {
+        const libraryId = args.where?.mediaItem?.libraryId;
+        if (!libraryId) return files.length;
+        const itemIds = new Set(items.filter((row) => row.libraryId === libraryId).map((row) => row.id));
+        return files.filter((row) => itemIds.has(row.mediaItemId)).length;
+      },
+    },
+    _raw: { libs, sources, items, files },
   };
 }
 
@@ -118,6 +145,52 @@ describe("library + source routes", () => {
     const list = await app.inject({ method: "GET", url: "/api/libraries", cookies: COOKIE });
     expect(list.json()).toHaveLength(1);
     expect(list.json()[0].name).toBe("Films");
+    expect(list.json()[0].summary).toMatchObject({ totalItems: 0, enrichedItems: 0, missingMetadata: 0, files: 0 });
+    await app.close();
+  });
+
+  it("includes library metadata health and active scan state", async () => {
+    const app = await makeApp();
+    const prisma = (app as unknown as { prisma: ReturnType<typeof fakePrisma> }).prisma;
+    const lib = (await app.inject({ method: "POST", url: "/api/libraries", cookies: COOKIE, payload: { name: "Movies" } })).json();
+    prisma._raw.sources.push({
+      id: "src1", libraryId: lib.id, kind: "local", path: os.tmpdir(),
+      smbHost: null, smbShare: null, smbSubpath: null, smbUsername: null, smbPassword: null, smbDomain: null,
+      enabled: true, status: "ok", statusMessage: null, lastScanAt: new Date("2026-07-04T08:00:00.000Z"),
+    });
+    prisma._raw.items.push(
+      { id: "item1", libraryId: lib.id, matchState: "matched", posterPath: "poster/item1.jpg" },
+      { id: "item2", libraryId: lib.id, matchState: "manual", posterPath: null },
+      { id: "item3", libraryId: lib.id, matchState: "unmatched", posterPath: null },
+    );
+    prisma._raw.files.push({ id: "file1", mediaItemId: "item1" }, { id: "file2", mediaItemId: "item3" });
+    (app as unknown as { scanQueue: unknown }).scanQueue = {
+      getJobs: async () => [
+        {
+          id: "bull-job",
+          data: { jobId: "scan-job-1", libraryId: lib.id, sources: [] },
+          progress: { phase: "enriching", processed: 2, total: 3 },
+          timestamp: Date.now(),
+          getState: async () => "active",
+        },
+      ],
+      close: async () => {},
+    };
+
+    const list = await app.inject({ method: "GET", url: "/api/libraries", cookies: COOKIE });
+    expect(list.statusCode).toBe(200);
+    expect(list.json()[0].summary).toMatchObject({
+      totalItems: 3,
+      enrichedItems: 2,
+      missingMetadata: 1,
+      missingArtwork: 2,
+      files: 2,
+      sourceCount: 1,
+      enabledSourceCount: 1,
+      sourceErrorCount: 0,
+      lastScanAt: "2026-07-04T08:00:00.000Z",
+    });
+    expect(list.json()[0].activeScan).toMatchObject({ jobId: "scan-job-1", phase: "enriching", processed: 2, total: 3 });
     await app.close();
   });
 
@@ -163,12 +236,45 @@ describe("library + source routes", () => {
   it("patches library order and deletes a library", async () => {
     const app = await makeApp();
     const lib = (await app.inject({ method: "POST", url: "/api/libraries", cookies: COOKIE, payload: { name: "L" } })).json();
+    const renamed = await app.inject({ method: "PATCH", url: `/api/libraries/${lib.id}`, cookies: COOKIE, payload: { name: "Renamed" } });
+    expect(renamed.json().name).toBe("Renamed");
     const patched = await app.inject({ method: "PATCH", url: `/api/libraries/${lib.id}`, cookies: COOKIE, payload: { order: 5 } });
     expect(patched.json().order).toBe(5);
+    const afterPatch = await app.inject({ method: "GET", url: "/api/libraries", cookies: COOKIE });
+    expect(afterPatch.json()[0].name).toBe("Renamed");
     const del = await app.inject({ method: "DELETE", url: `/api/libraries/${lib.id}`, cookies: COOKIE });
     expect(del.statusCode).toBe(204);
     const list = await app.inject({ method: "GET", url: "/api/libraries", cookies: COOKIE });
     expect(list.json()).toHaveLength(0);
+    await app.close();
+  });
+
+  it("returns the existing active scan instead of enqueueing a duplicate", async () => {
+    const app = await makeApp();
+    const lib = (await app.inject({ method: "POST", url: "/api/libraries", cookies: COOKIE, payload: { name: "L" } })).json();
+    (app as unknown as { scanQueue: unknown }).scanQueue = {
+      getJobs: async () => [
+        {
+          id: "bull-job",
+          data: { jobId: "scan-job-1", libraryId: lib.id, sources: [] },
+          progress: { phase: "scanning", processed: 1, total: 2 },
+          timestamp: Date.now(),
+          getState: async () => "active",
+        },
+      ],
+      add: async () => {
+        throw new Error("duplicate enqueue");
+      },
+      close: async () => {},
+    };
+
+    const res = await app.inject({ method: "POST", url: `/api/libraries/${lib.id}/scan`, cookies: COOKIE });
+    expect(res.statusCode).toBe(202);
+    expect(res.json()).toMatchObject({
+      jobId: "scan-job-1",
+      active: true,
+      scan: { phase: "scanning", processed: 1, total: 2 },
+    });
     await app.close();
   });
 });

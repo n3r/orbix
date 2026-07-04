@@ -31,7 +31,7 @@ export default function AccountLayout() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-4 md:px-8 py-8">
+    <div className="w-full px-[4vw] py-8">
       <h1 className="text-2xl font-semibold text-[var(--text)]">{t("account:title")}</h1>
       <nav className="mt-4 flex gap-6 border-b border-[var(--surface-2)]">
         <NavLink to="/account" end className={tab}>{t("account:tabs.overview")}</NavLink>

@@ -1,17 +1,40 @@
 {
   "title": "Bibliotecas",
+  "overview": "{{libraries}} bibliotecas · {{items}} títulos · {{missing}} sem metadados",
   "settingsLink": "Configurações",
   "adding": "Adicionando…",
+  "empty": "Nenhuma biblioteca configurada ainda.",
   "deleteLibrary": "Excluir biblioteca",
   "add": {
     "heading": "Adicionar biblioteca",
     "namePlaceholder": "Nome da biblioteca"
+  },
+  "rename": {
+    "button": "Renomear",
+    "nameLabel": "Nome da biblioteca"
+  },
+  "actions": {
+    "manageSources": "Origens",
+    "hideSources": "Ocultar origens"
+  },
+  "stats": {
+    "items": "Títulos",
+    "enriched": "Enriquecidos",
+    "missingMetadata": "Metadados ausentes",
+    "missingArtwork": "Arte ausente",
+    "files": "Arquivos",
+    "sourceErrors": "Erros de origem",
+    "sources": "{{count}}/{{total}} origens ativas",
+    "lastScan": "Último escaneamento: {{value}}",
+    "neverScanned": "Nunca"
   },
   "section": {
     "addButton": "Adicionar seção",
     "namePlaceholder": "Nome da seção (ex.: Filmes)"
   },
   "source": {
+    "heading": "Origens",
+    "empty": "Nenhuma origem configurada.",
     "addButton": "Adicionar origem",
     "pathPlaceholder": "/caminho/para/a/pasta/de/mídia",
     "kindLocal": "Local",
@@ -38,6 +61,7 @@
   "errors": {
     "loadFailed": "Falha ao carregar as bibliotecas",
     "createFailed": "Falha ao criar a biblioteca",
+    "renameFailed": "Falha ao renomear a biblioteca",
     "addSourceFailed": "Falha ao adicionar a origem"
   }
 }
