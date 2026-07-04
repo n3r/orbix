@@ -83,6 +83,14 @@ export default async function profiles(app: FastifyInstance) {
         return reply.code(403).send({ error: "pin_required" });
       }
     }
+    if (req.deviceId) {
+      // Device clients have no cookie jar: the active profile lives on the row.
+      await app.prisma.deviceToken.update({
+        where: { id: req.deviceId },
+        data: { activeProfileId: p.id },
+      });
+      return { profileId: p.id };
+    }
     reply.setCookie("orbix_profile", p.id, { httpOnly: true, sameSite: "lax", path: "/" });
     return { profileId: p.id };
   });

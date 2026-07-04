@@ -1,0 +1,12 @@
+# Local-only dev override (auto-loaded by `docker compose`). NOT for production.
+# Mounts your host media into the api container read-only so you can add library
+# Sections whose path points at /media/... (the api validates + scans the path
+# from INSIDE the container, so it must be a container path, not a host ~/ path).
+#
+# Mirrors the production stack convention (deploy/portainer-stack.yml mounts the
+# media share at /media:ro). Override ${ORBIX_MEDIA_PATH} in your shell/.env to
+# point elsewhere; defaults to ~/Media_Test.
+services:
+  api:
+    volumes:
+      - ${ORBIX_MEDIA_PATH:-${HOME}/Media_Test}:/media:ro

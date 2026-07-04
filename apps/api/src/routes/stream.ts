@@ -1,18 +1,20 @@
 import fs from "node:fs";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import {
-  buildPlaybackQualities,
-  decideStrategy,
-  findPlaybackQuality,
-  getSetting,
-  isPlaybackQualityId,
+  buildVodPlaylist,
+  buildMultivariantPlaylist,
+  buildMediaPlaylistFromBoundaries,
+  videoCodecString,
+  audioCodecString,
+  videoRange,
 } from "@orbix/core";
-import type { PlaybackAudioMode, PlaybackPlan, PlaybackQuality } from "@orbix/core";
 import { requireAuth } from "../lib/auth";
-import { activeProfile, profileAllowsItem, assertFileAllowed } from "../lib/catalog-filter";
+import { queryTokenAuth, tokenSuffix } from "../lib/device-auth";
+import { assertFileAllowed } from "../lib/catalog-filter";
 import { SessionManager, SegmentTimeoutError } from "../playback/session";
+import type { PlaySessionRegistry, PlaySessionEntry } from "../playback/registry";
+import { IMAGE_CODECS } from "./subtitles";
 
-const DEFAULT_PROFILE = "default";
 const DEFAULT_SEG_SEC = 6;
 
 function contentTypeForContainer(container: string | null | undefined): string {
@@ -24,259 +26,73 @@ function contentTypeForContainer(container: string | null | undefined): string {
   return "application/octet-stream";
 }
 
-function parseAudioMode(value: unknown): PlaybackAudioMode {
-  return value === "leveled" ? "leveled" : "standard";
-}
-
-function audioModeIsValid(value: string): value is PlaybackAudioMode {
-  return value === "standard" || value === "leveled";
-}
-
-function hlsIndexUrl(fileId: string, qualityId: string, audioMode: PlaybackAudioMode): string {
-  return `/api/play/${fileId}/hls/${qualityId}/${audioMode}/index.m3u8`;
-}
-
-function escapeAttribute(value: string): string {
-  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-}
-
-function buildMasterPlaylist(
-  qualities: PlaybackQuality[],
-  audioMode: PlaybackAudioMode,
-): string {
-  const lines = ["#EXTM3U", "#EXT-X-VERSION:7", "#EXT-X-INDEPENDENT-SEGMENTS"];
-
-  for (const quality of qualities) {
-    const attrs = [
-      `BANDWIDTH=${quality.bandwidth}`,
-      quality.width && quality.height ? `RESOLUTION=${quality.width}x${quality.height}` : null,
-      `NAME="${escapeAttribute(quality.label)}"`,
-    ].filter(Boolean);
-    lines.push(`#EXT-X-STREAM-INF:${attrs.join(",")}`);
-    lines.push(`hls/${quality.id}/${audioMode}/index.m3u8`);
-  }
-
-  return lines.join("\n");
-}
-
-function serializeQualityOptions(
-  file: {
-    id: string;
-    width: number | null;
-    height: number | null;
-    bitrate: number | null;
-  },
-  plan: PlaybackPlan,
-) {
-  const qualities = buildPlaybackQualities({
-    width: file.width,
-    height: file.height,
-    bitrate: file.bitrate,
-  });
-  const options = qualities.map((quality) => {
-    const direct = quality.id === "source" && plan.mode === "direct";
-    return {
-      id: quality.id,
-      label: quality.label,
-      width: quality.width,
-      height: quality.height,
-      bandwidth: quality.bandwidth,
-      type: direct ? "direct" : "hls",
-      url: direct ? `/api/play/${file.id}/direct` : hlsIndexUrl(file.id, quality.id, "standard"),
-      hlsUrl: hlsIndexUrl(file.id, quality.id, "standard"),
-    };
-  });
-
-  if (qualities.length > 1) {
-    return [
-      {
-        id: "auto",
-        label: "Auto",
-        width: null,
-        height: null,
-        bandwidth: null,
-        type: "hls",
-        url: `/api/play/${file.id}/master.m3u8`,
-        hlsUrl: `/api/play/${file.id}/master.m3u8`,
-      },
-      ...options,
-    ];
-  }
-
-  return options;
+/**
+ * A registry entry is only servable by the HLS routes when it was negotiated
+ * for an HLS mode (remux/transcode) with a known duration. `/playback/info`
+ * also creates entries for direct-play files (mode "direct") and for
+ * not-yet-probed files (durationSec <= 0) — those are legitimate registry
+ * entries, just not ones the HLS playlist/segment routes know how to serve,
+ * so they must 404 the same as an unknown id rather than emit a broken
+ * playlist.
+ */
+function isPlayableEntry(entry: PlaySessionEntry | null, fileId: string): entry is PlaySessionEntry {
+  return (
+    !!entry &&
+    entry.fileId === fileId &&
+    entry.plan.mode !== "direct" &&
+    // durationSec backstop: unreachable via /playback/info today (it 409s first); guards future callers.
+    entry.durationSec > 0
+  );
 }
 
 /**
- * Lookup MediaFile and return an active Session for the given fileId.
- * Returns null (+ sends reply) when file is not found, not probed, or blocked
- * by the active profile's maturity cap (kids-safety gate).
+ * Resolves a registry entry by playSessionId (instead of trusting the fileId
+ * alone) and hands the manager a stable per-session key so each negotiated
+ * playback attempt gets its own isolated ffmpeg + temp dir.
  */
-async function resolveSession(
+async function resolveByPlaySession(
   app: FastifyInstance,
-  manager: SessionManager,
+  deps: { manager: SessionManager; registry: PlaySessionRegistry },
   fileId: string,
-  qualityId: string,
-  audioMode: PlaybackAudioMode,
+  playSessionId: string,
   req: FastifyRequest,
   reply: { code: (n: number) => { send: (b: unknown) => unknown } },
 ) {
-  if (!isPlaybackQualityId(qualityId)) {
-    reply.code(400).send({ error: "invalid_quality" });
+  // Kids-safety gate: re-checked on every index/init/seg request (not just at
+  // negotiation time) so a profile switch mid-playback can't keep streaming
+  // blocked content off a still-valid playSessionId.
+  if (!(await assertFileAllowed(app, req, fileId, reply))) return null;
+
+  const entry = deps.registry.get(playSessionId);
+  if (!isPlayableEntry(entry, fileId)) {
+    reply.code(404).send({ error: "session_expired" });
     return null;
   }
-  if (!audioModeIsValid(audioMode)) {
-    reply.code(400).send({ error: "invalid_audio_mode" });
-    return null;
-  }
-
-  // Load the file (with its parent item's rating) and the active profile in
-  // parallel so we can enforce the kids maturity cap before serving any bytes.
-  const [file, profile] = await Promise.all([
-    app.prisma.mediaFile.findUnique({
-      where: { id: fileId },
-      select: {
-        id: true,
-        path: true,
-        container: true,
-        videoCodec: true,
-        audioCodecs: true,
-        width: true,
-        height: true,
-        durationSec: true,
-        bitrate: true,
-        mediaItem: { select: { rating: true } },
-      },
-    }),
-    activeProfile(app, req),
-  ]);
-
-  if (!file) {
-    reply.code(404).send({ error: "not_found" });
-    return null;
-  }
-
-  // Kids-safety gate: block access before serving any playlist bytes.
-  if (!profileAllowsItem(profile, { rating: file.mediaItem.rating })) {
-    reply.code(403).send({ error: "blocked_by_rating" });
-    return null;
-  }
-
-  if (!file.durationSec) {
-    reply.code(409).send({ error: "not_probed" });
-    return null;
-  }
-
-  const plan = decideStrategy({
-    container: file.container ?? undefined,
-    videoCodec: file.videoCodec ?? undefined,
-    audioCodecs: file.audioCodecs,
-  });
-  const qualities = buildPlaybackQualities({
-    width: file.width,
-    height: file.height,
-    bitrate: file.bitrate,
-  });
-  const quality = findPlaybackQuality(qualities, qualityId);
-  if (!quality) {
-    reply.code(404).send({ error: "quality_not_available" });
-    return null;
-  }
-
-  const key = `${fileId}:${profile?.id ?? DEFAULT_PROFILE}:${quality.id}:${audioMode}`;
-  const session = await manager.getOrCreate(key, {
-    inputPath: file.path,
-    plan,
-    quality,
-    audioMode,
-    durationSec: file.durationSec,
+  return deps.manager.getOrCreate(playSessionId, {
+    inputPath: entry.inputPath,
+    plan: entry.plan,
+    quality: entry.quality,
+    audioMode: entry.audioMode,
+    durationSec: entry.durationSec,
     segSec: DEFAULT_SEG_SEC,
+    boundaries: entry.boundaries,
+    forceKeyframes: entry.forceKeyframes,
   });
-
-  return session;
 }
 
-export default function streamRoute(env: { TRANSCODE_DIR: string; MAX_TRANSCODE_SESSIONS?: number }) {
+export default function streamRoute(
+  env: { TRANSCODE_DIR: string; MAX_TRANSCODE_SESSIONS?: number },
+  deps: { manager: SessionManager; registry: PlaySessionRegistry },
+) {
   return async function (app: FastifyInstance) {
-    const manager = new SessionManager({
-      transcodeDir: env.TRANSCODE_DIR,
-      maxSessions: env.MAX_TRANSCODE_SESSIONS,
-      getEncoder: () =>
-        getSetting<string>("encoder", {
-          fallback: "software",
-          read: (k) => app.prisma.setting.findUnique({ where: { key: k } }),
-        }),
-    });
-
-    app.addHook("onClose", async () => {
-      await manager.closeAll();
-    });
-
-    // ------------------------------------------------------------------
-    // GET /play/:fileId/decision
-    // ------------------------------------------------------------------
-    app.get<{ Params: { fileId: string } }>(
-      "/play/:fileId/decision",
-      { preHandler: requireAuth(app) },
-      async (req, reply) => {
-        const { fileId } = req.params;
-
-        // Load the file (with its parent item's rating) and the active profile
-        // in parallel so we can enforce the kids maturity cap before issuing a
-        // play URL.
-        const [file, profile] = await Promise.all([
-          app.prisma.mediaFile.findUnique({
-            where: { id: fileId },
-            select: {
-              id: true,
-              container: true,
-              videoCodec: true,
-              audioCodecs: true,
-              width: true,
-              height: true,
-              bitrate: true,
-              mediaItem: { select: { rating: true } },
-            },
-          }),
-          activeProfile(app, req),
-        ]);
-
-        if (!file) return reply.code(404).send({ error: "not_found" });
-
-        // Kids-safety gate: a kids profile must not receive a play URL for a
-        // blocked title.
-        if (!profileAllowsItem(profile, { rating: file.mediaItem.rating })) {
-          return reply.code(403).send({ error: "blocked_by_rating" });
-        }
-
-        const plan = decideStrategy({
-          container: file.container ?? undefined,
-          videoCodec: file.videoCodec ?? undefined,
-          audioCodecs: file.audioCodecs,
-        });
-
-        const url =
-          plan.mode === "direct"
-            ? `/api/play/${file.id}/direct`
-            : `/api/play/${file.id}/master.m3u8`;
-
-        return {
-          mode: plan.mode,
-          url,
-          qualities: serializeQualityOptions(file, plan),
-          audioModes: [
-            { id: "standard", label: "Standard" },
-            { id: "leveled", label: "Leveling" },
-          ],
-        };
-      },
-    );
+    const { manager, registry } = deps;
 
     // ------------------------------------------------------------------
     // GET /play/:fileId/direct
     // ------------------------------------------------------------------
     app.get<{ Params: { fileId: string } }>(
       "/play/:fileId/direct",
-      { preHandler: requireAuth(app) },
+      { preHandler: [queryTokenAuth(app), requireAuth(app)] },
       async (req, reply) => {
         const { fileId } = req.params;
 
@@ -353,32 +169,89 @@ export default function streamRoute(env: { TRANSCODE_DIR: string; MAX_TRANSCODE_
     );
 
     // ------------------------------------------------------------------
-    // GET /play/:fileId/master.m3u8 — tiny HLS master playlist
+    // GET /play/:fileId/master.m3u8 — Apple-grade multivariant playlist
     // ------------------------------------------------------------------
     app.get<{ Params: { fileId: string } }>(
       "/play/:fileId/master.m3u8",
-      { preHandler: requireAuth(app) },
+      { preHandler: [queryTokenAuth(app), requireAuth(app)] },
       async (req, reply) => {
         const { fileId } = req.params;
-        const audioMode = parseAudioMode((req.query as { audio?: string }).audio);
+        const playSessionId = (req.query as { playSessionId?: string }).playSessionId;
 
         // Kids-safety gate: check before serving the master playlist.
         if (!await assertFileAllowed(app, req, fileId, reply)) return;
 
-        const file = await app.prisma.mediaFile.findUnique({
-          where: { id: fileId },
-          select: { id: true, width: true, height: true, bitrate: true },
-        });
-        if (!file) return reply.code(404).send({ error: "not_found" });
+        if (!playSessionId) {
+          return reply.code(400).send({ error: "missing_session" });
+        }
 
-        const master = buildMasterPlaylist(
-          buildPlaybackQualities({
-            width: file.width,
-            height: file.height,
-            bitrate: file.bitrate,
-          }),
-          audioMode,
-        );
+        const entry = registry.get(playSessionId);
+        if (!isPlayableEntry(entry, fileId)) {
+          return reply.code(404).send({ error: "session_expired" });
+        }
+
+        // isPlayableEntry guarantees plan.mode !== "direct" (remux | transcode);
+        // narrow audioAction via the "in" check since PlaybackPlan is a union.
+        const media = entry.media;
+        // `leveled` re-encodes audio to AAC even on a copy plan (loudnorm filter).
+        const audioAction: "copy" | "aac" =
+          entry.audioMode === "leveled"
+            ? "aac"
+            : "audioAction" in entry.plan
+              ? entry.plan.audioAction
+              : "aac";
+
+        // A non-source quality is a downscale rendition (single variant per
+        // session): the video is re-encoded to the target height/bitrate, so
+        // the STREAM-INF advertises the target resolution + bandwidth. The
+        // client switches quality by re-negotiating /playback/info, which mints
+        // a new session (and thus a new master reflecting that choice).
+        const downscale = entry.quality.id !== "source" && entry.quality.targetVideoBitrate != null;
+
+        // Video codec string: remux reports the SOURCE codec/profile/level;
+        // transcode always emits libx264 High@4.1 today, so hardcode that.
+        const videoCodec =
+          entry.plan.mode === "transcode"
+            ? videoCodecString("h264", "High", 41)
+            : videoCodecString(media?.videoCodec ?? undefined, media?.videoProfile ?? undefined, media?.videoLevel ?? undefined);
+        const audioCodec =
+          audioAction === "copy" ? audioCodecString(media?.audioCodec ?? undefined) : audioCodecString("aac");
+        const codecs = [videoCodec, audioCodec].filter((c): c is string => c !== null);
+
+        const resolution = downscale
+          ? entry.quality.width && entry.quality.height
+            ? { width: entry.quality.width, height: entry.quality.height }
+            : undefined
+          : media?.width && media?.height
+            ? { width: media.width, height: media.height }
+            : undefined;
+
+        // Subtitle renditions: only text-based tracks (image subs need burn-in, not HLS renditions).
+        // Gated on the negotiated delivery preference (entry.subtitleRenditions,
+        // set from ClientCapabilities.subtitleDelivery at negotiation time): a
+        // client that declared "sidecar" (the web player) adds its own
+        // <Track>s, so in-manifest renditions here would duplicate them —
+        // omit the whole list for that client.
+        const subtitles = entry.subtitleRenditions
+          ? (media?.subtitleTracks ?? [])
+              .filter((t) => !IMAGE_CODECS.has(t.codec ?? ""))
+              .map((t) => ({
+                name: t.language ?? `Track ${t.index}`,
+                language: t.language,
+                uri: `subs/${t.index}/index.m3u8?playSessionId=${playSessionId}${tokenSuffix(req)}`,
+              }))
+          : [];
+
+        const master = buildMultivariantPlaylist({
+          mediaUri: `index.m3u8?playSessionId=${playSessionId}${tokenSuffix(req)}`,
+          bandwidth: downscale ? entry.quality.bandwidth : media?.bitrate ?? 8_000_000,
+          codecs,
+          resolution,
+          frameRate: media?.frameRate ?? undefined,
+          // Transcode output is SDR H.264 today regardless of the source's color transfer.
+          videoRange: entry.plan.mode === "remux" ? videoRange(media?.colorTransfer ?? undefined) : "SDR",
+          subtitles,
+        });
 
         return reply
           .code(200)
@@ -392,24 +265,30 @@ export default function streamRoute(env: { TRANSCODE_DIR: string; MAX_TRANSCODE_
     // ------------------------------------------------------------------
     app.get<{ Params: { fileId: string } }>(
       "/play/:fileId/index.m3u8",
-      { preHandler: requireAuth(app) },
+      { preHandler: [queryTokenAuth(app), requireAuth(app)] },
       async (req, reply) => {
         const { fileId } = req.params;
-        const session = await resolveSession(
-          app,
-          manager,
-          fileId,
-          "source",
-          "standard",
-          req,
-          reply,
-        );
+        const playSessionId = (req.query as { playSessionId?: string }).playSessionId;
+        if (!playSessionId) {
+          return reply.code(400).send({ error: "missing_session" });
+        }
+
+        const session = await resolveByPlaySession(app, { manager, registry }, fileId, playSessionId, req, reply);
         if (!session) return;
+
+        // Keyframe-derived boundaries (remux) give exact EXTINFs matching what
+        // ffmpeg actually cuts; without them (transcode, or remux with no
+        // extracted keyframes) fall back to the fixed-cadence VOD playlist.
+        const q = `playSessionId=${playSessionId}${tokenSuffix(req)}`;
+        const body =
+          session.boundaries && session.boundaries.length > 0
+            ? buildMediaPlaylistFromBoundaries(session.boundaries, q)
+            : buildVodPlaylist(session.durationSec, session.segSec, q);
 
         return reply
           .code(200)
           .header("Content-Type", "application/vnd.apple.mpegurl")
-          .send(manager.playlist(session));
+          .send(body);
       },
     );
 
@@ -418,18 +297,14 @@ export default function streamRoute(env: { TRANSCODE_DIR: string; MAX_TRANSCODE_
     // ------------------------------------------------------------------
     app.get<{ Params: { fileId: string } }>(
       "/play/:fileId/init.mp4",
-      { preHandler: requireAuth(app) },
+      { preHandler: [queryTokenAuth(app), requireAuth(app)] },
       async (req, reply) => {
         const { fileId } = req.params;
-        const session = await resolveSession(
-          app,
-          manager,
-          fileId,
-          "source",
-          "standard",
-          req,
-          reply,
-        );
+        const playSessionId = (req.query as { playSessionId?: string }).playSessionId;
+        if (!playSessionId) {
+          return reply.code(400).send({ error: "missing_session" });
+        }
+        const session = await resolveByPlaySession(app, { manager, registry }, fileId, playSessionId, req, reply);
         if (!session) return;
 
         let initPath: string;
@@ -446,88 +321,6 @@ export default function streamRoute(env: { TRANSCODE_DIR: string; MAX_TRANSCODE_
           .code(200)
           .header("Content-Type", "video/mp4")
           .send(fs.createReadStream(initPath));
-      },
-    );
-
-    // ------------------------------------------------------------------
-    // GET /play/:fileId/hls/:quality/:audio/index.m3u8
-    // ------------------------------------------------------------------
-    app.get<{ Params: { fileId: string; quality: string; audio: string } }>(
-      "/play/:fileId/hls/:quality/:audio/index.m3u8",
-      { preHandler: requireAuth(app) },
-      async (req, reply) => {
-        const { fileId, quality, audio } = req.params;
-        if (!audioModeIsValid(audio)) return reply.code(400).send({ error: "invalid_audio_mode" });
-        const session = await resolveSession(app, manager, fileId, quality, audio, req, reply);
-        if (!session) return;
-
-        return reply
-          .code(200)
-          .header("Content-Type", "application/vnd.apple.mpegurl")
-          .send(manager.playlist(session));
-      },
-    );
-
-    // ------------------------------------------------------------------
-    // GET /play/:fileId/hls/:quality/:audio/init.mp4
-    // ------------------------------------------------------------------
-    app.get<{ Params: { fileId: string; quality: string; audio: string } }>(
-      "/play/:fileId/hls/:quality/:audio/init.mp4",
-      { preHandler: requireAuth(app) },
-      async (req, reply) => {
-        const { fileId, quality, audio } = req.params;
-        if (!audioModeIsValid(audio)) return reply.code(400).send({ error: "invalid_audio_mode" });
-        const session = await resolveSession(app, manager, fileId, quality, audio, req, reply);
-        if (!session) return;
-
-        let initPath: string;
-        try {
-          initPath = await manager.ensureInit(session);
-        } catch (err) {
-          if (err instanceof SegmentTimeoutError) {
-            return reply.code(504).send({ error: "timeout", message: err.message });
-          }
-          throw err;
-        }
-
-        return reply
-          .code(200)
-          .header("Content-Type", "video/mp4")
-          .send(fs.createReadStream(initPath));
-      },
-    );
-
-    // ------------------------------------------------------------------
-    // GET /play/:fileId/hls/:quality/:audio/:seg
-    // ------------------------------------------------------------------
-    app.get<{ Params: { fileId: string; quality: string; audio: string; seg: string } }>(
-      "/play/:fileId/hls/:quality/:audio/:seg",
-      { preHandler: requireAuth(app) },
-      async (req, reply) => {
-        const { fileId, quality, audio, seg } = req.params;
-        if (!audioModeIsValid(audio)) return reply.code(400).send({ error: "invalid_audio_mode" });
-
-        const m = /^seg(\d+)\.m4s$/.exec(seg);
-        if (!m) return reply.code(400).send({ error: "bad_segment" });
-        const n = parseInt(m[1], 10);
-
-        const session = await resolveSession(app, manager, fileId, quality, audio, req, reply);
-        if (!session) return;
-
-        let segPath: string;
-        try {
-          segPath = await manager.ensureSegment(session, n);
-        } catch (err) {
-          if (err instanceof SegmentTimeoutError) {
-            return reply.code(504).send({ error: "timeout", message: err.message });
-          }
-          throw err;
-        }
-
-        return reply
-          .code(200)
-          .header("Content-Type", "video/iso.segment")
-          .send(fs.createReadStream(segPath));
       },
     );
 
@@ -536,7 +329,7 @@ export default function streamRoute(env: { TRANSCODE_DIR: string; MAX_TRANSCODE_
     // ------------------------------------------------------------------
     app.get<{ Params: { fileId: string; seg: string } }>(
       "/play/:fileId/:seg",
-      { preHandler: requireAuth(app) },
+      { preHandler: [queryTokenAuth(app), requireAuth(app)] },
       async (req, reply) => {
         const { fileId, seg } = req.params;
 
@@ -544,15 +337,11 @@ export default function streamRoute(env: { TRANSCODE_DIR: string; MAX_TRANSCODE_
         if (!m) return reply.code(400).send({ error: "bad_segment" });
         const n = parseInt(m[1], 10);
 
-        const session = await resolveSession(
-          app,
-          manager,
-          fileId,
-          "source",
-          "standard",
-          req,
-          reply,
-        );
+        const playSessionId = (req.query as { playSessionId?: string }).playSessionId;
+        if (!playSessionId) {
+          return reply.code(400).send({ error: "missing_session" });
+        }
+        const session = await resolveByPlaySession(app, { manager, registry }, fileId, playSessionId, req, reply);
         if (!session) return;
 
         let segPath: string;

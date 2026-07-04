@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { isFinished, continueWatching } from "@orbix/core";
 import { requireAuth } from "../lib/auth";
-import { activeProfile, profileAllowsItem, kidsRatingWhere } from "../lib/catalog-filter";
+import { activeProfile, activeProfileId, profileAllowsItem, kidsRatingWhere } from "../lib/catalog-filter";
 
 export default async function playstateRoute(app: FastifyInstance) {
   // PUT /items/:id/progress — upsert playback position for the active profile
@@ -9,7 +9,7 @@ export default async function playstateRoute(app: FastifyInstance) {
     "/items/:id/progress",
     { preHandler: requireAuth(app) },
     async (req, reply) => {
-      const profileId = req.cookies["orbix_profile"];
+      const profileId = await activeProfileId(app, req);
       if (!profileId) return reply.code(400).send({ error: "no_profile" });
 
       const body = (req.body ?? {}) as Record<string, unknown>;
@@ -55,6 +55,13 @@ export default async function playstateRoute(app: FastifyInstance) {
         update: { positionSec: positionSecInt, durationSec: durationSecInt, finished },
       });
 
+      // Liveness touch for the registry entry's 24h TTL (renegotiation window).
+      // ffmpeg idle-reaping is driven by segment fetches, not this.
+      // Unknown/missing ids are fine — progress must never fail on session state.
+      if (typeof body.playSessionId === "string") {
+        app.playSessions?.get(body.playSessionId);
+      }
+
       // Best-effort: append a PlayEvent once per viewing session (dedup within 6h)
       try {
         const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
@@ -77,7 +84,7 @@ export default async function playstateRoute(app: FastifyInstance) {
     "/items/:id/progress",
     { preHandler: requireAuth(app) },
     async (req, reply) => {
-      const profileId = req.cookies["orbix_profile"];
+      const profileId = await activeProfileId(app, req);
       if (!profileId) return reply.code(400).send({ error: "no_profile" });
 
       const mediaItemId = req.params.id;
@@ -111,7 +118,7 @@ export default async function playstateRoute(app: FastifyInstance) {
     "/continue-watching",
     { preHandler: requireAuth(app) },
     async (req, reply) => {
-      const profileId = req.cookies["orbix_profile"];
+      const profileId = await activeProfileId(app, req);
       if (!profileId) return reply.code(400).send({ error: "no_profile" });
 
       const states = await app.prisma.playbackState.findMany({

@@ -77,4 +77,20 @@ describe("buildVodPlaylist", () => {
     const extinfLines = playlist.split("\n").filter((l) => l.startsWith("#EXTINF:"));
     expect(extinfLines).toEqual(["#EXTINF:5.500,", "#EXTINF:5.500,"]);
   });
+
+  describe("query propagation", () => {
+    it("appends the query to init and every segment URI", () => {
+      const p = buildVodPlaylist(13, 6, "playSessionId=abc&token=orb_x");
+      expect(p).toContain('#EXT-X-MAP:URI="init.mp4?playSessionId=abc&token=orb_x"');
+      expect(p).toContain("seg0.m4s?playSessionId=abc&token=orb_x");
+      expect(p).toContain("seg2.m4s?playSessionId=abc&token=orb_x");
+    });
+
+    it("emits bare URIs when no query is given", () => {
+      const p = buildVodPlaylist(12, 6);
+      expect(p).toContain('#EXT-X-MAP:URI="init.mp4"');
+      expect(p).toContain("seg1.m4s");
+      expect(p).not.toContain("?");
+    });
+  });
 });

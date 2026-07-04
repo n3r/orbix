@@ -25,7 +25,8 @@ export default function AccountLayout() {
   const onAdminTab =
     pathname.startsWith("/account/library") ||
     pathname.startsWith("/account/settings") ||
-    pathname.startsWith("/account/tv");
+    pathname.startsWith("/account/tv") ||
+    pathname.startsWith("/account/devices");
   if (onAdminTab && !me.isLoading && !profile.isLoading && !isAdmin) {
     return <Navigate to="/account" replace />;
   }
@@ -39,6 +40,7 @@ export default function AccountLayout() {
         {isAdmin && <NavLink to="/account/tv" className={tab}>{t("nav:tv")}</NavLink>}
         {isAdmin && <NavLink to="/account/library" className={tab}>{t("nav:library")}</NavLink>}
         {isAdmin && <NavLink to="/account/settings" className={tab}>{t("nav:settings")}</NavLink>}
+        {isAdmin && <NavLink to="/account/devices" className={tab}>{t("account:tabs.devices")}</NavLink>}
       </nav>
       <div className="pt-6">
         <Outlet />

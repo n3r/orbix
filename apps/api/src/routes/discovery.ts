@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { buildSmartRows, itemSimilarity, continueWatching, parseConstraints, ratingTier, certsAtOrBelow } from "@orbix/core";
 import { requireAuth } from "../lib/auth";
-import { activeProfile, kidsRatingWhere } from "../lib/catalog-filter";
+import { activeProfile, activeProfileId, kidsRatingWhere } from "../lib/catalog-filter";
 import { embedText, EmbedderUnavailable } from "../discovery/embedder.js";
 import { backfillEmbeddings } from "../discovery/embed-worker.js";
 import { Prisma } from "@orbix/db";
@@ -71,7 +71,7 @@ export default async function discoveryRoute(app: FastifyInstance) {
     "/home/rows",
     { preHandler: requireAuth(app) },
     async (req, reply) => {
-      const profileId = req.cookies["orbix_profile"];
+      const profileId = await activeProfileId(app, req);
       if (!profileId) return reply.code(400).send({ error: "no_profile" });
 
       const profile = await activeProfile(app, req);
@@ -86,9 +86,15 @@ export default async function discoveryRoute(app: FastifyInstance) {
         id: true,
         title: true,
         year: true,
+        runtimeSec: true,
+        rating: true,
         posterPath: true,
         backdropPath: true,
         addedAt: true,
+        tmdbScore: true,
+        imdbRating: true,
+        rtRating: true,
+        metacritic: true,
         translations: { where: { language: lang }, select: { title: true } },
         genres: {
           select: { genre: { select: { name: true } } },
@@ -193,6 +199,14 @@ export default async function discoveryRoute(app: FastifyInstance) {
           title: item.title,
           features: { genres, keywords, cast, director },
           playedByProfile: playedIds.has(item.id),
+          year: item.year,
+          runtimeSec: item.runtimeSec,
+          addedAt: item.addedAt,
+          rating: item.rating,
+          tmdbScore: item.tmdbScore,
+          imdbRating: item.imdbRating,
+          rtRating: item.rtRating,
+          metacritic: item.metacritic,
         };
       });
 

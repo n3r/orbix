@@ -2,7 +2,8 @@
   "title": "Compte",
   "tabs": {
     "overview": "Aperçu",
-    "menu": "Mon menu"
+    "menu": "Mon menu",
+    "devices": "Appareils"
   },
   "profileKind": {
     "standard": "Profil standard",
@@ -15,5 +16,19 @@
     "selectOne": "Sélectionnez au moins une catégorie.",
     "moveUp": "Déplacer {{name}} vers le haut",
     "moveDown": "Déplacer {{name}} vers le bas"
+  },
+  "devices": {
+    "title": "Appareils associés",
+    "empty": "Aucun appareil associé pour l'instant. Lancez l'association depuis l'app TV.",
+    "pairTitle": "Associer un nouvel appareil",
+    "pairHint": "Saisissez le code à 6 caractères affiché sur votre TV.",
+    "pairButton": "Approuver",
+    "pairApproved": "Appareil approuvé — la TV va se connecter dans un instant.",
+    "pairUnknown": "Code introuvable ou expiré.",
+    "lastSeen": "Vu pour la dernière fois",
+    "revoked": "Révoqué",
+    "revoke": "Révoquer",
+    "rename": "Renommer",
+    "save": "Enregistrer"
   }
 }

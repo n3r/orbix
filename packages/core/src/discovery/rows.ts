@@ -1,8 +1,17 @@
+import { qualityScore } from "./similarity";
+
 export interface RowCatalogItem {
   id: string;
   title: string;
   features: { genres: string[]; keywords: string[]; cast: string[]; director?: string };
   playedByProfile: boolean;
+  year?: number | null;
+  runtimeSec?: number | null;
+  addedAt?: Date | string | number | null;
+  tmdbScore?: number | null;
+  imdbRating?: number | null;
+  rtRating?: number | null;
+  metacritic?: number | null;
 }
 
 export interface SmartRow {
@@ -37,6 +46,121 @@ function maxSim(
   return best;
 }
 
+function metadataRichness(item: RowCatalogItem): number {
+  const featureCount =
+    item.features.genres.length +
+    item.features.keywords.length +
+    Math.min(item.features.cast.length, 10) +
+    (item.features.director ? 1 : 0);
+  return Math.min(1, featureCount / 18);
+}
+
+function asMillis(value: RowCatalogItem["addedAt"]): number | undefined {
+  if (value == null) return undefined;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function rangeScore(value: number | undefined, min: number, max: number): number {
+  if (value === undefined || min === max) return 0.5;
+  return Math.min(1, Math.max(0, (value - min) / (max - min)));
+}
+
+function freshnessScore(item: RowCatalogItem, catalog: RowCatalogItem[]): number {
+  const addedValues = catalog.map((c) => asMillis(c.addedAt)).filter((x): x is number => x !== undefined);
+  const added = asMillis(item.addedAt);
+  if (addedValues.length > 1 && added !== undefined) {
+    return rangeScore(added, Math.min(...addedValues), Math.max(...addedValues));
+  }
+
+  const years = catalog
+    .map((c) => c.year)
+    .filter((year): year is number => year != null && Number.isFinite(year));
+  if (years.length > 1 && item.year != null) {
+    return rangeScore(item.year, Math.min(...years), Math.max(...years));
+  }
+  return 0.5;
+}
+
+function catalogLatestYear(catalog: RowCatalogItem[]): number | undefined {
+  const years = catalog
+    .map((c) => c.year)
+    .filter((year): year is number => year != null && Number.isFinite(year));
+  return years.length > 0 ? Math.max(...years) : undefined;
+}
+
+function ageDiscoveryScore(item: RowCatalogItem, latestYear: number | undefined): number {
+  if (item.year == null || latestYear === undefined) return 0.5;
+  return Math.min(1, Math.max(0, (latestYear - item.year) / 40));
+}
+
+function runtimeComfortScore(runtimeSec: number | null | undefined): number {
+  if (runtimeSec == null || !Number.isFinite(runtimeSec)) return 0.6;
+  const minutes = runtimeSec / 60;
+  if (minutes < 70) return 0.65;
+  if (minutes <= 135) return 1;
+  if (minutes <= 165) return 0.75;
+  if (minutes <= 195) return 0.45;
+  return 0.25;
+}
+
+function uniqueIds(ids: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const id of ids) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
+
+function selectDiverse(
+  scored: { item: RowCatalogItem; score: number }[],
+  input: {
+    limit: number;
+    simOf: BuildRowsInput["simOf"];
+    excludeIds?: Set<string>;
+    diversityPenalty?: number;
+  },
+): string[] {
+  const { limit, simOf, excludeIds = new Set(), diversityPenalty = 0.1 } = input;
+  const pool = scored
+    .filter((entry) => !excludeIds.has(entry.item.id))
+    .sort((a, b) => b.score - a.score || a.item.id.localeCompare(b.item.id));
+  const selected: { item: RowCatalogItem; score: number }[] = [];
+
+  while (selected.length < limit && pool.length > 0) {
+    let bestIndex = 0;
+    let bestAdjusted = Number.NEGATIVE_INFINITY;
+    for (let i = 0; i < pool.length; i++) {
+      const entry = pool[i]!;
+      const diversityCost = diversityPenalty * maxSim(
+        entry.item,
+        selected.map((s) => s.item),
+        simOf,
+      );
+      const adjusted = entry.score - diversityCost;
+      const best = pool[bestIndex]!;
+      if (
+        adjusted > bestAdjusted ||
+        (adjusted === bestAdjusted &&
+          (entry.score > best.score ||
+            (entry.score === best.score && entry.item.id.localeCompare(best.item.id) < 0)))
+      ) {
+        bestAdjusted = adjusted;
+        bestIndex = i;
+      }
+    }
+    const [next] = pool.splice(bestIndex, 1);
+    if (next) selected.push(next);
+  }
+
+  return selected.map((entry) => entry.item.id);
+}
+
 /**
  * Build smart home-row recommendations from profile history + catalog.
  *
@@ -46,13 +170,15 @@ function maxSim(
 export function buildSmartRows(input: BuildRowsInput): SmartRow[] {
   const { continueWatching, history, catalog, simOf, limit = 20 } = input;
   const rows: SmartRow[] = [];
+  const surfacedRecommendationIds = new Set<string>();
+  const topExposureLimit = Math.min(6, Math.max(3, Math.floor(limit / 2)));
 
   // ── 1. Continue Watching ──────────────────────────────────────────────────
   if (continueWatching.length > 0) {
     rows.push({
       key: "continue",
       title: "Continue Watching",
-      itemIds: continueWatching.map((c) => c.mediaItemId),
+      itemIds: uniqueIds(continueWatching.map((c) => c.mediaItemId)).slice(0, limit),
     });
   }
 
@@ -64,13 +190,25 @@ export function buildSmartRows(input: BuildRowsInput): SmartRow[] {
     if (seed !== undefined) {
       const candidates = catalog
         .filter((c) => !c.playedByProfile && c.id !== seed.id)
-        .map((c) => ({ id: c.id, score: simOf(seed.features, c.features) }))
+        .map((c) => {
+          const contentScore = simOf(seed.features, c.features);
+          return {
+            id: c.id,
+            contentScore,
+            score:
+              0.82 * contentScore +
+              0.12 * qualityScore(c) +
+              0.06 * metadataRichness(c),
+          };
+        })
+        .filter((c) => c.contentScore > 0.05)
         // sort: score DESC, then id ASC (deterministic tiebreak)
         .sort((a, b) => b.score - a.score || a.id.localeCompare(b.id))
         .slice(0, limit)
         .map((c) => c.id);
 
       if (candidates.length > 0) {
+        for (const id of candidates.slice(0, topExposureLimit)) surfacedRecommendationIds.add(id);
         rows.push({
           key: "becauseYouWatched",
           title: `Because you watched ${seedEntry.title}`,
@@ -82,25 +220,43 @@ export function buildSmartRows(input: BuildRowsInput): SmartRow[] {
 
   // ── 3. Hidden Gems ────────────────────────────────────────────────────────
   const unplayed = catalog.filter((c) => !c.playedByProfile);
+  let hiddenGemIds: string[] = [];
 
   if (unplayed.length > 0) {
     // Resolve catalog entries for history items (for sim scoring).
     const historyItems = history
       .map((h) => catalog.find((c) => c.id === h.mediaItemId))
       .filter((c): c is RowCatalogItem => c !== undefined);
+    const latestYear = catalogLatestYear(catalog);
+    const hiddenLimit = Math.min(limit, 12, Math.max(1, Math.floor(unplayed.length * 0.55)));
 
-    const gemIds = [...unplayed]
-      .map((c) => ({ item: c, score: maxSim(c, historyItems, simOf) }))
-      // sort: score DESC, then id ASC (deterministic tiebreak)
-      .sort((a, b) => b.score - a.score || a.item.id.localeCompare(b.item.id))
-      .slice(0, limit)
-      .map((x) => x.item.id);
+    const hiddenScores = unplayed
+      .map((c) => {
+        const affinity = maxSim(c, historyItems, simOf);
+        return {
+          item: c,
+          score:
+            0.46 * qualityScore(c) +
+            0.26 * affinity +
+            0.18 * ageDiscoveryScore(c, latestYear) +
+            0.1 * metadataRichness(c),
+        };
+      })
+      .filter((entry) => entry.score >= 0.4);
 
-    rows.push({
-      key: "hiddenGems",
-      title: "Hidden gems",
-      itemIds: gemIds,
-    });
+    hiddenGemIds = selectDiverse(
+      hiddenScores,
+      { limit: hiddenLimit, simOf, excludeIds: surfacedRecommendationIds, diversityPenalty: 0.08 },
+    );
+
+    if (hiddenGemIds.length > 0) {
+      for (const id of hiddenGemIds) surfacedRecommendationIds.add(id);
+      rows.push({
+        key: "hiddenGems",
+        title: "Hidden gems",
+        itemIds: hiddenGemIds,
+      });
+    }
   }
 
   // ── 4. Tonight ────────────────────────────────────────────────────────────
@@ -111,18 +267,33 @@ export function buildSmartRows(input: BuildRowsInput): SmartRow[] {
       .map((h) => catalog.find((c) => c.id === h.mediaItemId))
       .filter((c): c is RowCatalogItem => c !== undefined);
 
-    const tonightIds = [...unplayed]
-      .map((c) => ({ item: c, score: maxSim(c, historyItems, simOf) }))
-      // sort: score DESC, then id DESC (reverse tiebreak — feels curated vs gems)
-      .sort((a, b) => b.score - a.score || b.item.id.localeCompare(a.item.id))
-      .slice(0, tonightLimit)
-      .map((x) => x.item.id);
+    const tonightIds = selectDiverse(
+      unplayed.map((c) => {
+        const affinity = maxSim(c, historyItems, simOf);
+        return {
+          item: c,
+          score:
+            0.38 * affinity +
+            0.24 * qualityScore(c) +
+            0.24 * runtimeComfortScore(c.runtimeSec) +
+            0.14 * freshnessScore(c, catalog),
+        };
+      }),
+      {
+        limit: tonightLimit,
+        simOf,
+        excludeIds: surfacedRecommendationIds,
+        diversityPenalty: 0.14,
+      },
+    );
 
-    rows.push({
-      key: "tonight",
-      title: "Pick something for tonight",
-      itemIds: tonightIds,
-    });
+    if (tonightIds.length > 0) {
+      rows.push({
+        key: "tonight",
+        title: "Pick something for tonight",
+        itemIds: tonightIds,
+      });
+    }
   }
 
   return rows;
