@@ -14,6 +14,38 @@
   "badges": {
     "offline": "Hors ligne"
   },
+  "categories": {
+    "auto": "Automobile",
+    "animation": "Animation",
+    "business": "Économie",
+    "classic": "Classique",
+    "comedy": "Comédie",
+    "cooking": "Cuisine",
+    "culture": "Culture",
+    "documentary": "Documentaire",
+    "education": "Éducation",
+    "entertainment": "Divertissement",
+    "family": "Famille",
+    "general": "Généraliste",
+    "interactive": "Interactif",
+    "kids": "Enfants",
+    "legislative": "Parlement",
+    "lifestyle": "Style de vie",
+    "movies": "Films",
+    "music": "Musique",
+    "news": "Actualités",
+    "outdoor": "Plein air",
+    "public": "Publique",
+    "relax": "Détente",
+    "religious": "Religieux",
+    "series": "Séries",
+    "science": "Science",
+    "shop": "Téléachat",
+    "sports": "Sport",
+    "travel": "Voyage",
+    "weather": "Météo",
+    "xxx": "Adultes"
+  },
   "card": {
     "play": "Regarder {{name}}",
     "favorite": "Ajouter aux favoris",
@@ -21,6 +53,8 @@
   },
   "guidePage": {
     "title": "Guide TV",
+    "viewList": "Liste",
+    "viewGrid": "Grille",
     "searchPlaceholder": "Rechercher des chaînes",
     "all": "Toutes",
     "favorites": "Favoris",
@@ -31,6 +65,15 @@
     "schedule": "Détails de la chaîne",
     "noEpg": "Aucune donnée de guide",
     "next": "Ensuite"
+  },
+  "grid": {
+    "now": "Maintenant",
+    "prev": "Précédent",
+    "next": "Suivant",
+    "today": "Aujourd'hui",
+    "tomorrow": "Demain",
+    "showingOf": "Affichage de {{shown}} sur {{total}} — affinez le filtre",
+    "playProgramme": "Regarder {{title}} sur {{channel}}"
   },
   "channel": {
     "number": "Chaîne {{number}}",

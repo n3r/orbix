@@ -1,25 +1,24 @@
 import { useState } from "react";
 import { useParams } from "react-router";
 import { useTranslation } from "react-i18next";
-import { useQueryClient } from "@tanstack/react-query";
 import { Button, cn } from "@orbix/ui";
-import { apiFetch } from "@/lib/api";
-import { useTvChannel, useTvProgrammes } from "@/lib/queries";
+import { useTvChannel, useTvProgrammes, useToggleTvFavorite } from "@/lib/queries";
 import { formatTvTime, tvDayString } from "@/lib/tv-time";
 import LiveTvOverlay from "@/components/tv/LiveTvOverlay";
-import { channelHue, channelInitials, regionName } from "@/lib/tv";
+import { ChannelLogo } from "@/components/tv/ChannelLogo";
+import { regionName } from "@/lib/tv";
 import { HeartIcon, PlayIcon } from "@/components/shell/icons";
 
 /** Channel detail: hero, badges, favorite toggle, Watch CTA, day schedule. */
 export default function TvChannelPage() {
   const { id } = useParams<{ id: string }>();
   const { t, i18n } = useTranslation();
-  const queryClient = useQueryClient();
   const channel = useTvChannel(id);
   const [dayOffset, setDayOffset] = useState<0 | 1>(0);
   const day = tvDayString(dayOffset);
   const programmes = useTvProgrammes(id, day);
   const [watching, setWatching] = useState(false);
+  const toggleFavorite = useToggleTvFavorite();
 
   if (channel.isLoading)
     return <div className="p-8 text-[var(--text-dim)]">{t("common:status.loading")}</div>;
@@ -27,21 +26,11 @@ export default function TvChannelPage() {
   const c = channel.data;
   if (!c) return <div className="p-8 text-[var(--text-dim)]">{t("tv:channel.notFound")}</div>;
 
-  const toggleFavorite = async () => {
-    try {
-      await apiFetch(`/tv/favorites/${c.id}`, { method: c.favorite ? "DELETE" : "PUT" });
-    } catch {
-      return;
-    }
-    void queryClient.invalidateQueries({ queryKey: ["tv-channel", c.id] });
-    void queryClient.invalidateQueries({ queryKey: ["tv-home"] });
-    void queryClient.invalidateQueries({ queryKey: ["tv-guide"] });
-    void queryClient.invalidateQueries({ queryKey: ["tv-favorites"] });
-  };
-
   const badges = [
     regionName(c.country, i18n.language),
-    ...c.categories.map((cat) => cat.charAt(0).toUpperCase() + cat.slice(1)),
+    ...c.categories.map((cat) =>
+      t(`tv:categories.${cat}`, { defaultValue: cat.charAt(0).toUpperCase() + cat.slice(1) }),
+    ),
   ].filter((x): x is string => Boolean(x));
 
   const schedule = programmes.data?.programmes ?? [];
@@ -51,19 +40,14 @@ export default function TvChannelPage() {
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-4 py-8 md:px-8">
       <div className="flex items-center gap-5">
-        <span className="grid h-24 w-40 shrink-0 place-items-center overflow-hidden rounded-[var(--radius)] bg-[var(--surface)]">
-          {c.logo ? (
-            <img src={c.logo} alt="" className="max-h-16 max-w-32 object-contain" />
-          ) : (
-            <span
-              aria-hidden
-              className="grid h-full w-full place-items-center text-3xl font-bold text-white/90"
-              style={{ backgroundColor: `hsl(${channelHue(c.id)} 45% 28%)` }}
-            >
-              {channelInitials(c.name)}
-            </span>
-          )}
-        </span>
+        <ChannelLogo
+          logo={c.logo}
+          name={c.name}
+          channelId={c.id}
+          className="h-24 w-40 shrink-0 rounded-[var(--radius)] bg-[var(--surface)]"
+          imgClassName="max-h-16 max-w-32"
+          monogramClassName="text-3xl font-bold text-white/90"
+        />
         <div className="min-w-0 flex-1">
           <p className="text-sm text-[var(--text-dim)]">{t("tv:channel.number", { number: c.number })}</p>
           <h1 className="truncate text-3xl font-bold text-[var(--text)]">{c.name}</h1>
@@ -83,7 +67,7 @@ export default function TvChannelPage() {
         </div>
         <button
           type="button"
-          onClick={() => void toggleFavorite()}
+          onClick={() => toggleFavorite.mutate({ channelId: c.id, isFavorite: c.favorite })}
           aria-label={c.favorite ? t("tv:card.unfavorite") : t("tv:card.favorite")}
           className={cn(
             "grid h-10 w-10 shrink-0 place-items-center rounded-full border border-[var(--surface-2)] transition-colors",

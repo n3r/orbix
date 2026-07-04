@@ -3,6 +3,7 @@ import { requireAuth } from "../lib/auth";
 import { requireTvAccess } from "../lib/tv-access";
 import { activeProfile } from "../lib/catalog-filter";
 import { loadNowNext } from "../lib/tv-now-next";
+import { loadProgrammeWindow } from "../lib/tv-grid";
 
 // ── Shared card shape (fixed cross-phase contract) ──────────────────────────
 
@@ -45,6 +46,12 @@ const CHANNEL_CARD_SELECT = {
 
 const RAIL_CAP = 30;
 const RECENTS_CAP = 20;
+// /tv/grid rows are heavier than /tv/guide rows (each carries a programme window).
+const GRID_LIMIT_DEFAULT = 50;
+const GRID_LIMIT_CAP = 100;
+const GRID_HOURS_DEFAULT = 3;
+const GRID_HOURS_MIN = 1;
+const GRID_HOURS_MAX = 6;
 
 function toCard(ch: ChannelRow, favoriteIds: ReadonlySet<string>): TvChannelCard {
   return {
@@ -218,6 +225,80 @@ export default async function tvCatalogRoute(app: FastifyInstance) {
     const nowNext = await loadNowNext(app.prisma, channels.map((c) => c.id));
     const decorated = channels.map((c) => ({ ...c, ...(nowNext.get(c.id) ?? { now: null, next: null }) }));
     return { total, offset, limit, channels: decorated };
+  });
+
+  // GET /tv/grid — windowed channel list with EACH channel's programmes across a
+  // time window (for the 2D time×channel guide).
+  app.get<{
+    Querystring: {
+      start?: string;
+      hours?: string;
+      country?: string;
+      category?: string;
+      favorites?: string;
+      q?: string;
+      offset?: string;
+      limit?: string;
+    };
+  }>("/tv/grid", guard, async (req, reply) => {
+    const profile = await activeProfile(app, req);
+
+    let windowStart: Date;
+    if (req.query.start !== undefined) {
+      windowStart = new Date(req.query.start);
+      if (Number.isNaN(windowStart.getTime())) return reply.code(400).send({ error: "invalid_start" });
+    } else {
+      const now = new Date();
+      windowStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours()));
+    }
+    const hoursRaw = Number.parseInt(req.query.hours ?? "", 10);
+    const hours = Number.isFinite(hoursRaw)
+      ? Math.min(Math.max(hoursRaw, GRID_HOURS_MIN), GRID_HOURS_MAX)
+      : GRID_HOURS_DEFAULT;
+    const windowEnd = new Date(windowStart.getTime() + hours * 3_600_000);
+
+    const offsetRaw = Number.parseInt(req.query.offset ?? "", 10);
+    const offset = Number.isFinite(offsetRaw) && offsetRaw > 0 ? offsetRaw : 0;
+    const limitRaw = Number.parseInt(req.query.limit ?? "", 10);
+    const limit = Math.min(Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : GRID_LIMIT_DEFAULT, GRID_LIMIT_CAP);
+    const q = req.query.q?.trim();
+    const favoritesOnly = req.query.favorites === "true" || req.query.favorites === "1";
+
+    const favRows = profile
+      ? await app.prisma.tvFavorite.findMany({
+          where: { profileId: profile.id },
+          select: { channelId: true },
+        })
+      : [];
+    const favoriteIds = new Set(favRows.map((r) => r.channelId));
+    if (favoritesOnly && favoriteIds.size === 0) {
+      return { start: windowStart.toISOString(), hours, total: 0, offset, limit, channels: [] };
+    }
+
+    const where = {
+      hidden: false,
+      ...(req.query.country ? { country: req.query.country.trim().toUpperCase() } : {}),
+      ...(req.query.category ? { categories: { has: req.query.category.trim().toLowerCase() } } : {}),
+      ...(favoritesOnly ? { id: { in: [...favoriteIds] } } : {}),
+      ...(q ? { name: { contains: q, mode: "insensitive" as const } } : {}),
+    };
+
+    const [total, rows] = await Promise.all([
+      app.prisma.tvChannel.count({ where }),
+      app.prisma.tvChannel.findMany({
+        where,
+        orderBy: { number: "asc" },
+        skip: offset,
+        take: limit,
+        select: CHANNEL_CARD_SELECT,
+      }),
+    ]);
+
+    const channels = rows.map((c) => toCard(c, favoriteIds));
+    // ONE grouped query across the whole page — never per-channel.
+    const programmes = await loadProgrammeWindow(app.prisma, channels.map((c) => c.id), windowStart, windowEnd);
+    const decorated = channels.map((c) => ({ ...c, programmes: programmes.get(c.id) ?? [] }));
+    return { start: windowStart.toISOString(), hours, total, offset, limit, channels: decorated };
   });
 
   // GET /tv/channels/:id — detail; hidden channels are 404 everywhere.

@@ -2,7 +2,7 @@ import { useQuery, useInfiniteQuery, useMutation, useQueryClient, keepPreviousDa
 import { apiJson, apiFetch, ApiError } from "./api";
 import type {
   AuthMe, HomeRow, MediaCard, MenuConfig, MenuItem, Profile, TitleDetail,
-  TvChannelCard, TvGuideResponse, TvHome, TvProgramme,
+  TvChannelCard, TvGridResponse, TvGuideResponse, TvHome, TvProgramme,
 } from "./types";
 
 export interface SetupStatus { complete: boolean }
@@ -147,6 +147,44 @@ export function useTvGuide(params: TvGuideParams) {
   });
 }
 
+export interface TvGridParams {
+  start?: string;
+  hours?: number;
+  country?: string;
+  category?: string;
+  favorites?: boolean;
+  q?: string;
+  offset?: number;
+  limit?: number;
+}
+
+/**
+ * Windowed time×channel grid page: each visible channel's programmes over
+ * [start, start+hours). `placeholderData` keeps the previous window's data
+ * visible while Prev/Next/Now/day-chip nav loads the next one (same reason
+ * `useTvProgrammes` keeps the previous day visible on a tab switch) — the
+ * grid's query key changes on every nav click (it embeds `start`), and
+ * without this it would flash to a full loading state each time.
+ */
+export function useTvGrid(params: TvGridParams) {
+  return useQuery({
+    queryKey: ["tv-grid", params],
+    placeholderData: keepPreviousData,
+    queryFn: () => {
+      const qs = new URLSearchParams();
+      if (params.start) qs.set("start", params.start);
+      if (params.hours) qs.set("hours", String(params.hours));
+      if (params.country) qs.set("country", params.country);
+      if (params.category) qs.set("category", params.category);
+      if (params.favorites) qs.set("favorites", "1");
+      if (params.q) qs.set("q", params.q);
+      if (params.offset) qs.set("offset", String(params.offset));
+      if (params.limit) qs.set("limit", String(params.limit));
+      return apiJson<TvGridResponse>(`/tv/grid?${qs}`);
+    },
+  });
+}
+
 export function useTvChannel(id: string | undefined) {
   return useQuery({
     queryKey: ["tv-channel", id],
@@ -159,6 +197,27 @@ export function useTvFavorites() {
   return useQuery({
     queryKey: ["tv-favorites"],
     queryFn: async () => (await apiJson<{ favorites: TvChannelCard[] }>("/tv/favorites")).favorites,
+  });
+}
+
+/**
+ * Toggle a channel's favorite flag. Shared by ChannelCard and TvChannelPage
+ * so the two stay in lockstep on which views need refreshing. On success,
+ * invalidates every TV query whose payload embeds `favorite`. Errors (e.g. a
+ * network hiccup) are left for the caller to swallow — no user-facing error
+ * UI, matching the prior inline behavior.
+ */
+export function useToggleTvFavorite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ channelId, isFavorite }: { channelId: string; isFavorite: boolean }) =>
+      apiFetch(`/tv/favorites/${channelId}`, { method: isFavorite ? "DELETE" : "PUT" }),
+    onSuccess: (_res, { channelId }) => {
+      void qc.invalidateQueries({ queryKey: ["tv-home"] });
+      void qc.invalidateQueries({ queryKey: ["tv-guide"] });
+      void qc.invalidateQueries({ queryKey: ["tv-favorites"] });
+      void qc.invalidateQueries({ queryKey: ["tv-channel", channelId] });
+    },
   });
 }
 

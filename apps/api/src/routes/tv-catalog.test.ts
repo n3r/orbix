@@ -52,6 +52,7 @@ function channelRow(over: Record<string, unknown> = {}) {
 const KIDS_BLOCKED_ROUTES: { method: "GET" | "PUT" | "DELETE" | "POST"; url: string }[] = [
   { method: "GET", url: "/api/tv/home" },
   { method: "GET", url: "/api/tv/guide" },
+  { method: "GET", url: "/api/tv/grid" },
   { method: "GET", url: "/api/tv/channels/c1" },
   { method: "GET", url: "/api/tv/channels/c1/programmes" },
   { method: "GET", url: "/api/tv/favorites" },
@@ -198,6 +199,185 @@ describe("GET /tv/guide", () => {
     expect(res.statusCode).toBe(200);
     expect(captured.skip).toBe(0);
     expect(captured.take).toBe(100);
+    await app.close();
+  });
+});
+
+describe("GET /tv/grid", () => {
+  it("defaults start to now floored to the hour, hours to 3, offset 0, limit 50", async () => {
+    const app = await buildApp(env);
+    patchAuth(app);
+    emptyTvModels(app);
+    (app as any).prisma.tvChannel = { count: async () => 0, findMany: async () => [] };
+    const res = await app.inject({ method: "GET", url: "/api/tv/grid", cookies: COOKIES });
+    const now = Date.now();
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body).toMatchObject({ hours: 3, total: 0, offset: 0, limit: 50, channels: [] });
+    const start = new Date(body.start);
+    expect(start.getUTCMinutes()).toBe(0);
+    expect(start.getUTCSeconds()).toBe(0);
+    expect(start.getUTCMilliseconds()).toBe(0);
+    const age = now - start.getTime();
+    expect(age).toBeGreaterThanOrEqual(0);
+    expect(age).toBeLessThan(2 * 3_600_000); // sanity: recent, not a bogus/epoch date
+    await app.close();
+  });
+
+  it("400s an invalid start", async () => {
+    const app = await buildApp(env);
+    patchAuth(app);
+    emptyTvModels(app);
+    const res = await app.inject({ method: "GET", url: "/api/tv/grid?start=not-a-date", cookies: COOKIES });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: "invalid_start" });
+    await app.close();
+  });
+
+  it("accepts an explicit start verbatim and clamps out-of-range hours to [1,6]", async () => {
+    const app = await buildApp(env);
+    patchAuth(app);
+    emptyTvModels(app);
+    (app as any).prisma.tvChannel = { count: async () => 0, findMany: async () => [] };
+    const low = await app.inject({
+      method: "GET",
+      url: "/api/tv/grid?start=2026-07-04T12:00:00.000Z&hours=0",
+      cookies: COOKIES,
+    });
+    expect(low.json()).toMatchObject({ start: "2026-07-04T12:00:00.000Z", hours: 1 });
+    const high = await app.inject({
+      method: "GET",
+      url: "/api/tv/grid?start=2026-07-04T12:00:00.000Z&hours=99",
+      cookies: COOKIES,
+    });
+    expect(high.json()).toMatchObject({ start: "2026-07-04T12:00:00.000Z", hours: 6 });
+    await app.close();
+  });
+
+  it("defaults limit to 50, caps at 100 (lower than guide's 200), applies offset/country/category/q filters", async () => {
+    const app = await buildApp(env);
+    patchAuth(app);
+    emptyTvModels(app);
+    let captured: any = null;
+    (app as any).prisma.tvChannel = {
+      count: async () => 450,
+      findMany: async (args: any) => {
+        captured = args;
+        return [channelRow()];
+      },
+    };
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/tv/grid?limit=999&offset=40&country=ru&category=News&q=first",
+      cookies: COOKIES,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(captured.take).toBe(100); // hard cap — grid rows are heavier than guide rows
+    expect(captured.skip).toBe(40);
+    expect(captured.orderBy).toEqual({ number: "asc" });
+    expect(captured.where.hidden).toBe(false);
+    expect(captured.where.country).toBe("RU");
+    expect(captured.where.categories).toEqual({ has: "news" });
+    expect(captured.where.name).toEqual({ contains: "first", mode: "insensitive" });
+    expect(res.json()).toMatchObject({ total: 450, offset: 40, limit: 100 });
+    await app.close();
+  });
+
+  it("uses default offset=0 limit=50 when unset", async () => {
+    const app = await buildApp(env);
+    patchAuth(app);
+    emptyTvModels(app);
+    let captured: any = null;
+    (app as any).prisma.tvChannel = {
+      count: async () => 0,
+      findMany: async (args: any) => {
+        captured = args;
+        return [];
+      },
+    };
+    const res = await app.inject({ method: "GET", url: "/api/tv/grid", cookies: COOKIES });
+    expect(res.statusCode).toBe(200);
+    expect(captured.skip).toBe(0);
+    expect(captured.take).toBe(50);
+    await app.close();
+  });
+
+  it("filters to the profile's favorites when favorites=true", async () => {
+    const app = await buildApp(env);
+    patchAuth(app);
+    emptyTvModels(app);
+    let captured: any = null;
+    (app as any).prisma.tvChannel = {
+      count: async () => 1,
+      findMany: async (args: any) => {
+        captured = args;
+        return [channelRow({ id: "c9", number: 9 })];
+      },
+    };
+    (app as any).prisma.tvFavorite = { findMany: async () => [{ channelId: "c9" }] };
+    const res = await app.inject({ method: "GET", url: "/api/tv/grid?favorites=true", cookies: COOKIES });
+    expect(res.statusCode).toBe(200);
+    expect(captured.where.id).toEqual({ in: ["c9"] });
+    expect(res.json().channels[0].favorite).toBe(true);
+    await app.close();
+  });
+
+  it("short-circuits to an empty grid when favorites=true and the profile has none", async () => {
+    const app = await buildApp(env);
+    patchAuth(app);
+    emptyTvModels(app);
+    const res = await app.inject({ method: "GET", url: "/api/tv/grid?favorites=true", cookies: COOKIES });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ total: 0, channels: [] });
+    await app.close();
+  });
+
+  it("attaches each channel's programme window with exactly ONE tvProgramme query (no N+1); channels with none get []", async () => {
+    const app = await buildApp(env);
+    patchAuth(app);
+    emptyTvModels(app);
+    (app as any).prisma.tvChannel = {
+      count: async () => 2,
+      findMany: async () => [
+        channelRow({ id: "a", number: 1, name: "One", country: "RU" }),
+        channelRow({ id: "b", number: 2, name: "Two", country: "DE" }),
+      ],
+    };
+    const programmeCalls: unknown[] = [];
+    (app as any).prisma.tvProgramme = {
+      findMany: async (args: unknown) => {
+        programmeCalls.push(args);
+        return [
+          {
+            id: "p1",
+            channelId: "a",
+            title: "News",
+            start: new Date("2026-07-04T18:00:00Z"),
+            stop: new Date("2026-07-04T19:00:00Z"),
+            category: "news",
+          },
+        ];
+      },
+    };
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/tv/grid?start=2026-07-04T18:00:00.000Z",
+      cookies: COOKIES,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(programmeCalls).toHaveLength(1); // N+1 ban
+    const body = res.json();
+    expect(body.start).toBe("2026-07-04T18:00:00.000Z");
+    const a = body.channels.find((c: any) => c.id === "a");
+    const b = body.channels.find((c: any) => c.id === "b");
+    expect(a.programmes).toEqual([
+      { id: "p1", title: "News", start: "2026-07-04T18:00:00.000Z", stop: "2026-07-04T19:00:00.000Z", category: "news" },
+    ]);
+    expect(b.programmes).toEqual([]); // no rows for b -> graceful empty, not omitted
+    // card fields + programmes only — no raw stream/url leak
+    expect(Object.keys(a).sort()).toEqual(
+      ["id", "number", "name", "country", "categories", "quality", "logo", "healthy", "favorite", "programmes"].sort(),
+    );
     await app.close();
   });
 });

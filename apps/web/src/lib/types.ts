@@ -201,6 +201,34 @@ export interface TvGuideResponse {
   channels: TvChannelCard[];
 }
 
+/** One programme in a TvGridChannel's time window (grid view — distinct from now/next). */
+export interface TvGridProgramme {
+  id: string;
+  title: string;
+  start: string;
+  stop: string;
+  category: string | null;
+}
+
+/**
+ * One row of the time×channel grid: the same card fields as TvChannelCard
+ * MINUS now/next (the grid shows full-window `programmes` instead — /tv/grid
+ * never decorates with now/next) PLUS its programme window.
+ */
+export interface TvGridChannel extends Omit<TvChannelCard, "now" | "next"> {
+  programmes: TvGridProgramme[];
+}
+
+/** Windowed multi-channel programme grid (offset paging over channels; time-windowed programmes). */
+export interface TvGridResponse {
+  start: string;
+  hours: number;
+  total: number;
+  offset: number;
+  limit: number;
+  channels: TvGridChannel[];
+}
+
 export interface TvPlaySource {
   streamId: string;
   src: string; // "/api/tv/proxy/<streamId>/index.m3u8"

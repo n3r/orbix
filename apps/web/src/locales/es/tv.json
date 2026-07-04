@@ -14,6 +14,38 @@
   "badges": {
     "offline": "Sin señal"
   },
+  "categories": {
+    "auto": "Motor",
+    "animation": "Animación",
+    "business": "Negocios",
+    "classic": "Clásicos",
+    "comedy": "Comedia",
+    "cooking": "Cocina",
+    "culture": "Cultura",
+    "documentary": "Documental",
+    "education": "Educación",
+    "entertainment": "Entretenimiento",
+    "family": "Familiar",
+    "general": "General",
+    "interactive": "Interactivo",
+    "kids": "Infantil",
+    "legislative": "Parlamento",
+    "lifestyle": "Estilo de vida",
+    "movies": "Películas",
+    "music": "Música",
+    "news": "Noticias",
+    "outdoor": "Aire libre",
+    "public": "Pública",
+    "relax": "Relax",
+    "religious": "Religioso",
+    "series": "Series",
+    "science": "Ciencia",
+    "shop": "Televenta",
+    "sports": "Deportes",
+    "travel": "Viajes",
+    "weather": "Tiempo",
+    "xxx": "Adultos"
+  },
   "card": {
     "play": "Ver {{name}}",
     "favorite": "Añadir a favoritos",
@@ -21,6 +53,8 @@
   },
   "guidePage": {
     "title": "Guía de TV",
+    "viewList": "Lista",
+    "viewGrid": "Cuadrícula",
     "searchPlaceholder": "Buscar canales",
     "all": "Todos",
     "favorites": "Favoritos",
@@ -31,6 +65,15 @@
     "schedule": "Detalles del canal",
     "noEpg": "Sin datos de guía",
     "next": "Después"
+  },
+  "grid": {
+    "now": "Ahora",
+    "prev": "Anterior",
+    "next": "Siguiente",
+    "today": "Hoy",
+    "tomorrow": "Mañana",
+    "showingOf": "Mostrando {{shown}} de {{total}} — acota el filtro",
+    "playProgramme": "Ver {{title}} en {{channel}}"
   },
   "channel": {
     "number": "Canal {{number}}",

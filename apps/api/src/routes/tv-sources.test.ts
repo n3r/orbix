@@ -136,8 +136,8 @@ describe("POST /tv/sources", () => {
     // Country-change hook seeds default EPG sources — stub tvEpgSource so it
     // doesn't fall through to the real Prisma client.
     (app as any).prisma.tvEpgSource = {
-      findFirst: async () => null,
-      create: async () => ({ id: "e" }),
+      findMany: async () => [],
+      upsert: async () => ({ id: "e" }),
     };
     const res = await app.inject({
       method: "POST", url: "/api/tv/sources", cookies: COOKIES,
@@ -161,8 +161,7 @@ describe("POST /tv/sources", () => {
     };
     // The seeding path blows up — the route must swallow it, not 500.
     (app as any).prisma.tvEpgSource = {
-      findFirst: async () => null,
-      create: async () => {
+      findMany: async () => {
         throw new Error("epg source unreachable");
       },
     };
@@ -216,12 +215,12 @@ describe("PATCH /tv/sources/:id", () => {
     (app as any).prisma.tvSource = {
       update: async (args: any) => ({ id: "src1", kind: "iptv-org", ...args.data }),
     };
-    const epgCreates: { url: string }[] = [];
+    const epgUpserts: { url: string }[] = [];
     (app as any).prisma.tvEpgSource = {
-      findFirst: async () => null,
-      create: async ({ data }: { data: { url: string } }) => {
-        epgCreates.push(data);
-        return { id: "e1", ...data };
+      findMany: async () => [], // nothing pre-existing
+      upsert: async ({ create }: { create: { url: string } }) => {
+        epgUpserts.push(create);
+        return { id: "e1", ...create };
       },
     };
     const res = await app.inject({
@@ -229,7 +228,7 @@ describe("PATCH /tv/sources/:id", () => {
       payload: { countries: ["RU", "DE"] },
     });
     expect(res.statusCode).toBeLessThan(300);
-    expect(epgCreates.map((c) => c.url).sort()).toEqual(
+    expect(epgUpserts.map((c) => c.url).sort()).toEqual(
       [
         "https://epg.iptvx.one/EPG_LITE.xml.gz",
         "https://epgshare01.online/epgshare01/epg_ripper_DE1.xml.gz",

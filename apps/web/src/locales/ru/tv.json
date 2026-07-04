@@ -14,6 +14,38 @@
   "badges": {
     "offline": "Нет сигнала"
   },
+  "categories": {
+    "auto": "Авто",
+    "animation": "Мультфильмы",
+    "business": "Бизнес",
+    "classic": "Классика",
+    "comedy": "Комедия",
+    "cooking": "Кулинария",
+    "culture": "Культура",
+    "documentary": "Документальное",
+    "education": "Образование",
+    "entertainment": "Развлечения",
+    "family": "Семейное",
+    "general": "Общее",
+    "interactive": "Интерактив",
+    "kids": "Детское",
+    "legislative": "Парламент",
+    "lifestyle": "Стиль жизни",
+    "movies": "Кино",
+    "music": "Музыка",
+    "news": "Новости",
+    "outdoor": "Активный отдых",
+    "public": "Общественное",
+    "relax": "Релакс",
+    "religious": "Религиозное",
+    "series": "Сериалы",
+    "science": "Наука",
+    "shop": "Телемагазин",
+    "sports": "Спорт",
+    "travel": "Путешествия",
+    "weather": "Погода",
+    "xxx": "Для взрослых"
+  },
   "card": {
     "play": "Смотреть «{{name}}»",
     "favorite": "Добавить в избранное",
@@ -21,6 +53,8 @@
   },
   "guidePage": {
     "title": "Телепрограмма",
+    "viewList": "Список",
+    "viewGrid": "Сетка",
     "searchPlaceholder": "Поиск каналов",
     "all": "Все",
     "favorites": "Избранное",
@@ -33,6 +67,15 @@
     "schedule": "Сведения о канале",
     "noEpg": "Нет данных телепрограммы",
     "next": "Далее"
+  },
+  "grid": {
+    "now": "Сейчас",
+    "prev": "Назад",
+    "next": "Вперёд",
+    "today": "Сегодня",
+    "tomorrow": "Завтра",
+    "showingOf": "Показано {{shown}} из {{total}} — уточните фильтр",
+    "playProgramme": "Смотреть «{{title}}» на «{{channel}}»"
   },
   "channel": {
     "number": "Канал {{number}}",

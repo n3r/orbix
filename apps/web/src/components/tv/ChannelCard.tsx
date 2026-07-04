@@ -1,12 +1,10 @@
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@orbix/ui";
-import { apiFetch } from "@/lib/api";
+import { useToggleTvFavorite } from "@/lib/queries";
 import type { TvChannelCard } from "@/lib/types";
-import { channelHue, channelInitials } from "@/lib/tv";
 import { HeartIcon } from "@/components/shell/icons";
 import { NowProgressBar } from "./NowProgressBar";
+import { ChannelLogo } from "./ChannelLogo";
 
 /**
  * 16:9 channel tile: cached logo centered on a dark surface (deterministic
@@ -24,22 +22,7 @@ export default function ChannelCard({
   className?: string;
 }) {
   const { t } = useTranslation();
-  const queryClient = useQueryClient();
-  const [imgFailed, setImgFailed] = useState(false);
-
-  const toggleFavorite = async () => {
-    try {
-      await apiFetch(`/tv/favorites/${channel.id}`, { method: channel.favorite ? "DELETE" : "PUT" });
-    } catch {
-      return; // network hiccup — leave state untouched
-    }
-    void queryClient.invalidateQueries({ queryKey: ["tv-home"] });
-    void queryClient.invalidateQueries({ queryKey: ["tv-guide"] });
-    void queryClient.invalidateQueries({ queryKey: ["tv-favorites"] });
-    void queryClient.invalidateQueries({ queryKey: ["tv-channel", channel.id] });
-  };
-
-  const hue = channelHue(channel.id);
+  const toggleFavorite = useToggleTvFavorite();
 
   return (
     <div
@@ -54,27 +37,16 @@ export default function ChannelCard({
           status dot (a later sibling below) stays at full strength so the
           reason for the dimming is still legible. */}
       <div className={cn(!channel.healthy && "opacity-50")}>
-        <div className="grid aspect-video w-full place-items-center">
-          {channel.logo && !imgFailed ? (
-            <img
-              src={channel.logo}
-              alt=""
-              loading="lazy"
-              className="max-h-[55%] max-w-[70%] object-contain"
-              onError={() => setImgFailed(true)}
-            />
-          ) : (
-            <div
-              aria-hidden
-              className="grid h-full w-full place-items-center text-2xl font-semibold uppercase tracking-wide text-white/90"
-              style={{
-                backgroundImage: `linear-gradient(135deg, hsl(${hue} 45% 34%), hsl(${hue} 45% 18%))`,
-              }}
-            >
-              {channelInitials(channel.name)}
-            </div>
-          )}
-        </div>
+        <ChannelLogo
+          logo={channel.logo}
+          name={channel.name}
+          channelId={channel.id}
+          className="aspect-video w-full"
+          imgClassName="max-h-[55%] max-w-[70%]"
+          monogramClassName="text-2xl font-semibold uppercase tracking-wide text-white/90"
+          gradient
+          loading="lazy"
+        />
 
         <div className="absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-2.5 pb-2 pt-6">
           <div className="flex items-center gap-1.5">
@@ -117,7 +89,7 @@ export default function ChannelCard({
       {/* Favorite heart — painted above the play hit-area (later sibling). */}
       <button
         type="button"
-        onClick={() => void toggleFavorite()}
+        onClick={() => toggleFavorite.mutate({ channelId: channel.id, isFavorite: channel.favorite })}
         aria-label={channel.favorite ? t("tv:card.unfavorite") : t("tv:card.favorite")}
         className={cn(
           "absolute right-1.5 top-1.5 grid h-7 w-7 place-items-center rounded-full bg-black/50 text-white",

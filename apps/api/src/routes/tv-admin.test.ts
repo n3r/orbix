@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildApp } from "../app";
+import { Prisma } from "@orbix/db";
 import type { Env } from "@orbix/config";
 
 const env: Env = {
@@ -34,6 +35,45 @@ describe("EPG sources CRUD", () => {
     expect((await app.inject({ method: "POST", url: "/api/tv/epg-sources", cookies: { orbix_session: "s1" }, payload: { name: "bad", url: "ftp://nope" } })).statusCode).toBe(400);
     expect((await app.inject({ method: "PATCH", url: "/api/tv/epg-sources/e1", cookies: { orbix_session: "s1" }, payload: { enabled: false, offsetMin: 60 } })).statusCode).toBe(200);
     expect((await app.inject({ method: "DELETE", url: "/api/tv/epg-sources/e1", cookies: { orbix_session: "s1" } })).statusCode).toBe(204);
+    await app.close();
+  });
+
+  it("409s when the DB unique index rejects a duplicate url (P2002)", async () => {
+    const app = await adminApp();
+    (app as any).prisma.tvEpgSource = {
+      create: async () => {
+        throw new Prisma.PrismaClientKnownRequestError("unique violation", {
+          code: "P2002",
+          clientVersion: "x",
+        });
+      },
+    };
+    const res = await app.inject({
+      method: "POST", url: "/api/tv/epg-sources", cookies: { orbix_session: "s1" },
+      payload: { name: "dup", url: "https://epg.iptvx.one/EPG_LITE.xml.gz" },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({ error: "epg_source_exists" });
+    await app.close();
+  });
+
+  it("PATCH /tv/epg-sources/:id 409s when updating url to a duplicate", async () => {
+    const app = await adminApp();
+    (app as any).prisma.tvEpgSource = {
+      findUnique: async () => ({ id: "e1", name: "existing", url: "https://epg.old.xml", enabled: true, offsetMin: 0, status: "ok", statusMessage: null, lastSyncAt: null, createdAt: new Date() }),
+      update: async () => {
+        throw new Prisma.PrismaClientKnownRequestError("unique violation", {
+          code: "P2002",
+          clientVersion: "x",
+        });
+      },
+    };
+    const res = await app.inject({
+      method: "PATCH", url: "/api/tv/epg-sources/e1", cookies: { orbix_session: "s1" },
+      payload: { url: "https://epg.iptvx.one/EPG_LITE.xml.gz" },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({ error: "epg_source_exists" });
     await app.close();
   });
 
