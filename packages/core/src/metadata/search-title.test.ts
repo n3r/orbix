@@ -242,3 +242,50 @@ describe("buildQueryLadder", () => {
     expect(ladder.every((a) => a.year === undefined)).toBe(true);
   });
 });
+
+describe("cartoon/documentary noise (library audit)", () => {
+  it("cuts at bare resolutions and upscale tags", () => {
+    expect(cleanSearchTitle("Darkwing Duck 1080 Upscale")).toBe("Darkwing Duck");
+    expect(cleanSearchTitle("Утиные истории DVD AI Upscale")).toBe("Утиные истории");
+  });
+
+  it("keeps titles whose number is part of the name", () => {
+    expect(cleanSearchTitle("Blade Runner 2049")).toBe("Blade Runner 2049");
+    expect(cleanSearchTitle("Death Race 2000")).toBe("Death Race 2000");
+  });
+
+  it("cuts at SAT/IPTV/TV rip tags", () => {
+    expect(cleanSearchTitle("Megafactories Supercars Lexus LFA SATRip by Alex Smit")).toBe(
+      "Megafactories Supercars Lexus LFA",
+    );
+    expect(cleanSearchTitle("Дуэль титанов II IPTVRip")).toBe("Дуэль титанов II");
+  });
+
+  it("strips a leading [Group] release tag", () => {
+    expect(cleanSearchTitle("[Beatrice-Raws] Tonari no Totoro")).toBe("Tonari no Totoro");
+    expect(cleanSearchTitle("[DS27]Zootopia+")).toBe("Zootopia+");
+  });
+
+  it("never empties a fully bracketed title ([REC])", () => {
+    expect(cleanSearchTitle("[REC]")).toBe("REC");
+  });
+
+  it("drops .ru / piracy-TLD domain brackets", () => {
+    expect(cleanSearchTitle("Korolev-Braun [torrents.ru]")).toBe("Korolev-Braun");
+    expect(cleanSearchTitle("Exo-Squad [cartoons.flybb.ru]")).toBe("Exo-Squad");
+  });
+
+  it("offers a channel-prefix-free ladder attempt (BBC / Культура)", () => {
+    const attempts = buildQueryLadder({ title: "BBC Космос Руководство для начинающих" });
+    expect(attempts.some((a) => a.query === "Космос Руководство для начинающих")).toBe(true);
+    const ru = buildQueryLadder({ title: "Культура Тайна Млечного Пути" });
+    expect(ru.some((a) => a.query === "Тайна Млечного Пути")).toBe(true);
+  });
+
+  it("does not invent a channel attempt for titles that merely start with a channel-like word", () => {
+    // "Discovery" as the movie's actual first word with no separator context stays intact.
+    const attempts = buildQueryLadder({ title: "Discovery" });
+    expect(attempts[0]!.query).toBe("Discovery");
+    expect(attempts).toHaveLength(1);
+  });
+});

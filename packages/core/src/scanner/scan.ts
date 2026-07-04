@@ -1,4 +1,5 @@
 import { parseMediaPath } from "./parse";
+import { buildScanContext } from "./scan-context";
 import type { MediaFileTechnical } from "./probe";
 
 export interface ScanResult {
@@ -25,6 +26,11 @@ export async function scanSource(
   deps: ScanDeps
 ): Promise<ScanResult> {
   const files = await deps.listFiles(opts.root);
+  // Sibling context: ordinal-run/collection detection needs the whole listing.
+  const ctx = buildScanContext(
+    opts.root,
+    files.map((f) => f.path),
+  );
 
   let added = 0;
   let updated = 0;
@@ -47,7 +53,7 @@ export async function scanSource(
       continue;
     }
 
-    const parsed = parseMediaPath(file.path);
+    const parsed = parseMediaPath(file.path, ctx);
     // Extras/trailers/samples: not library items — don't probe, don't ingest.
     if (parsed.skip) {
       skipped++;

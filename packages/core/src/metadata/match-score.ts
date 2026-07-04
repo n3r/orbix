@@ -25,11 +25,20 @@ export const TITLE_WEAK = 0.55;
  * filenames), lowercase, and reduce runs of non-alphanumerics to single
  * spaces. Cyrillic/CJK letters are not decomposed, so they survive intact.
  */
+// Cyrillic lowercase letters whose glyph is identical to a Latin one. Release
+// names mix scripts freely ("\u041c\u0438\u043d\u044co\u043d\u044b" with a Latin o, "Lil\u043e" with a Cyrillic
+// \u043e) \u2014 folding the twins to Latin makes both sides of a comparison agree.
+// Only exact visual twins are folded; \u0432/\u0431/\u0438 etc. stay Cyrillic.
+const HOMOGLYPHS: Record<string, string> = {
+  \u0430: "a", \u0435: "e", \u043e: "o", \u0440: "p", \u0441: "c", \u0443: "y", \u0445: "x",
+};
+
 export function normalizeForMatch(s: string): string {
   return s
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
+    .replace(/[\u0430\u0435\u043e\u0440\u0441\u0443\u0445]/g, (ch) => HOMOGLYPHS[ch]!)
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim();
 }

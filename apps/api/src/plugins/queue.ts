@@ -55,7 +55,13 @@ export const scanDoneCache = new Map<string, Record<string, unknown>>();
 
 // ── listFiles walker ─────────────────────────────────────────────────────────
 
-const VIDEO_EXTS = new Set([".mkv", ".mp4", ".avi", ".mov", ".m4v", ".webm"]);
+// .ts/.m2ts are MPEG-TS broadcast/Blu-ray captures — common for documentary
+// HDTV rips; ffprobe/ffmpeg handle them natively. BDMV disc trees that contain
+// .m2ts fragments are skipped by the parser (DISC_STRUCTURE_RE).
+const VIDEO_EXTS = new Set([
+  ".mkv", ".mp4", ".avi", ".mov", ".m4v", ".webm",
+  ".ts", ".m2ts", ".mts", ".mpg", ".mpeg", ".wmv",
+]);
 
 async function listFiles(
   root: string,

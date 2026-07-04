@@ -14,8 +14,11 @@ describe("normalizeForMatch", () => {
     expect(normalizeForMatch("Léon (Director's Cut)")).toBe("leon director s cut");
   });
 
-  it("keeps Cyrillic script intact", () => {
-    expect(normalizeForMatch("Горько! 2")).toBe("горько 2");
+  it("keeps Cyrillic comparable to itself (homoglyph twins fold to Latin)", () => {
+    // The output alphabet folds visual twins (о→o, р→p …); what matters is
+    // that any two spellings of the same Cyrillic word normalize identically.
+    expect(normalizeForMatch("Горько! 2")).toBe(normalizeForMatch("горько 2"));
+    expect(normalizeForMatch("Горько! 2")).toBe("гopькo 2");
   });
 
   it("folds fullwidth characters (common in CJK filenames)", () => {
@@ -186,5 +189,21 @@ describe("degenerate numeric queries", () => {
   it("leaves longer numeric titles alone (1917, 2012)", () => {
     const m1917 = { title: "1917", year: 2019, voteCount: 9000 };
     expect(isAcceptable("1917", m1917, undefined, true)).toBe(true);
+  });
+});
+
+describe("Latin/Cyrillic homoglyph folding", () => {
+  it("treats a mixed-script title as equal to its pure-Cyrillic form", () => {
+    // "Миньoны" from the NAS carries a LATIN "o" — visually identical.
+    expect(normalizeForMatch("Миньoны")).toBe(normalizeForMatch("Миньоны"));
+    expect(titleSimilarity("Миньoны", { title: "Миньоны" })).toBe(1);
+  });
+
+  it("folds the common homoglyph set both ways", () => {
+    expect(normalizeForMatch("Lilо and Stitch")).toBe(normalizeForMatch("Lilo and Stitch"));
+  });
+
+  it("does not conflate genuinely different Cyrillic words with Latin ones", () => {
+    expect(normalizeForMatch("щит")).not.toBe(normalizeForMatch("shield"));
   });
 });

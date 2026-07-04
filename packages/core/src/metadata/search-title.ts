@@ -36,21 +36,24 @@ export interface SearchAttempt {
 const NOISE_WORDS = new Set([
   // source / rip
   "REMUX", "BDREMUX", "BLURAY", "BDRIP", "BRRIP", "WEBRIP", "WEBDL", "HDTV",
-  "DVDRIP", "HDRIP", "DVDSCR", "ISO", "BDMV",
+  "DVDRIP", "HDRIP", "DVDSCR", "ISO", "BDMV", "DVD", "HDTVRIP",
+  "SATRIP", "IPTVRIP", "TVRIP", "DVBRIP", "VHSRIP", "DCPRIP",
   "TC", "TS", "TELECINE", "TELESYNC", "HDTC", "HDCAM", "CAMRIP", "SCREENER",
   // resolution / quality
-  "UHD", "HDR", "HDR10", "DV", "SDR", "4K", "2K",
+  "UHD", "HDR", "HDR10", "DV", "SDR", "4K", "2K", "HD",
   // codec
   "X264", "X265", "HEVC", "AVC", "MPEG4", "XVID", "DIVX", "VC1",
   // audio
   "DTS", "DTSHD", "AC3", "EAC3", "DDP", "DD", "AAC", "FLAC", "TRUEHD", "ATMOS", "MP3",
   // edition
   "UNRATED", "UNCUT", "REMASTERED", "REMASTER", "EXTENDED", "THEATRICAL", "IMAX",
-  "DIRECTORS", "PROPER", "REPACK", "RERIP", "LIMITED",
+  "DIRECTORS", "PROPER", "REPACK", "RERIP", "LIMITED", "UPSCALE", "UPSCALED",
 ]);
 
 const NOISE_RE: RegExp[] = [
   /^\d{3,4}P$/, // 720P 1080P 2160P
+  /^\d{3,4}I$/, // 1080I HDTV interlaced tags
+  /^(?:480|576|720|1080|2160|4320)$/, // bare resolutions ("Darkwing Duck 1080 Upscale")
   /^X26[45]$/,
   /^H26[45]$/,
   /^DD[P+]?\d?\d?$/, // DD DDP DD5 DD51
@@ -60,7 +63,7 @@ const NOISE_RE: RegExp[] = [
 
 // Bracket segments whose contents look like a tracker / release-site tag.
 const TRACKER_WORDS = /(?:rutracker|nnmclub|kinozal|rarbg|hdclub|rutor|torrent)/i;
-const DOMAIN_RE = /[\w-]+\.(?:org|com|net|to|se|me|tv|info)\b/i;
+const DOMAIN_RE = /[\w-]+\.(?:org|com|net|to|se|me|tv|info|ru|su|ua|by|ws|cc|io|club|fun|top|pw|biz)\b/i;
 const BRACKET_SEGMENT_RE = /[[({][^[\]{}()]*[)\]}]/g;
 
 function noiseKey(token: string): string {
@@ -84,8 +87,14 @@ function stripNoise(raw: string): string {
   // TMDB's search index only matches the composed form.
   const composed = raw.normalize("NFC");
 
+  // 0.5. A LEADING bracket group is a release tag ("[Beatrice-Raws] Tonari no
+  // Totoro", "[DS27]Zootopia+") — but only when a title follows (a fully
+  // bracketed name like "[REC]" survives) and the tag is whitespace-free (a
+  // bracket-wrapped TITLE, "[Taxi 1998] [tags]", contains spaces).
+  const untagged = composed.replace(/^\s*\[[^\]\s]*\][\s._-]*(?=\S)/, "");
+
   // 1. Drop bracket segments that are clearly tracker/site tags.
-  const debracketed = composed.replace(BRACKET_SEGMENT_RE, (seg) =>
+  const debracketed = untagged.replace(BRACKET_SEGMENT_RE, (seg) =>
     DOMAIN_RE.test(seg) || TRACKER_WORDS.test(seg) ? " " : seg,
   );
 
@@ -151,6 +160,10 @@ function parentheticalVariants(title: string): string[] {
   }
   return variants;
 }
+
+// A leading broadcaster name with a separator and a real title after it.
+const CHANNEL_PREFIX_RE =
+  /^(?:bbc|discovery(?:[\s.]+(?:world|channel|science|civilization))?|national[\s.]+geographic|nat[\s.]?geo|ngc|history(?:[\s.]+channel)?|animal[\s.]+planet|pbs|nova|культура|первый[\s.]+канал|нтв|россия)[\s.:\-—_]+(?=\S)/i;
 
 function firstNTokens(s: string, n: number): string {
   return s.split(/\s+/).filter(Boolean).slice(0, n).join(" ");
@@ -252,6 +265,20 @@ export function buildQueryLadder(input: { title: string; year?: number }): Searc
     const lang = languageForQuery(variant);
     push(variant, year, lang);
     push(variant, undefined, lang);
+  }
+
+  // TV-channel prefix ("BBC. Космос…", "Discovery World-Return…",
+  // "Культура_Тайна Млечного Пути") — documentaries are habitually filed
+  // under their broadcaster. The prefix-free name is a separate attempt, not
+  // a replacement: a title legitimately starting with the word keeps rung 1.
+  const chan = CHANNEL_PREFIX_RE.exec(body);
+  if (chan) {
+    const rest = body.slice(chan[0].length).trim();
+    if (rest) {
+      const lang = languageForQuery(rest);
+      push(rest, year, lang);
+      push(rest, undefined, lang);
+    }
   }
 
   // Bilingual names: each script run is its own query in its own language.
