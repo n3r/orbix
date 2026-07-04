@@ -289,3 +289,35 @@ describe("cartoon/documentary noise (library audit)", () => {
     expect(attempts).toHaveLength(1);
   });
 });
+
+describe("mixed-script and spelling-variant rescue rungs", () => {
+  it("repairs Latin homoglyphs inside a Cyrillic word (Миньoны)", () => {
+    const attempts = buildQueryLadder({ title: "Миньoны", year: 2015 });
+    expect(attempts.some((a) => a.query === "Миньоны")).toBe(true);
+  });
+
+  it("repairs Cyrillic homoglyphs inside a Latin word (Lilо)", () => {
+    const attempts = buildQueryLadder({ title: "Lilо and Stitch 2 Stitch Has a Glitch", year: 2005 });
+    expect(attempts.some((a) => a.query === "Lilo and Stitch 2 Stitch Has a Glitch")).toBe(true);
+  });
+
+  it("adds no repair attempt for clean single-script titles", () => {
+    const attempts = buildQueryLadder({ title: "Миньоны", year: 2015 });
+    expect(attempts.filter((a) => a.query === "Миньоны" && a.yearFiltered)).toHaveLength(1);
+  });
+
+  it("consumes quality tokens after a channel prefix (BBC HD Supervolcano)", () => {
+    const attempts = buildQueryLadder({ title: "BBC HD Supervolcano" });
+    expect(attempts.some((a) => a.query === "Supervolcano")).toBe(true);
+  });
+
+  it("tries the joined spelling of a hyphenated name (Exo-Squad → ExoSquad)", () => {
+    const attempts = buildQueryLadder({ title: "Exo-Squad" });
+    expect(attempts.some((a) => a.query === "ExoSquad")).toBe(true);
+  });
+
+  it("does not join hyphens in multi-word titles beyond the hyphenated word", () => {
+    const attempts = buildQueryLadder({ title: "Spider-Man Homecoming" });
+    expect(attempts.some((a) => a.query === "SpiderMan Homecoming")).toBe(true);
+  });
+});

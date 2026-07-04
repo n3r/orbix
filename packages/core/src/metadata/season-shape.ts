@@ -63,12 +63,16 @@ export function seasonShapeScore(local: LocalSeasonShape[], provider: ProviderSe
  * order; a failed fetch neither wins nor blocks the others, and an equal
  * score keeps the earlier (better-ranked) finalist. Returns undefined when
  * every fetch failed — the caller falls back to its own ranking.
+ *
+ * Five, not three: namesake pileups are real — "Ранчо" surfaces The Ranch
+ * (2016), The Ranch (2012) and The Ranch (2004) above Le Ranch (2012), and
+ * only the fourth candidate's shape explains the files.
  */
 export async function pickBestByShape<T>(
   finalists: T[],
   local: LocalSeasonShape[],
   fetchShape: (finalist: T) => Promise<ProviderSeasonShape[]>,
-  limit = 3,
+  limit = 5,
 ): Promise<T | undefined> {
   let best: { finalist: T; shape: number } | undefined;
   for (const f of finalists.slice(0, limit)) {

@@ -139,6 +139,20 @@ export function cleanSearchTitle(raw: string): string {
 }
 
 /**
+ * Ladder-dedup key: case/punctuation-insensitive but WITHOUT homoglyph
+ * folding — a homoglyph-repaired query must survive as its own attempt (the
+ * provider's index is what needs the exact spelling), while "Exo-Squad" and
+ * "Exo Squad" still collapse into one search.
+ */
+export function queryKey(q: string): string {
+  return q
+    .normalize("NFC")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+/**
  * Alternative queries derived from parenthetical segments. A parenthesized part
  * is usually an original/alt title (`(eXistenZ)`, `(The Possession)`) or a
  * director/edition note (`(авторская версия)`) — so both the outside text and
@@ -164,6 +178,36 @@ function parentheticalVariants(title: string): string[] {
 // A leading broadcaster name with a separator and a real title after it.
 const CHANNEL_PREFIX_RE =
   /^(?:bbc|discovery(?:[\s.]+(?:world|channel|science|civilization))?|national[\s.]+geographic|nat[\s.]?geo|ngc|history(?:[\s.]+channel)?|animal[\s.]+planet|pbs|nova|культура|первый[\s.]+канал|нтв|россия)[\s.:\-—_]+(?=\S)/i;
+
+// Quality tokens that ride along with a channel prefix ("BBC HD Supervolcano").
+const CHANNEL_QUALITY_RE = /^(?:(?:hd|uhd|sd|4k)[\s.:\-—_]+)+/i;
+
+// ── Mixed-script homoglyph repair ────────────────────────────────────────────
+// Release names splice visually identical letters across scripts ("Миньoны"
+// with a Latin o, "Lilо" with a Cyrillic о). Provider search indexes do NOT
+// fold homoglyphs, so the polluted spelling returns nothing — repair each
+// mixed word toward its majority script and search that too.
+const LAT_TO_CYR: Record<string, string> = {
+  a: "а", e: "е", o: "о", p: "р", c: "с", y: "у", x: "х",
+  A: "А", E: "Е", O: "О", P: "Р", C: "С", Y: "У", X: "Х", B: "В", H: "Н", K: "К", M: "М", T: "Т",
+};
+const CYR_TO_LAT: Record<string, string> = {
+  а: "a", е: "e", о: "o", р: "p", с: "c", у: "y", х: "x",
+  А: "A", Е: "E", О: "O", Р: "P", С: "C", У: "Y", Х: "X", В: "B", Н: "H", К: "K", М: "M", Т: "T",
+};
+
+function repairHomoglyphs(s: string): string {
+  return s
+    .split(/(\s+)/)
+    .map((word) => {
+      const cyr = (word.match(/\p{Script=Cyrillic}/gu) ?? []).length;
+      const lat = (word.match(/\p{Script=Latin}/gu) ?? []).length;
+      if (!cyr || !lat) return word;
+      const map = cyr >= lat ? LAT_TO_CYR : CYR_TO_LAT;
+      return [...word].map((ch) => map[ch] ?? ch).join("");
+    })
+    .join("");
+}
 
 function firstNTokens(s: string, n: number): string {
   return s.split(/\s+/).filter(Boolean).slice(0, n).join(" ");
@@ -260,6 +304,23 @@ export function buildQueryLadder(input: { title: string; year?: number }): Searc
   push(body, year, bodyLang);
   push(body, undefined, bodyLang);
 
+  // Mixed-script pollution: the repaired spelling is the FAITHFUL name.
+  const repaired = repairHomoglyphs(body);
+  if (repaired !== body) {
+    const lang = languageForQuery(repaired);
+    push(repaired, year, lang);
+    push(repaired, undefined, lang);
+  }
+
+  // A hyphenated single name often lives unhyphenated in provider indexes
+  // ("Exo-Squad" → "Exosquad"). The joined spelling is faithful, not derived —
+  // dedup already collapses the space-separated reading.
+  const joined = body.replace(/(?<=\p{L})-(?=\p{L})/gu, "");
+  if (joined !== body) {
+    push(joined, year, bodyLang);
+    push(joined, undefined, bodyLang);
+  }
+
   // Parenthetical alternatives (original titles, director/edition notes).
   for (const variant of parentheticalVariants(title)) {
     const lang = languageForQuery(variant);
@@ -271,9 +332,12 @@ export function buildQueryLadder(input: { title: string; year?: number }): Searc
   // "Культура_Тайна Млечного Пути") — documentaries are habitually filed
   // under their broadcaster. The prefix-free name is a separate attempt, not
   // a replacement: a title legitimately starting with the word keeps rung 1.
-  const chan = CHANNEL_PREFIX_RE.exec(body);
+  // Runs against the RAW title: the noise cut may already have consumed
+  // everything after the channel word ("BBC HD Supervolcano" cleans to "BBC").
+  const rawSpaced = title.replace(/[._]+/g, " ");
+  const chan = CHANNEL_PREFIX_RE.exec(rawSpaced);
   if (chan) {
-    const rest = body.slice(chan[0].length).trim();
+    const rest = stripNoise(rawSpaced.slice(chan[0].length).replace(CHANNEL_QUALITY_RE, ""));
     if (rest) {
       const lang = languageForQuery(rest);
       push(rest, year, lang);
@@ -336,7 +400,7 @@ export function buildQueryLadder(input: { title: string; year?: number }): Searc
   const seen = new Set<string>();
   const ladder: SearchAttempt[] = [];
   for (const attempt of raw) {
-    const key = `${normalizeForMatch(attempt.query)}|${attempt.year ?? ""}|${attempt.language ?? ""}`;
+    const key = `${queryKey(attempt.query)}|${attempt.year ?? ""}|${attempt.language ?? ""}`;
     if (seen.has(key)) continue;
     seen.add(key);
     ladder.push(attempt);
