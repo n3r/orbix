@@ -20,19 +20,34 @@ export const DEFAULT_EPG_SOURCES: { countries: string[]; name: string; url: stri
 /**
  * Upsert-by-url the default EPG sources covering the given country codes.
  * Never deletes or disables anything the admin already configured.
- * Returns the number of rows created.
+ *
+ * `url` is a DB-level unique constraint (`TvEpgSource_url_key`), so each
+ * upsert is create-if-absent / no-op if present — idempotent and
+ * concurrency-safe with no findFirst-then-create TOCTOU window.
+ *
+ * Returns the number of rows newly created, determined by a single
+ * `findMany` pre-check before upserting. Under a concurrent double-seed race
+ * this count can be an approximation (two callers may both see a url as
+ * "new"), but the DB rows themselves are always correctly deduplicated
+ * regardless of what this count reports.
  */
 export async function seedEpgSourcesForCountries(
   prisma: PrismaClient,
   countries: string[],
 ): Promise<number> {
   const wanted = DEFAULT_EPG_SOURCES.filter((s) => s.countries.some((c) => countries.includes(c)));
-  let created = 0;
+  if (wanted.length === 0) return 0;
+  const existing = await prisma.tvEpgSource.findMany({
+    where: { url: { in: wanted.map((s) => s.url) } },
+    select: { url: true },
+  });
+  const existingUrls = new Set(existing.map((e) => e.url));
   for (const s of wanted) {
-    const existing = await prisma.tvEpgSource.findFirst({ where: { url: s.url } });
-    if (existing) continue;
-    await prisma.tvEpgSource.create({ data: { name: s.name, url: s.url } });
-    created++;
+    await prisma.tvEpgSource.upsert({
+      where: { url: s.url },
+      create: { name: s.name, url: s.url },
+      update: {},
+    });
   }
-  return created;
+  return wanted.filter((s) => !existingUrls.has(s.url)).length;
 }

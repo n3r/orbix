@@ -443,6 +443,8 @@ model TvEpgSource {
   statusMessage String?
   lastSyncAt    DateTime?
   createdAt     DateTime  @default(now())
+
+  @@unique([url])
 }
 
 model TvFavorite {

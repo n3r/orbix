@@ -58,8 +58,18 @@ export default async function tvAdminRoute(app: FastifyInstance): Promise<void> 
     if (!name || !isHttpUrl(url) || !Number.isInteger(offsetMin)) {
       return reply.code(400).send({ error: "invalid_epg_source" });
     }
-    const created = await app.prisma.tvEpgSource.create({ data: { name, url, offsetMin } });
-    return reply.code(201).send(created);
+    try {
+      const created = await app.prisma.tvEpgSource.create({ data: { name, url, offsetMin } });
+      return reply.code(201).send(created);
+    } catch (e) {
+      // The DB-level unique constraint on `url` (TvEpgSource_url_key) is the
+      // real guard against duplicate EPG sources — translate its P2002 into a
+      // friendly 409 (same pattern as the iptv-org singleton in tv-sources.ts).
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+        return reply.code(409).send({ error: "epg_source_exists" });
+      }
+      throw e;
+    }
   });
 
   app.patch("/tv/epg-sources/:id", guards, async (req, reply) => {
