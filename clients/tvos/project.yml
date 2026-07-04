@@ -1,0 +1,35 @@
+name: Orbix
+options:
+  bundleIdPrefix: dev.orbix
+  deploymentTarget:
+    tvOS: "17.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    TVOS_DEPLOYMENT_TARGET: "17.0"
+    TARGETED_DEVICE_FAMILY: "3" # tvOS
+    CODE_SIGNING_ALLOWED: "NO" # simulator builds need no signing
+targets:
+  Orbix:
+    type: application
+    platform: tvOS
+    sources:
+      - path: Sources/Orbix
+    dependencies:
+      - target: OrbixKit
+    settings:
+      base:
+        INFOPLIST_FILE: Resources/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: dev.orbix.tvos
+        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: ""
+  OrbixKit:
+    type: framework
+    platform: tvOS
+    sources:
+      - path: Sources/OrbixKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.orbix.tvos.kit
+        GENERATE_INFOPLIST_FILE: "YES" # embedded framework needs an Info.plist to pass app-bundle validation
