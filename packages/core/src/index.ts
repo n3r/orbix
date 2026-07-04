@@ -38,3 +38,4 @@ export * from "./tv/sync-planner";
 export * from "./tv/numbering";
 export * from "./tv/pick-stream";
 export * from "./tv/proxy";
+export * from "./tv/xmltv";
