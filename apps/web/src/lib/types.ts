@@ -227,3 +227,29 @@ export interface TvSource {
   statusMessage: string | null;
   lastSyncAt: string | null;
 }
+
+/** Admin: one configured XMLTV guide feed. */
+export interface TvEpgSource {
+  id: string;
+  name: string;
+  url: string;
+  enabled: boolean;
+  offsetMin: number;
+  status: string;
+  statusMessage: string | null;
+  lastSyncAt: string | null;
+}
+
+/** Admin channel-manager row — unlike TvChannelCard, this INCLUDES hidden channels. */
+export interface TvAdminChannel {
+  id: string;
+  number: number;
+  name: string;
+  country: string | null;
+  categories: string[];
+  quality: string | null;
+  logo: string | null;
+  hidden: boolean;
+  kidsAllowed: boolean;
+  epgId: string | null;
+}

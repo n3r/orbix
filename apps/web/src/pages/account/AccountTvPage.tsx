@@ -5,6 +5,8 @@ import { Button, Card, Input, cn } from "@orbix/ui";
 import { apiFetch } from "@/lib/api";
 import type { TvSource } from "@/lib/types";
 import { regionName } from "@/lib/tv";
+import { TvEpgSourcesCard } from "@/components/account/TvEpgSourcesCard";
+import { TvChannelManagerCard } from "@/components/account/TvChannelManagerCard";
 
 /** iptv-org country codes offered as checkboxes (their codes — UK, not GB). */
 const TV_COUNTRIES = [
@@ -466,6 +468,9 @@ export default function AccountTvPage() {
       </Card>
 
       <p className="text-xs text-[var(--text-dim)]">{t("tv:admin.legal")}</p>
+
+      <TvEpgSourcesCard />
+      <TvChannelManagerCard />
     </main>
   );
 }

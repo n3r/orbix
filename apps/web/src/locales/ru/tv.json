@@ -99,5 +99,53 @@
     "skip": "Skip",
     "finish": "Go to TV",
     "summary": "Ready: {{countries}} countries enabled, {{sources}} M3U playlists."
+  },
+  "epg": {
+    "title": "EPG sources",
+    "intro": "XMLTV guide feeds matched to channels by tvg-id. Add a feed URL, then refresh to pull today's schedule.",
+    "refresh": "Refresh now",
+    "refreshing": "Refreshing…",
+    "refreshStarted": "Refresh started — programme data will update shortly.",
+    "added": "EPG source added.",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "offsetMin": "Offset (min)",
+    "delete": "Delete",
+    "deleteConfirm": "Delete this EPG source? Programme data it supplied will stop updating.",
+    "lastSync": "Last sync: {{when}}",
+    "never": "never",
+    "name": "Name",
+    "url": "https://example.com/guide.xml.gz",
+    "add": "Add source",
+    "empty": "No EPG sources yet.",
+    "status": {
+      "syncing": "Syncing…",
+      "error": "Error",
+      "ok": "OK"
+    }
+  },
+  "manager": {
+    "title": "Channel manager",
+    "intro": "Search, hide, restrict, or fix up the matched EPG id and channel number for any channel.",
+    "search": "Search channels",
+    "countryPlaceholder": "Country (e.g. RU)",
+    "columns": {
+      "number": "#",
+      "channel": "Channel",
+      "country": "Country",
+      "hidden": "Hidden",
+      "kids": "Kids",
+      "epgId": "EPG id"
+    },
+    "numberLabel": "Channel number for {{name}}",
+    "save": "Save",
+    "saved": "Saved",
+    "hiddenToggle": "Hide {{name}}",
+    "kidsToggle": "Allow {{name}} on kids profiles",
+    "epgIdPlaceholder": "tvg-id",
+    "empty": "No channels match.",
+    "pageOf": "{{from}}–{{to}} of {{total}}",
+    "prev": "Previous",
+    "next": "Next"
   }
 }
