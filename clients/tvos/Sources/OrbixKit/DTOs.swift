@@ -208,12 +208,19 @@ public struct HomeRows: Codable, Sendable, Equatable {
 
 // MARK: - Item detail
 
-/// Minimal decode target for `GET /api/items/:id`. The M1 playback spike
-/// only needs the ids of the item's playable files — `files[0]` is "best
-/// copy first" per the server's `orderBy` (height/bitrate desc, see
-/// `apps/api/src/routes/catalog.ts`) — so every other field on the full
-/// item-detail response (title, seasons, cast, ratings, ...) is simply
-/// ignored by Codable's synthesized `init(from:)`.
+/// Decode target for `GET /api/items/:id` (see `apps/api/src/routes/catalog.ts`),
+/// the M3 title/detail page's primary data source. Every field beyond
+/// `id`/`kind`/`title` is `Optional`: some because the server can send an
+/// explicit `null` (a movie missing a rating, an unmatched title with no
+/// resolved genres, ...), `seasons` because the key is only present at all
+/// when `kind == "series"` (the route spreads it in conditionally —
+/// `...(item.kind === "series" ? {seasons: [...]} : {})`), and the rest
+/// defensively even though the route currently always sends them (as an
+/// array, at worst empty) — Codable's synthesized `init(from:)` calls
+/// `decodeIfPresent` for every `Optional` stored property, so a missing key
+/// and an explicit `null` both decode to `nil` without throwing, which keeps
+/// this type decode-safe against a server that omits or nulls out more than
+/// it does today.
 public struct ItemDetail: Codable, Sendable, Equatable {
     public struct FileRef: Codable, Sendable, Equatable {
         public var id: String
@@ -223,10 +230,122 @@ public struct ItemDetail: Codable, Sendable, Equatable {
         }
     }
 
-    public var files: [FileRef]
+    /// One `credits` row with `department == "cast"`, as the route maps it:
+    /// `{name: person.name, character: role}` (see `catalog.ts`'s
+    /// `item.credits.filter(...).map(...)`, top 15). Note the wire field is
+    /// `character` — the role *name* (e.g. "Woody"), not a generic
+    /// credit shape — the route already drops `department`/`order` before
+    /// serializing, so there's nothing else to decode here. `character` is
+    /// `NOT NULL` in the DB (`Credit.role: String`), but modeled `Optional`
+    /// here anyway per this type's general decode-safety stance.
+    public struct CastMember: Codable, Sendable, Equatable {
+        public var name: String
+        public var character: String?
 
-    public init(files: [FileRef]) {
+        public init(name: String, character: String? = nil) {
+            self.name = name
+            self.character = character
+        }
+    }
+
+    /// The credited `department == "crew"`, `role == "Director"` row, if any
+    /// (`{name: person.name}` — see `catalog.ts`'s `directorCredit`).
+    public struct Director: Codable, Sendable, Equatable {
+        public var name: String
+
+        public init(name: String) {
+            self.name = name
+        }
+    }
+
+    /// One entry of a series' `seasons` array (only present when
+    /// `kind == "series"`). `episodeCount` is the season's `_count.episodes`
+    /// from the route's Prisma select, not something derived client-side.
+    public struct SeasonSummary: Codable, Sendable, Equatable {
+        public var seasonNumber: Int
+        public var name: String?
+        public var episodeCount: Int?
+        public var posterPath: String?
+
+        public init(seasonNumber: Int, name: String? = nil, episodeCount: Int? = nil, posterPath: String? = nil) {
+            self.seasonNumber = seasonNumber
+            self.name = name
+            self.episodeCount = episodeCount
+            self.posterPath = posterPath
+        }
+    }
+
+    public var id: String
+    public var kind: String
+    public var title: String
+    public var year: Int?
+    public var overview: String?
+    public var posterPath: String?
+    public var backdropPath: String?
+    public var logoPath: String?
+    public var runtimeSec: Int?
+    public var rating: String?
+    public var genres: [String]?
+    public var cast: [CastMember]?
+    public var director: Director?
+    /// Series only (see the type doc comment); `nil` for a movie.
+    public var seasons: [SeasonSummary]?
+    /// A movie's playable files, "best copy first" per the server's
+    /// `orderBy` (height/bitrate desc) — the title page's Play button uses
+    /// `files?.first?.id`. **Do not assume this is empty/absent for a
+    /// series**: `MediaFile.mediaItemId` is shared by a series' episode
+    /// files too (the route's `files` relation isn't filtered by episode),
+    /// so a series' `files` can be non-empty but is not a sensible Play
+    /// target — branch on `kind` instead, not on whether `files` is empty.
+    public var files: [FileRef]?
+
+    public init(
+        id: String,
+        kind: String,
+        title: String,
+        year: Int? = nil,
+        overview: String? = nil,
+        posterPath: String? = nil,
+        backdropPath: String? = nil,
+        logoPath: String? = nil,
+        runtimeSec: Int? = nil,
+        rating: String? = nil,
+        genres: [String]? = nil,
+        cast: [CastMember]? = nil,
+        director: Director? = nil,
+        seasons: [SeasonSummary]? = nil,
+        files: [FileRef]? = nil
+    ) {
+        self.id = id
+        self.kind = kind
+        self.title = title
+        self.year = year
+        self.overview = overview
+        self.posterPath = posterPath
+        self.backdropPath = backdropPath
+        self.logoPath = logoPath
+        self.runtimeSec = runtimeSec
+        self.rating = rating
+        self.genres = genres
+        self.cast = cast
+        self.director = director
+        self.seasons = seasons
         self.files = files
+    }
+}
+
+/// Response of `GET /api/items/:id/similar` (see
+/// `apps/api/src/routes/similar.ts`): `{items: [...]}`, each entry a subset
+/// of `MediaCard`'s fields (`id,title,year,posterPath,matchState`) —
+/// `matchState` isn't modeled (nothing needs it yet), and
+/// `backdropPath`/`progress`/`resume` are simply absent on the wire, which
+/// decode to `nil` since every one of those is already `Optional` on
+/// `MediaCard`.
+public struct SimilarResponse: Codable, Sendable, Equatable {
+    public var items: [MediaCard]
+
+    public init(items: [MediaCard]) {
+        self.items = items
     }
 }
 

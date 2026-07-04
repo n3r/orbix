@@ -5,24 +5,33 @@ import SwiftUI
 /// (see `apps/api/src/routes/discovery.ts`'s smart-rows hydration), replacing
 /// the M1 `SpikeListView` flat poster grid. Each row renders as a titled,
 /// horizontally-scrolling, independently focus-sectioned rail of
-/// `PosterCard`s. Selecting a card is a no-op placeholder for now — real
-/// navigation to a title/detail page is M3 Task 2.
+/// `PosterCard`s. Owns the `NavigationStack` for the whole home→title
+/// flow: selecting a card pushes a `TitleRoute` (M3 Task 2); `TitlePage`'s
+/// own "More Like This" rail is handed the same `path` binding, so
+/// selecting a similar title there pushes another `TitlePage` onto this
+/// same stack rather than needing a stack of its own.
 struct HomeView: View {
     let model: AppModel
 
     @State private var homeModel = HomeModel()
     @State private var imageLoader = ImageLoader()
+    @State private var path: [TitleRoute] = []
 
     var body: some View {
-        Group {
-            if let client = model.client {
-                content(client: client)
-                    .task { await homeModel.load(client: client) }
-            } else {
-                // Defensive only: RootView only routes to HomeView once
-                // `model.client` is non-nil (same invariant
-                // ProfilePickerView/PairingView's fallbacks document).
-                ProgressView()
+        NavigationStack(path: $path) {
+            Group {
+                if let client = model.client {
+                    content(client: client)
+                        .task { await homeModel.load(client: client) }
+                } else {
+                    // Defensive only: RootView only routes to HomeView once
+                    // `model.client` is non-nil (same invariant
+                    // ProfilePickerView/PairingView's fallbacks document).
+                    ProgressView()
+                }
+            }
+            .navigationDestination(for: TitleRoute.self) { route in
+                TitlePage(itemId: route.itemId, model: model, path: $path)
             }
         }
     }
@@ -106,13 +115,10 @@ struct HomeView: View {
         .accessibilityIdentifier("homeErrorState")
     }
 
-    /// Selecting a card will eventually push the title/detail page
-    /// (`TitlePage`, M3 Task 2, via a `NavigationStack` this view will then
-    /// wrap its content in). Until that exists, selection is a diagnostic
-    /// no-op rather than a dead end with no feedback at all.
+    /// Pushes the title/detail page (`TitlePage`) for the selected card
+    /// onto `path`.
     private func select(_ card: MediaCard) {
-        // TODO(M3 Task 2): push TitlePage(itemId: card.id) once it exists.
-        print("[HomeView] selected \(card.title) (\(card.id)) — navigation lands in M3 Task 2")
+        path.append(TitleRoute(itemId: card.id))
     }
 }
 

@@ -171,4 +171,121 @@ final class DTOTests: XCTestCase {
         XCTAssertNil(me.kind)
         XCTAssertNil(me.maturityCap)
     }
+
+    // MARK: - Item detail (M3 Task 2)
+
+    func testDecodeItemDetailMovie() throws {
+        // A representative movie GET /api/items/:id response (see
+        // apps/api/src/routes/catalog.ts): no "seasons" key at all (only
+        // spread in for kind == "series"), a populated cast/director, and a
+        // "best copy first" files array the title page's Play button reads
+        // files[0] from.
+        let json = """
+        {"id":"m1","kind":"movie","title":"Arrival","year":2016,
+         "overview":"A linguist works with the military to communicate with alien visitors.",
+         "tagline":"Why are they here?","status":null,"runtimeSec":6600,"rating":"PG-13",
+         "posterPath":"/p1.jpg","backdropPath":"/b1.jpg","logoPath":"/l1.png",
+         "tmdbScore":7.9,"imdbRating":7.9,"imdbVotes":700000,"rtRating":94,"metacritic":81,
+         "matchState":"matched",
+         "genres":["Drama","Science Fiction"],
+         "cast":[{"name":"Amy Adams","character":"Louise Banks"},
+                 {"name":"Jeremy Renner","character":"Ian Donnelly"}],
+         "director":{"name":"Denis Villeneuve"},
+         "files":[{"id":"f1","path":"/data/Arrival.mkv","container":"matroska,webm",
+                   "videoCodec":"h264","audioCodecs":["ac3"],"width":1920,"height":1080,
+                   "durationSec":6600,"size":"8589934592"}]}
+        """.data(using: .utf8)!
+        let detail = try JSONDecoder().decode(ItemDetail.self, from: json)
+        XCTAssertEqual(detail.id, "m1")
+        XCTAssertEqual(detail.kind, "movie")
+        XCTAssertEqual(detail.title, "Arrival")
+        XCTAssertEqual(detail.year, 2016)
+        XCTAssertEqual(detail.runtimeSec, 6600)
+        XCTAssertEqual(detail.rating, "PG-13")
+        XCTAssertEqual(detail.backdropPath, "/b1.jpg")
+        XCTAssertEqual(detail.logoPath, "/l1.png")
+        XCTAssertEqual(detail.genres, ["Drama", "Science Fiction"])
+        XCTAssertEqual(detail.cast?.count, 2)
+        XCTAssertEqual(detail.cast?.first?.name, "Amy Adams")
+        XCTAssertEqual(detail.cast?.first?.character, "Louise Banks")
+        XCTAssertEqual(detail.director?.name, "Denis Villeneuve")
+        XCTAssertNil(detail.seasons)
+        XCTAssertEqual(detail.files?.first?.id, "f1")
+    }
+
+    func testDecodeItemDetailSeries() throws {
+        // A series response: "seasons" is present (only true for
+        // kind == "series"); a null season name and a null director must
+        // both decode to nil, not throw. "files" is an empty array here —
+        // deliberately not asserted as "always empty for a series" (see
+        // ItemDetail.files' doc comment: the underlying relation isn't
+        // filtered by episode in the route, so this can't be assumed).
+        let json = """
+        {"id":"s1","kind":"series","title":"Some Series","year":2020,
+         "overview":"A prestige drama.","tagline":null,"status":"Ended",
+         "runtimeSec":null,"rating":"TV-14",
+         "posterPath":"/p2.jpg","backdropPath":"/b2.jpg","logoPath":null,
+         "tmdbScore":8.1,"imdbRating":null,"imdbVotes":null,"rtRating":null,"metacritic":null,
+         "matchState":"matched",
+         "genres":["Drama"],
+         "seasons":[{"seasonNumber":1,"name":"Season 1","episodeCount":8,"posterPath":"/sp1.jpg"},
+                    {"seasonNumber":2,"name":null,"episodeCount":6,"posterPath":null}],
+         "cast":[{"name":"Actor One","character":"Role One"}],
+         "director":null,
+         "files":[]}
+        """.data(using: .utf8)!
+        let detail = try JSONDecoder().decode(ItemDetail.self, from: json)
+        XCTAssertEqual(detail.kind, "series")
+        XCTAssertNil(detail.runtimeSec)
+        XCTAssertNil(detail.director)
+        XCTAssertEqual(detail.seasons?.count, 2)
+        XCTAssertEqual(detail.seasons?.first?.seasonNumber, 1)
+        XCTAssertEqual(detail.seasons?.first?.name, "Season 1")
+        XCTAssertEqual(detail.seasons?.first?.episodeCount, 8)
+        XCTAssertNil(detail.seasons?.last?.name)
+        XCTAssertEqual(detail.files, [])
+    }
+
+    func testDecodeItemDetailToleratesMissingOptionalFields() throws {
+        // Only the three truly-required fields present — every other key
+        // entirely absent (not even null). Must decode cleanly: this is
+        // the "server can omit optional fields" contract ItemDetail's doc
+        // comment claims, exercised for real rather than just asserted.
+        let json = """
+        {"id":"m2","kind":"movie","title":"Untitled Import"}
+        """.data(using: .utf8)!
+        let detail = try JSONDecoder().decode(ItemDetail.self, from: json)
+        XCTAssertEqual(detail.id, "m2")
+        XCTAssertEqual(detail.title, "Untitled Import")
+        XCTAssertNil(detail.year)
+        XCTAssertNil(detail.overview)
+        XCTAssertNil(detail.rating)
+        XCTAssertNil(detail.genres)
+        XCTAssertNil(detail.cast)
+        XCTAssertNil(detail.director)
+        XCTAssertNil(detail.seasons)
+        XCTAssertNil(detail.files)
+    }
+
+    func testDecodeSimilarResponse() throws {
+        // GET /api/items/:id/similar's {items: [...]} envelope (see
+        // apps/api/src/routes/similar.ts's `toCard`): a narrower shape than
+        // a home-row MediaCard (no backdropPath/progress/resume/addedAt) —
+        // all of which are Optional on MediaCard, so this must still decode
+        // cleanly with those fields nil rather than throwing.
+        let json = """
+        {"items":[{"id":"m3","title":"Interstellar","year":2014,
+                   "posterPath":"/p3.jpg","matchState":"matched"}]}
+        """.data(using: .utf8)!
+        let response = try JSONDecoder().decode(SimilarResponse.self, from: json)
+        XCTAssertEqual(response.items.count, 1)
+        let card = try XCTUnwrap(response.items.first)
+        XCTAssertEqual(card.id, "m3")
+        XCTAssertEqual(card.title, "Interstellar")
+        XCTAssertEqual(card.year, 2014)
+        XCTAssertEqual(card.posterPath, "/p3.jpg")
+        XCTAssertNil(card.backdropPath)
+        XCTAssertNil(card.progress)
+        XCTAssertNil(card.resume)
+    }
 }

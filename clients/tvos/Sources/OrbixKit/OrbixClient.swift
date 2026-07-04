@@ -91,12 +91,36 @@ public actor OrbixClient {
 
     // MARK: - Item detail
 
+    /// `GET /api/items/:id` — full item detail (movie or series; see
+    /// `ItemDetail`'s doc comment for the field-by-field shape). A
+    /// kids-blocked or missing id 404s (`apps/api/src/routes/catalog.ts`);
+    /// callers surface that as a graceful "not available" rather than a
+    /// crash — see `TitleModel.load`.
+    public func itemDetail(id: String) async throws -> ItemDetail {
+        try await send(method: "GET", url: baseURL.appending(path: "api/items/\(id)"))
+    }
+
+    /// `GET /api/items/:id/similar` → `{items: [...]}` (see
+    /// `apps/api/src/routes/similar.ts`); unwrapped to the bare array since
+    /// nothing else on the envelope is needed. A kids-blocked or missing
+    /// anchor id 404s, same as `itemDetail`.
+    public func similar(id: String) async throws -> [MediaCard] {
+        let response: SimilarResponse = try await send(
+            method: "GET",
+            url: baseURL.appending(path: "api/items/\(id)/similar")
+        )
+        return response.items
+    }
+
     /// `GET /api/items/:id` → the ids of its playable files, "best copy
     /// first" per the server's `orderBy` (see
-    /// `apps/api/src/routes/catalog.ts`). The M1 spike plays `files[0]`.
+    /// `apps/api/src/routes/catalog.ts`). The M1 spike played `files[0]`;
+    /// kept as a thin convenience over `itemDetail(id:)` for any caller that
+    /// only wants file ids — `files` is `Optional` on `ItemDetail`, hence
+    /// the `?? []`, not because this is expected to actually be missing.
     public func itemFileIds(id: String) async throws -> [String] {
-        let detail: ItemDetail = try await send(method: "GET", url: baseURL.appending(path: "api/items/\(id)"))
-        return detail.files.map(\.id)
+        let detail = try await itemDetail(id: id)
+        return detail.files?.map(\.id) ?? []
     }
 
     // MARK: - Playback
