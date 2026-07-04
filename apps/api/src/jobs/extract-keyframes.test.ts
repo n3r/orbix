@@ -33,6 +33,14 @@ describe("extractKeyframes", () => {
     expect(updates).toHaveLength(0);
   });
 
+  it("proceeds when keyframes is null (e.g. reset by an in-place file replacement) but skips when non-empty", async () => {
+    const nullCase = deps({ keyframes: null });
+    expect(await extractKeyframes("f1", nullCase.deps as never)).toEqual({ count: 3 });
+
+    const nonEmptyCase = deps({ keyframes: [0, 6] });
+    expect(await extractKeyframes("f1", nonEmptyCase.deps as never)).toEqual({ skipped: "already_indexed" });
+  });
+
   it("skips missing files", async () => {
     const d = {
       run: async () => CSV,

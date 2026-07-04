@@ -255,6 +255,15 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
           subtitleTracks: input.tech.subtitleTracks as unknown as Prisma.InputJsonValue,
           audioTracks: input.tech.audioTracks as unknown as Prisma.InputJsonValue,
           probedOk,
+          // Reset on every (re)scan of a new-or-changed file: a stale index from
+          // a previous file at this path would otherwise survive an in-place
+          // replacement (this object isn't re-derived from tech) and permanently
+          // skip re-extraction, since extractKeyframes treats any non-empty
+          // array as already-indexed. enqueueKeyframesIfNeeded repopulates it.
+          // Prisma.DbNull (not a plain `null`) is required for a nullable Json
+          // column — matches the SQL NULL a fresh row gets when the field is
+          // omitted from create.
+          keyframes: Prisma.DbNull,
         };
 
         if (existing) {
@@ -1233,7 +1242,15 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
 
     // ── Keyframe extraction ──────────────────────────────────────────────────
 
-    const keyframesQueue = new Queue<KeyframesJobData>("keyframes", { connection });
+    // removeOnComplete/removeOnFail: the jobId=fileId dedup (see
+    // enqueueKeyframesIfNeeded / playback.ts) means a finished job's record
+    // would otherwise permanently block re-enqueue for that file (and grow
+    // Redis without bound) — remove it once it settles so a later rescan (or
+    // a subsequent remux negotiation) can re-extract.
+    const keyframesQueue = new Queue<KeyframesJobData>("keyframes", {
+      connection,
+      defaultJobOptions: { removeOnComplete: true, removeOnFail: true },
+    });
 
     const keyframesWorker = new Worker<KeyframesJobData, void>(
       "keyframes",
