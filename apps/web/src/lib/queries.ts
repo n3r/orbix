@@ -1,4 +1,4 @@
-import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { apiJson, apiFetch, ApiError } from "./api";
 import type {
   AuthMe, HomeRow, MediaCard, MenuConfig, MenuItem, Profile, TitleDetail,
@@ -162,11 +162,18 @@ export function useTvFavorites() {
   });
 }
 
-/** Day schedule for the channel page (empty until the EPG phase). */
-export function useTvProgrammes(id: string | undefined) {
+/**
+ * Day schedule for the channel page. `day` is a local "YYYY-MM-DD" (see
+ * `tvDayString` in `@/lib/tv-time`) — omit for the API's default (today).
+ * Keeps the previous day's data visible while a new day loads (Today/Tomorrow
+ * tab switches don't flash to the empty state).
+ */
+export function useTvProgrammes(id: string | undefined, day?: string) {
   return useQuery({
-    queryKey: ["tv-programmes", id],
+    queryKey: ["tv-programmes", id, day],
     enabled: !!id,
-    queryFn: () => apiJson<{ programmes: TvProgramme[] }>(`/tv/channels/${id}/programmes`),
+    placeholderData: keepPreviousData,
+    queryFn: () =>
+      apiJson<{ programmes: TvProgramme[] }>(`/tv/channels/${id}/programmes${day ? `?day=${day}` : ""}`),
   });
 }

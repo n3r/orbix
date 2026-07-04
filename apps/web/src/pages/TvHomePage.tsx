@@ -17,7 +17,10 @@ function categoryLabel(id: string): string {
 function EmptyState({ isAdmin }: { isAdmin: boolean }) {
   const { t } = useTranslation();
   return (
-    <div className="mx-auto flex max-w-md flex-col items-center gap-4 px-6 py-24 text-center">
+    <div
+      data-testid="tv-empty-state"
+      className="mx-auto flex max-w-md flex-col items-center gap-4 px-6 py-24 text-center"
+    >
       <TvIcon className="h-12 w-12 text-[var(--text-dim)]" />
       <h2 className="text-xl font-semibold text-[var(--text)]">{t("tv:empty.title")}</h2>
       {isAdmin ? (

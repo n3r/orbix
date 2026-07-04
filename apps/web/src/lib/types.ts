@@ -160,9 +160,9 @@ export interface TvChannelCard {
   logo: string | null;
   healthy: boolean;
   favorite: boolean;
-  /** Present on guide rows (null until the EPG phase lands). */
-  now?: TvProgrammeSlot | null;
-  next?: TvProgrammeSlot | null;
+  /** Always present; null when there's no EPG match or nothing airs now/next. */
+  now: TvProgrammeSlot | null;
+  next: TvProgrammeSlot | null;
 }
 
 export interface TvHome {
@@ -185,6 +185,12 @@ export interface TvPlaySource {
   label: string | null;
 }
 
+/** now/next pair returned by the play endpoint; always present, either slot may be null. */
+export interface TvNowNext {
+  now: TvProgrammeSlot | null;
+  next: TvProgrammeSlot | null;
+}
+
 export interface TvPlayResponse {
   channel: {
     id: string;
@@ -194,7 +200,7 @@ export interface TvPlayResponse {
     country: string | null;
     quality: string | null;
   };
-  nowNext: null;
+  nowNext: TvNowNext;
   sources: TvPlaySource[];
 }
 

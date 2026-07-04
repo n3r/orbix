@@ -28,12 +28,18 @@
     "channelCount_other": "{{count}} channels",
     "empty": "No channels match.",
     "play": "Watch {{name}}",
-    "schedule": "Channel details"
+    "schedule": "Channel details",
+    "noEpg": "Aucune donnée de guide",
+    "next": "Ensuite"
   },
   "channel": {
     "number": "Channel {{number}}",
     "watch": "Watch",
-    "schedule": "Today's schedule",
+    "schedule": "Programme",
+    "today": "Aujourd'hui",
+    "tomorrow": "Demain",
+    "onNow": "En ce moment",
+    "noSchedule": "Aucun programme pour ce jour.",
     "scheduleEmpty": "No guide data for this channel yet.",
     "notFound": "Channel not found."
   },
@@ -45,7 +51,8 @@
     "reconnecting": "Reconnecting…",
     "tryingSource": "Trying next source ({{n}}/{{total}})…",
     "source": "Source {{n}}/{{total}}",
-    "miniGuide": "Channels"
+    "miniGuide": "Channels",
+    "next": "Ensuite"
   },
   "admin": {
     "title": "Live TV",

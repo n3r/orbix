@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button, cn } from "@orbix/ui";
 import { apiFetch } from "@/lib/api";
 import { useTvChannel, useTvProgrammes } from "@/lib/queries";
+import { formatTvTime, tvDayString } from "@/lib/tv-time";
 import LiveTvOverlay from "@/components/tv/LiveTvOverlay";
 import { channelHue, channelInitials, regionName } from "@/lib/tv";
 import { HeartIcon, PlayIcon } from "@/components/shell/icons";
@@ -15,7 +16,9 @@ export default function TvChannelPage() {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const channel = useTvChannel(id);
-  const programmes = useTvProgrammes(id);
+  const [dayOffset, setDayOffset] = useState<0 | 1>(0);
+  const day = tvDayString(dayOffset);
+  const programmes = useTvProgrammes(id, day);
   const [watching, setWatching] = useState(false);
 
   if (channel.isLoading)
@@ -35,15 +38,14 @@ export default function TvChannelPage() {
     void queryClient.invalidateQueries({ queryKey: ["tv-favorites"] });
   };
 
-  const time = (iso: string) =>
-    new Date(iso).toLocaleTimeString(i18n.language, { hour: "2-digit", minute: "2-digit" });
-
   const badges = [
     regionName(c.country, i18n.language),
     ...c.categories.map((cat) => cat.charAt(0).toUpperCase() + cat.slice(1)),
   ].filter((x): x is string => Boolean(x));
 
   const schedule = programmes.data?.programmes ?? [];
+  // Single snapshot for the whole render — every row's on-air check agrees.
+  const nowMs = Date.now();
 
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-4 py-8 md:px-8">
@@ -99,23 +101,71 @@ export default function TvChannelPage() {
 
       <section>
         <h2 className="mb-3 text-lg font-semibold text-[var(--text)]">{t("tv:channel.schedule")}</h2>
+
+        <div role="tablist" className="mb-3 flex gap-2">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={dayOffset === 0}
+            onClick={() => setDayOffset(0)}
+            className={cn(
+              "rounded-full border px-3 py-1 text-sm transition-colors",
+              dayOffset === 0
+                ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--text)]"
+                : "border-[var(--surface-2)] text-[var(--text-dim)] hover:text-[var(--text)]",
+            )}
+          >
+            {t("tv:channel.today")}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={dayOffset === 1}
+            onClick={() => setDayOffset(1)}
+            className={cn(
+              "rounded-full border px-3 py-1 text-sm transition-colors",
+              dayOffset === 1
+                ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--text)]"
+                : "border-[var(--surface-2)] text-[var(--text-dim)] hover:text-[var(--text)]",
+            )}
+          >
+            {t("tv:channel.tomorrow")}
+          </button>
+        </div>
+
         {schedule.length === 0 ? (
-          <p className="text-sm text-[var(--text-dim)]">{t("tv:channel.scheduleEmpty")}</p>
+          <p className="text-sm text-[var(--text-dim)]">{t("tv:channel.noSchedule")}</p>
         ) : (
           <ul className="flex flex-col">
-            {schedule.map((p) => (
-              <li key={p.id} className="flex gap-4 border-b border-[var(--surface)] py-2 text-sm">
-                <span className="w-28 shrink-0 tabular-nums text-[var(--text-dim)]">
-                  {time(p.start)}–{time(p.stop)}
-                </span>
-                <span className="min-w-0">
-                  <span className="block font-medium text-[var(--text)]">{p.title}</span>
-                  {p.description && (
-                    <span className="line-clamp-2 block text-xs text-[var(--text-dim)]">{p.description}</span>
+            {schedule.map((p) => {
+              const onAir = Date.parse(p.start) <= nowMs && nowMs < Date.parse(p.stop);
+              return (
+                <li
+                  key={p.id}
+                  className={cn(
+                    "flex gap-4 rounded px-2 py-2 text-sm",
+                    onAir ? "bg-white/10 ring-1 ring-red-500/60" : "border-b border-[var(--surface)]",
                   )}
-                </span>
-              </li>
-            ))}
+                >
+                  <span className="w-28 shrink-0 tabular-nums text-[var(--text-dim)]">
+                    {formatTvTime(p.start, i18n.language)}–{formatTvTime(p.stop, i18n.language)}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-2">
+                      <span className="min-w-0 truncate font-medium text-[var(--text)]">{p.title}</span>
+                      {onAir && (
+                        <span className="shrink-0 rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-white">
+                          {t("tv:channel.onNow")}
+                        </span>
+                      )}
+                    </span>
+                    {p.description && (
+                      <span className="line-clamp-2 block text-xs text-[var(--text-dim)]">{p.description}</span>
+                    )}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>

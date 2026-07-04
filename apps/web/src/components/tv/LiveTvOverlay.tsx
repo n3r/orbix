@@ -4,6 +4,8 @@ import { useTranslation } from "react-i18next";
 import { Button, cn } from "@orbix/ui";
 import type { TvChannelCard, TvPlayResponse } from "@/lib/types";
 import LiveTvPlayer from "./LiveTvPlayer";
+import { NowProgressBar } from "./NowProgressBar";
+import { ChannelNowNext } from "./ChannelNowNext";
 import { channelHue, channelInitials } from "@/lib/tv";
 import { ChevronDownIcon } from "@/components/shell/icons";
 
@@ -208,11 +210,11 @@ export default function LiveTvOverlay({ channels, initialId, onClose }: Props) {
         </div>
       )}
 
-      {/* Zap OSD: number · logo · name · quality · source indicator */}
+      {/* Zap OSD: number · logo · name · quality · source indicator · now/next */}
       {osdVisible && (
-        <div className="pointer-events-none absolute left-4 top-14 z-10 flex items-center gap-3 rounded-lg bg-black/70 px-4 py-3 backdrop-blur">
-          <span className="text-2xl font-bold tabular-nums text-white/80">{current.number}</span>
-          <span className="grid h-10 w-14 place-items-center overflow-hidden rounded bg-white/10">
+        <div className="pointer-events-none absolute left-4 top-14 z-10 flex max-w-[min(90vw,28rem)] items-center gap-3 rounded-lg bg-black/70 px-4 py-3 backdrop-blur">
+          <span className="shrink-0 text-2xl font-bold tabular-nums text-white/80">{current.number}</span>
+          <span className="grid h-10 w-14 shrink-0 place-items-center overflow-hidden rounded bg-white/10">
             {current.logo ? (
               <img src={current.logo} alt="" className="max-h-8 max-w-12 object-contain" />
             ) : (
@@ -225,8 +227,8 @@ export default function LiveTvOverlay({ channels, initialId, onClose }: Props) {
               </span>
             )}
           </span>
-          <span className="flex flex-col">
-            <span className="text-base font-semibold text-white">{current.name}</span>
+          <span className="flex min-w-0 flex-col">
+            <span className="truncate text-base font-semibold text-white">{current.name}</span>
             <span className="flex items-center gap-2 text-xs text-white/60">
               {current.quality && (
                 <span className="rounded-sm bg-white/15 px-1 py-0.5 font-semibold">{current.quality}</span>
@@ -235,6 +237,17 @@ export default function LiveTvOverlay({ channels, initialId, onClose }: Props) {
                 <span>{t("tv:player.source", { n: info.sourceIndex + 1, total: info.play.sources.length })}</span>
               )}
             </span>
+            {info?.play.nowNext.now && (
+              <span className="mt-1 min-w-0">
+                <span className="block truncate text-xs text-white/80">{info.play.nowNext.now.title}</span>
+                <NowProgressBar start={info.play.nowNext.now.start} stop={info.play.nowNext.now.stop} />
+              </span>
+            )}
+            {info?.play.nowNext.next && (
+              <span className="block truncate text-[11px] text-white/50">
+                {t("tv:player.next")} · {info.play.nowNext.next.title}
+              </span>
+            )}
           </span>
         </div>
       )}
@@ -263,7 +276,10 @@ export default function LiveTvOverlay({ channels, initialId, onClose }: Props) {
                 )}
               >
                 <span className="w-8 shrink-0 text-right text-xs tabular-nums text-white/50">{c.number}</span>
-                <span className="line-clamp-1 flex-1 text-sm">{c.name}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="line-clamp-1 block text-sm">{c.name}</span>
+                  <ChannelNowNext now={c.now} next={c.next} />
+                </span>
                 {c.quality && <span className="shrink-0 text-[10px] text-white/40">{c.quality}</span>}
               </button>
             ))}

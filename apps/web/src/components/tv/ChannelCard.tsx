@@ -6,6 +6,7 @@ import { apiFetch } from "@/lib/api";
 import type { TvChannelCard } from "@/lib/types";
 import { channelHue, channelInitials } from "@/lib/tv";
 import { HeartIcon } from "@/components/shell/icons";
+import { NowProgressBar } from "./NowProgressBar";
 
 /**
  * 16:9 channel tile: cached logo centered on a dark surface (deterministic
@@ -75,15 +76,24 @@ export default function ChannelCard({
           )}
         </div>
 
-        <div className="absolute inset-x-0 bottom-0 flex items-center gap-1.5 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-2.5 pb-2 pt-6">
-          <span className="text-[11px] tabular-nums text-white/60">{channel.number}</span>
-          <span className="line-clamp-1 flex-1 text-[13px] font-medium leading-tight text-white">
-            {channel.name}
-          </span>
-          {channel.quality && (
-            <span className="rounded-sm bg-white/15 px-1 py-0.5 text-[10px] font-semibold leading-none text-white/90">
-              {channel.quality}
+        <div className="absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-2.5 pb-2 pt-6">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] tabular-nums text-white/60">{channel.number}</span>
+            <span className="line-clamp-1 flex-1 text-[13px] font-medium leading-tight text-white">
+              {channel.name}
             </span>
+            {channel.quality && (
+              <span className="rounded-sm bg-white/15 px-1 py-0.5 text-[10px] font-semibold leading-none text-white/90">
+                {channel.quality}
+              </span>
+            )}
+          </div>
+          {/* now-playing — cards stay clean without EPG (no label when null) */}
+          {channel.now && (
+            <div className="min-w-0">
+              <p className="line-clamp-1 text-[11px] text-white/70">{channel.now.title}</p>
+              <NowProgressBar start={channel.now.start} stop={channel.now.stop} />
+            </div>
           )}
         </div>
       </div>

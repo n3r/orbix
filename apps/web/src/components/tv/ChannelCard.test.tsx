@@ -19,6 +19,8 @@ const base: TvChannelCard = {
   logo: null,
   healthy: true,
   favorite: false,
+  now: null,
+  next: null,
 };
 
 describe("ChannelCard", () => {
@@ -51,5 +53,22 @@ describe("ChannelCard", () => {
 
     expect(container.querySelector("img")).toBeNull();
     expect(screen.getByText("NO")).toBeTruthy();
+  });
+
+  it("shows the now title with a progress bar when now is set", () => {
+    const now = {
+      title: "Evening News",
+      start: new Date(Date.now() - 30 * 60_000).toISOString(),
+      stop: new Date(Date.now() + 30 * 60_000).toISOString(),
+    };
+    const { container } = wrap(<ChannelCard channel={{ ...base, now }} onPlay={() => {}} />);
+    expect(screen.getByText("Evening News")).toBeTruthy();
+    const fill = container.querySelector("[data-progress] > div") as HTMLElement;
+    expect(Number.parseFloat(fill.style.width)).toBeGreaterThan(0);
+  });
+
+  it("stays clean (no EPG placeholder copy) when now is null", () => {
+    const { container } = wrap(<ChannelCard channel={base} onPlay={() => {}} />);
+    expect(container.querySelector("[data-progress]")).toBeNull();
   });
 });

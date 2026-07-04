@@ -6,6 +6,7 @@ import { cn, Input } from "@orbix/ui";
 import { useTvGuide } from "@/lib/queries";
 import type { TvChannelCard } from "@/lib/types";
 import LiveTvOverlay from "@/components/tv/LiveTvOverlay";
+import { ChannelNowNext } from "@/components/tv/ChannelNowNext";
 import { channelHue, channelInitials, regionName } from "@/lib/tv";
 import { InfoIcon } from "@/components/shell/icons";
 
@@ -15,7 +16,10 @@ type Filter =
   | { kind: "country"; code: string }
   | { kind: "category"; id: string };
 
-const ROW_HEIGHT = 64;
+// Taller than a plain single-line row (72 vs. 64) to fit the now/next block
+// (title + time, thin progress bar, next line) added below the channel name
+// without clipping inside the virtualizer's fixed-height rows.
+const ROW_HEIGHT = 72;
 
 function Chip({
   active,
@@ -162,7 +166,7 @@ export default function TvGuidePage() {
               return (
                 <div
                   key={c.id}
-                  className="group absolute left-0 top-0 flex w-full items-center gap-3 border-b border-[var(--surface)] px-3"
+                  className="group absolute left-0 top-0 flex w-full items-center gap-3 overflow-hidden border-b border-[var(--surface)] px-3"
                   style={{ height: vi.size, transform: `translateY(${vi.start}px)` }}
                 >
                   <span className="w-10 shrink-0 text-right text-sm tabular-nums text-[var(--text-dim)]">
@@ -188,11 +192,7 @@ export default function TvGuidePage() {
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium text-[var(--text)]">{c.name}</span>
-                    {/* now/next slots — em-dash until the EPG phase fills them */}
-                    <span className="block truncate text-xs text-[var(--text-dim)]">
-                      {c.now?.title ?? "—"}
-                      {c.next?.title ? ` · ${c.next.title}` : ""}
-                    </span>
+                    <ChannelNowNext now={c.now} next={c.next} />
                   </span>
                   {c.quality && (
                     <span className="shrink-0 rounded-sm bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-[var(--text-dim)]">
