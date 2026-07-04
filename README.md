@@ -15,8 +15,17 @@ Runs on your NAS via Docker/Portainer. Web-first (responsive); no native apps re
 - **Metadata enrichment** — TMDB metadata + locally-cached posters/backdrops (offline after scan). Manual match/poster fix UI for the inevitable mismatch. Periodic refresh job.
 - **In-browser playback** — direct play for compatible files; on-the-fly **remux/transcode to fMP4 HLS** (ffmpeg) for MKV/HEVC/etc., with seek, subtitles (text → WebVTT), and per-profile resume + Continue Watching.
 - **Discovery** — content-based smart rows + natural-language mood search using **local sentence embeddings** (bge-small via transformers.js + pgvector), fully offline; degrades gracefully if the model is absent.
-- **TV (live channels)** — a browsable worldwide catalog of free, publicly available live channels: opt-in runtime sync of the iptv-org public-domain index (DMCA blocklist honored, NSFW excluded) plus your own M3U playlists, with channel logos cached to disk for offline browsing. Orbix ships no channels and no stream URLs; availability depends on your network position. Hidden for kids profiles (server-enforced).
+- **Live TV (optional)** — a worldwide catalog of free, publicly available live channels (opt-in iptv-org index sync and/or your own M3U playlists), always-proxied HLS playback with instant zapping and a mini-guide, XMLTV EPG with now/next and per-channel day schedules, nightly stream health checks, and an admin channel manager. Hidden from kids profiles (server-enforced).
 - **Self-hostable** — dev stack via `docker compose`; production via a Portainer NAS stack with a baked offline model, read-only media mount, and persistent named volumes.
+
+## Live TV
+
+The TV section is optional and off until an admin configures it.
+
+- **Opt-in catalog, no bundled content** — Orbix ships **no channels and no stream URLs**. An admin may opt in, at runtime, to syncing the [iptv-org](https://github.com/iptv-org/iptv) public-domain index of publicly available broadcasts (its DMCA blocklist is honored and NSFW channels are never imported), and/or import their own M3U playlists, which remain the user's responsibility.
+- **Neutral player** — stream availability varies by country and by the server's network position; Orbix never bypasses DRM, tokens, or geo measures. This follows the established community posture (the Hypnotix/Linux Mint precedent). Not legal advice.
+- **Guide** — XMLTV EPG sources are seeded automatically per enabled country (iptvx.one for RU/CIS, epgshare01 country packs elsewhere) and manageable in the admin UI; now/next appears on every rail, guide row and in the player, backed by Postgres — no XML parsing at request time.
+- **Offline nuance** — the channel catalog, logos and guide data are cached locally and browsable offline like the rest of Orbix, but **live playback itself requires internet**: the streams are remote by nature. Your movie/series library stays fully offline-capable either way.
 
 ## Architecture
 

@@ -129,6 +129,16 @@ Notes:
 
 ---
 
+## Live TV (optional)
+
+The TV section syncs channel catalogs (iptv-org), XMLTV EPG feeds, and proxies live streams **from the internet at runtime** — unlike the VOD library, live TV needs **outbound internet access from the `api` container** (catalog sync every 24 h, EPG refresh every 12 h, a nightly stream health probe, and the stream proxy itself while watching).
+
+- **No new containers, volumes, or ports** — the existing `api` service does all of it; channel logos live in the `orbix-metadata` volume and guide data in postgres.
+- If your NAS egress is firewalled, allow outbound HTTP(S) from the api container — or simply leave the TV section unconfigured; everything else keeps working fully offline.
+- Streams are fetched from the NAS's network position: channels that are geo-blocked for your server's country will show as unavailable even if they play on your phone abroad.
+
+---
+
 ## Updating Orbix
 
 1. Pull the latest code (or update the git stack in Portainer)
