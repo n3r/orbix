@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router";
 import { useTranslation } from "react-i18next";
 import { cn } from "@orbix/ui";
 import { useMenu } from "@/lib/queries";
+import type { Profile } from "@/lib/types";
 import { HomeIcon, TvIcon, SearchIcon, UserIcon } from "./icons";
 
 function Tab({ to, label, active, onClick, children }: {
@@ -16,7 +17,7 @@ function Tab({ to, label, active, onClick, children }: {
   return <button type="button" onClick={onClick} className={cls} aria-label={label}>{children}<span>{label}</span></button>;
 }
 
-export default function BottomNav() {
+export default function BottomNav({ profile }: { profile: Profile | null }) {
   const { t } = useTranslation();
   const { pathname } = useLocation();
   const [catalogOpen, setCatalogOpen] = useState(false);
@@ -51,7 +52,11 @@ export default function BottomNav() {
 
       <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-[var(--surface-2)] bg-[var(--surface)]/95 backdrop-blur md:hidden">
         <Tab to="/" label={t("nav:home")} active={pathname === "/"}><HomeIcon className="h-5 w-5" /></Tab>
-        <Tab label={t("nav:tv")}><TvIcon className="h-5 w-5 opacity-60" /></Tab>
+        {profile?.kind !== "kids" && (
+          <Tab to="/tv" label={t("nav:tv")} active={pathname.startsWith("/tv")}>
+            <TvIcon className="h-5 w-5" />
+          </Tab>
+        )}
         <Tab label={t("nav:catalog")} active={catalogOpen} onClick={() => setCatalogOpen((v) => !v)}>
           <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
             <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" />
