@@ -1,11 +1,10 @@
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@orbix/ui";
 import { useToggleTvFavorite } from "@/lib/queries";
 import type { TvChannelCard } from "@/lib/types";
-import { channelHue, channelInitials } from "@/lib/tv";
 import { HeartIcon } from "@/components/shell/icons";
 import { NowProgressBar } from "./NowProgressBar";
+import { ChannelLogo } from "./ChannelLogo";
 
 /**
  * 16:9 channel tile: cached logo centered on a dark surface (deterministic
@@ -24,9 +23,6 @@ export default function ChannelCard({
 }) {
   const { t } = useTranslation();
   const toggleFavorite = useToggleTvFavorite();
-  const [imgFailed, setImgFailed] = useState(false);
-
-  const hue = channelHue(channel.id);
 
   return (
     <div
@@ -41,27 +37,16 @@ export default function ChannelCard({
           status dot (a later sibling below) stays at full strength so the
           reason for the dimming is still legible. */}
       <div className={cn(!channel.healthy && "opacity-50")}>
-        <div className="grid aspect-video w-full place-items-center">
-          {channel.logo && !imgFailed ? (
-            <img
-              src={channel.logo}
-              alt=""
-              loading="lazy"
-              className="max-h-[55%] max-w-[70%] object-contain"
-              onError={() => setImgFailed(true)}
-            />
-          ) : (
-            <div
-              aria-hidden
-              className="grid h-full w-full place-items-center text-2xl font-semibold uppercase tracking-wide text-white/90"
-              style={{
-                backgroundImage: `linear-gradient(135deg, hsl(${hue} 45% 34%), hsl(${hue} 45% 18%))`,
-              }}
-            >
-              {channelInitials(channel.name)}
-            </div>
-          )}
-        </div>
+        <ChannelLogo
+          logo={channel.logo}
+          name={channel.name}
+          channelId={channel.id}
+          className="aspect-video w-full"
+          imgClassName="max-h-[55%] max-w-[70%]"
+          monogramClassName="text-2xl font-semibold uppercase tracking-wide text-white/90"
+          gradient
+          loading="lazy"
+        />
 
         <div className="absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-2.5 pb-2 pt-6">
           <div className="flex items-center gap-1.5">

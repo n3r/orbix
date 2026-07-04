@@ -6,7 +6,7 @@ import type { TvChannelCard, TvPlayResponse } from "@/lib/types";
 import LiveTvPlayer from "./LiveTvPlayer";
 import { NowProgressBar } from "./NowProgressBar";
 import { ChannelNowNext } from "./ChannelNowNext";
-import { channelHue, channelInitials } from "@/lib/tv";
+import { ChannelLogo } from "./ChannelLogo";
 import { ChevronDownIcon } from "@/components/shell/icons";
 
 const OSD_MS = 4_000;
@@ -214,19 +214,14 @@ export default function LiveTvOverlay({ channels, initialId, onClose }: Props) {
       {osdVisible && (
         <div className="pointer-events-none absolute left-4 top-14 z-10 flex max-w-[min(90vw,28rem)] items-center gap-3 rounded-lg bg-black/70 px-4 py-3 backdrop-blur">
           <span className="shrink-0 text-2xl font-bold tabular-nums text-white/80">{current.number}</span>
-          <span className="grid h-10 w-14 shrink-0 place-items-center overflow-hidden rounded bg-white/10">
-            {current.logo ? (
-              <img src={current.logo} alt="" className="max-h-8 max-w-12 object-contain" />
-            ) : (
-              <span
-                aria-hidden
-                className="grid h-full w-full place-items-center text-sm font-bold text-white"
-                style={{ backgroundColor: `hsl(${channelHue(current.id)} 45% 28%)` }}
-              >
-                {channelInitials(current.name)}
-              </span>
-            )}
-          </span>
+          <ChannelLogo
+            logo={current.logo}
+            name={current.name}
+            channelId={current.id}
+            className="h-10 w-14 shrink-0 rounded bg-white/10"
+            imgClassName="max-h-8 max-w-12"
+            monogramClassName="text-sm font-bold text-white"
+          />
           <span className="flex min-w-0 flex-col">
             <span className="truncate text-base font-semibold text-white">{current.name}</span>
             <span className="flex items-center gap-2 text-xs text-white/60">

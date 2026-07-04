@@ -7,7 +7,8 @@ import { useTvGuide } from "@/lib/queries";
 import type { TvChannelCard } from "@/lib/types";
 import LiveTvOverlay from "@/components/tv/LiveTvOverlay";
 import { ChannelNowNext } from "@/components/tv/ChannelNowNext";
-import { channelHue, channelInitials, regionName } from "@/lib/tv";
+import { ChannelLogo } from "@/components/tv/ChannelLogo";
+import { regionName } from "@/lib/tv";
 import { InfoIcon } from "@/components/shell/icons";
 
 type Filter =
@@ -33,6 +34,7 @@ function Chip({
   return (
     <button
       type="button"
+      aria-pressed={active}
       onClick={onClick}
       className={cn(
         "shrink-0 rounded-full border px-3 py-1 text-sm transition-colors",
@@ -98,6 +100,16 @@ export default function TvGuidePage() {
   });
   const virtualItems = rowVirtualizer.getVirtualItems();
 
+  // Reset scroll on every filter/search change. TanStack Query can keep the
+  // virtualized list mounted with its previous scrollTop when the new query
+  // key is already cached (e.g. flipping back to "All", which shares the
+  // unfiltered `base` query below) — without this, a filter switch can land
+  // the user mid-list instead of at the top of the new results.
+  useEffect(() => {
+    parentRef.current?.scrollTo({ top: 0 });
+    rowVirtualizer.scrollToOffset(0);
+  }, [filter, debouncedQ, rowVirtualizer]);
+
   // Offset paging: pull the next 100 as the list nears its loaded end.
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = guide;
   useEffect(() => {
@@ -146,7 +158,7 @@ export default function TvGuidePage() {
             active={filter.kind === "category" && filter.id === cat}
             onClick={() => setFilter({ kind: "category", id: cat })}
           >
-            {cat.charAt(0).toUpperCase() + cat.slice(1)}
+            {t(`tv:categories.${cat}`, { defaultValue: cat.charAt(0).toUpperCase() + cat.slice(1) })}
           </Chip>
         ))}
       </div>
@@ -172,24 +184,15 @@ export default function TvGuidePage() {
                   <span className="w-10 shrink-0 text-right text-sm tabular-nums text-[var(--text-dim)]">
                     {c.number}
                   </span>
-                  <span className="grid h-9 w-14 shrink-0 place-items-center overflow-hidden rounded bg-[var(--surface)]">
-                    {c.logo ? (
-                      <img
-                        src={c.logo}
-                        alt=""
-                        loading="lazy"
-                        className="max-h-7 max-w-11 object-contain"
-                      />
-                    ) : (
-                      <span
-                        aria-hidden
-                        className="grid h-full w-full place-items-center text-xs font-bold text-white/90"
-                        style={{ backgroundColor: `hsl(${channelHue(c.id)} 45% 28%)` }}
-                      >
-                        {channelInitials(c.name)}
-                      </span>
-                    )}
-                  </span>
+                  <ChannelLogo
+                    logo={c.logo}
+                    name={c.name}
+                    channelId={c.id}
+                    className="h-9 w-14 shrink-0 rounded bg-[var(--surface)]"
+                    imgClassName="max-h-7 max-w-11"
+                    monogramClassName="text-xs font-bold text-white/90"
+                    loading="lazy"
+                  />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium text-[var(--text)]">{c.name}</span>
                     <ChannelNowNext now={c.now} next={c.next} />
