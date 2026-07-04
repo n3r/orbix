@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { requireAuth } from "../lib/auth";
 import { requireTvAccess } from "../lib/tv-access";
 import { activeProfile } from "../lib/catalog-filter";
+import { loadNowNext } from "../lib/tv-now-next";
 
 // ── Shared card shape (fixed cross-phase contract) ──────────────────────────
 
@@ -128,7 +129,7 @@ export default async function tvCatalogRoute(app: FastifyInstance) {
         channels: list.slice(0, RAIL_CAP).map((c) => toCard(c, favoriteIds)),
       }));
 
-    // Category rails ("on now" annotations arrive with the EPG phase).
+    // Category rails ("on now" annotations are attached below).
     const byCategory = new Map<string, ChannelRow[]>();
     for (const c of channels) {
       for (const cat of c.categories) {
@@ -144,10 +145,27 @@ export default async function tvCatalogRoute(app: FastifyInstance) {
         channels: list.slice(0, RAIL_CAP).map((c) => toCard(c, favoriteIds)),
       }));
 
-    return { recents, favorites, countries, categories };
+    // now/next: ONE grouped query across every rail (never per-channel/per-rail).
+    const ids = new Set<string>();
+    for (const card of [
+      ...recents,
+      ...favorites,
+      ...countries.flatMap((r) => r.channels),
+      ...categories.flatMap((r) => r.channels),
+    ])
+      ids.add(card.id);
+    const nowNext = await loadNowNext(app.prisma, [...ids]);
+    const dec = <T extends { id: string }>(c: T) => ({ ...c, ...(nowNext.get(c.id) ?? { now: null, next: null }) });
+
+    return {
+      recents: recents.map(dec),
+      favorites: favorites.map(dec),
+      countries: countries.map((r) => ({ ...r, channels: r.channels.map(dec) })),
+      categories: categories.map((r) => ({ ...r, channels: r.channels.map(dec) })),
+    };
   });
 
-  // GET /tv/guide — windowed channel list; now/next joins arrive with EPG.
+  // GET /tv/guide — windowed channel list with now/next attached per card.
   app.get<{
     Querystring: {
       country?: string;
@@ -196,7 +214,10 @@ export default async function tvCatalogRoute(app: FastifyInstance) {
       }),
     ]);
 
-    return { total, offset, limit, channels: rows.map((c) => toCard(c, favoriteIds)) };
+    const channels = rows.map((c) => toCard(c, favoriteIds));
+    const nowNext = await loadNowNext(app.prisma, channels.map((c) => c.id));
+    const decorated = channels.map((c) => ({ ...c, ...(nowNext.get(c.id) ?? { now: null, next: null }) }));
+    return { total, offset, limit, channels: decorated };
   });
 
   // GET /tv/channels/:id — detail; hidden channels are 404 everywhere.
@@ -261,9 +282,8 @@ export default async function tvCatalogRoute(app: FastifyInstance) {
     };
   });
 
-  // GET /tv/channels/:id/programmes — contract-stable stub until the EPG phase
-  // (phase 3 of the TV rollout); the shape is locked now so the UI can build
-  // against it.
+  // GET /tv/channels/:id/programmes?day=YYYY-MM-DD — that (UTC) day's schedule,
+  // defaulting to the current UTC day; 400 on a malformed day.
   app.get<{ Params: { id: string }; Querystring: { day?: string } }>(
     "/tv/channels/:id/programmes",
     guard,
@@ -273,7 +293,26 @@ export default async function tvCatalogRoute(app: FastifyInstance) {
         select: { id: true, hidden: true },
       });
       if (!ch || ch.hidden) return reply.code(404).send({ error: "not_found" });
-      return { programmes: [] };
+
+      const { day } = req.query;
+      let dayStart: Date;
+      if (day !== undefined) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return reply.code(400).send({ error: "invalid_day" });
+        dayStart = new Date(`${day}T00:00:00.000Z`);
+        if (Number.isNaN(dayStart.getTime())) return reply.code(400).send({ error: "invalid_day" });
+      } else {
+        const t = new Date();
+        dayStart = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate()));
+      }
+      const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+      const rows = await app.prisma.tvProgramme.findMany({
+        where: { channelId: ch.id, stop: { gt: dayStart }, start: { lt: dayEnd } }, // overlap semantics
+        orderBy: { start: "asc" },
+        select: { id: true, start: true, stop: true, title: true, description: true, category: true },
+      });
+      return {
+        programmes: rows.map((r) => ({ ...r, start: r.start.toISOString(), stop: r.stop.toISOString() })),
+      };
     },
   );
 

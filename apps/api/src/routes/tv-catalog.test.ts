@@ -37,6 +37,7 @@ function emptyTvModels(app: any) {
     deleteMany: async () => ({ count: 0 }),
   };
   app.prisma.tvPlayEvent = { findMany: async () => [], create: async () => ({}) };
+  app.prisma.tvProgramme = { findMany: async () => [] };
 }
 
 function channelRow(over: Record<string, unknown> = {}) {
@@ -103,6 +104,7 @@ describe("GET /tv/home", () => {
       // newest first; c2 appears twice → deduped
       findMany: async () => [{ channelId: "c2" }, { channelId: "c1" }, { channelId: "c2" }],
     };
+    (app as any).prisma.tvProgramme = { findMany: async () => [] }; // no EPG rows in this test
 
     const res = await app.inject({ method: "GET", url: "/api/tv/home", cookies: COOKIES });
     expect(res.statusCode).toBe(200);
@@ -121,6 +123,7 @@ describe("GET /tv/home", () => {
     expect(c2card).toEqual({
       id: "c2", number: 2, name: "2x2", country: "RU", categories: ["comedy"],
       quality: "1080p", logo: null, healthy: false, favorite: false,
+      now: null, next: null,
     });
     const c1card = body.recents[1];
     expect(c1card.logo).toBe("/api/images/channel/1tv.png");
@@ -235,7 +238,7 @@ describe("GET /tv/channels/:id", () => {
 });
 
 describe("GET /tv/channels/:id/programmes", () => {
-  it("returns the locked empty shape until the EPG phase", async () => {
+  it("returns an empty list when the channel has no programmes that day", async () => {
     const app = await buildApp(env);
     patchAuth(app);
     emptyTvModels(app);
@@ -335,6 +338,83 @@ describe("POST /tv/events/:channelId", () => {
     (app as any).prisma.tvChannel = { findUnique: async () => ({ id: "cH", hidden: true }) };
     const res = await app.inject({ method: "POST", url: "/api/tv/events/cH", cookies: COOKIES });
     expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+});
+
+describe("now/next decoration", () => {
+  it("GET /api/tv/guide attaches now/next with exactly ONE tvProgramme query", async () => {
+    const app = await buildApp(env);
+    patchAuth(app);
+    emptyTvModels(app);
+    (app as any).prisma.tvChannel = {
+      count: async () => 2,
+      findMany: async () => [
+        channelRow({ id: "a", number: 1, name: "One", country: "RU" }),
+        channelRow({ id: "b", number: 2, name: "Two", country: "DE" }),
+      ],
+    };
+    const programmeCalls: unknown[] = [];
+    (app as any).prisma.tvProgramme = {
+      findMany: async (args: unknown) => {
+        programmeCalls.push(args);
+        return [
+          { channelId: "a", title: "News", start: new Date(Date.now() - 600_000), stop: new Date(Date.now() + 600_000) },
+        ];
+      },
+    };
+    const res = await app.inject({ method: "GET", url: "/api/tv/guide", cookies: COOKIES });
+    expect(res.statusCode).toBe(200);
+    expect(programmeCalls).toHaveLength(1); // N+1 ban
+    const body = res.json() as { channels: { id: string; now: { title: string } | null; next: unknown }[] };
+    expect(body.channels.find((c) => c.id === "a")?.now?.title).toBe("News");
+    expect(body.channels.find((c) => c.id === "b")?.now).toBeNull();
+    await app.close();
+  });
+
+  it("GET /api/tv/home attaches now/next with exactly ONE tvProgramme query across all rails", async () => {
+    const app = await buildApp(env);
+    patchAuth(app);
+    emptyTvModels(app);
+    const card = channelRow({ id: "a", number: 1, name: "One", country: "RU" });
+    (app as any).prisma.tvChannel = { findMany: async () => [card], count: async () => 1 };
+    const programmeCalls: unknown[] = [];
+    (app as any).prisma.tvProgramme = {
+      findMany: async (args: unknown) => {
+        programmeCalls.push(args);
+        return [
+          { channelId: "a", title: "News", start: new Date(Date.now() - 600_000), stop: new Date(Date.now() + 600_000) },
+        ];
+      },
+    };
+    const res = await app.inject({ method: "GET", url: "/api/tv/home", cookies: COOKIES });
+    expect(res.statusCode).toBe(200);
+    expect(programmeCalls).toHaveLength(1); // ONE grouped query across every rail
+    const rails = res.json() as { countries: { channels: { id: string; now: { title: string } | null }[] }[] };
+    const decorated = rails.countries.flatMap((r) => r.channels).find((c) => c.id === "a");
+    expect(decorated?.now?.title).toBe("News");
+    await app.close();
+  });
+
+  it("GET /api/tv/channels/:id/programmes?day= returns the UTC day, 400 on malformed day", async () => {
+    const app = await buildApp(env);
+    patchAuth(app);
+    emptyTvModels(app);
+    (app as any).prisma.tvChannel = { findUnique: async () => ({ id: "a", hidden: false }) };
+    let captured: any = null;
+    (app as any).prisma.tvProgramme = {
+      findMany: async (args: any) => {
+        captured = args;
+        return [{ id: "p1", start: new Date("2026-07-03T16:00:00Z"), stop: new Date("2026-07-03T17:00:00Z"), title: "Время", description: null, category: "Новости" }];
+      },
+    };
+    const bad = await app.inject({ method: "GET", url: "/api/tv/channels/a/programmes?day=03-07-2026", cookies: COOKIES });
+    expect(bad.statusCode).toBe(400);
+    const res = await app.inject({ method: "GET", url: "/api/tv/channels/a/programmes?day=2026-07-03", cookies: COOKIES });
+    expect(res.statusCode).toBe(200);
+    expect(captured.where.stop.gt.toISOString()).toBe("2026-07-03T00:00:00.000Z");
+    expect(captured.where.start.lt.toISOString()).toBe("2026-07-04T00:00:00.000Z");
+    expect(res.json().programmes[0].title).toBe("Время");
     await app.close();
   });
 });

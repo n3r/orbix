@@ -122,13 +122,40 @@ describe("GET /tv/channels/:id/play", () => {
         ],
       }),
     };
+    (app as any).prisma.tvProgramme = { findMany: async () => [] }; // no EPG rows in this test
     const res = await app.inject({ method: "GET", url: "/api/tv/channels/ch1/play", cookies });
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.channel).toMatchObject({ id: "ch1", number: 5, name: "One", logo: "channel/one.png", country: "RU", quality: "1080p" });
-    expect(body.nowNext).toBeNull();
+    expect(body.nowNext).toEqual({ now: null, next: null });
     expect(body.sources.map((s: any) => s.streamId)).toEqual(["ok1", "ok2", "unk"]);
     expect(body.sources[0]).toMatchObject({ src: "/api/tv/proxy/ok1/index.m3u8", quality: "1080p", label: null });
+    await app.close();
+  });
+
+  it("GET /api/tv/channels/:id/play fills nowNext from one grouped query", async () => {
+    const app = await buildTvApp();
+    (app as any).prisma.tvChannel = {
+      findUnique: async () => ({
+        id: "ch1", number: 5, name: "One", logoPath: "channel/one.png", country: "RU", quality: "1080p", hidden: false,
+        streams: [{ id: "ok1", quality: "1080p", label: null, priority: 0, protocol: "hls", status: "ok" }],
+      }),
+    };
+    const programmeCalls: unknown[] = [];
+    (app as any).prisma.tvProgramme = {
+      findMany: async (args: unknown) => {
+        programmeCalls.push(args);
+        return [
+          { channelId: "ch1", title: "Время", start: new Date(Date.now() - 600_000), stop: new Date(Date.now() + 600_000) },
+          { channelId: "ch1", title: "Кино", start: new Date(Date.now() + 600_000), stop: new Date(Date.now() + 4_200_000) },
+        ];
+      },
+    };
+    const res = await app.inject({ method: "GET", url: "/api/tv/channels/ch1/play", cookies });
+    expect(res.statusCode).toBe(200);
+    expect(programmeCalls).toHaveLength(1);
+    expect(res.json().nowNext.now.title).toBe("Время");
+    expect(res.json().nowNext.next.title).toBe("Кино");
     await app.close();
   });
 

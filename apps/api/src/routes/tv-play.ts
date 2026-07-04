@@ -12,6 +12,7 @@ import {
 import { requireAuth } from "../lib/auth";
 import { requireTvAccess } from "../lib/tv-access";
 import { makeTvUpstream, type TvUpstream, type UpstreamResult } from "../lib/tv-upstream";
+import { loadNowNext } from "../lib/tv-now-next";
 
 const MAX_SOURCES = 3;
 const DEGRADED_AT = 3;
@@ -117,6 +118,8 @@ export default function tvPlayRoute(
       const ordered = orderStreams(channel.streams);
       if (ordered.length === 0) return reply.code(409).send({ error: "no_playable_stream" });
 
+      const nowNext = (await loadNowNext(app.prisma, [channel.id])).get(channel.id) ?? { now: null, next: null };
+
       return {
         channel: {
           id: channel.id,
@@ -126,7 +129,7 @@ export default function tvPlayRoute(
           country: channel.country,
           quality: channel.quality,
         },
-        nowNext: null, // phase 3 (EPG) fills this
+        nowNext,
         sources: ordered.slice(0, MAX_SOURCES).map((s) => ({
           streamId: s.id,
           src: `/api/tv/proxy/${s.id}/index.m3u8`,
