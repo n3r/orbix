@@ -81,6 +81,16 @@ public actor OrbixClient {
         try await send(method: "GET", url: baseURL.appending(path: "api/home/rows"))
     }
 
+    // MARK: - Item detail
+
+    /// `GET /api/items/:id` → the ids of its playable files, "best copy
+    /// first" per the server's `orderBy` (see
+    /// `apps/api/src/routes/catalog.ts`). The M1 spike plays `files[0]`.
+    public func itemFileIds(id: String) async throws -> [String] {
+        let detail: ItemDetail = try await send(method: "GET", url: baseURL.appending(path: "api/items/\(id)"))
+        return detail.files.map(\.id)
+    }
+
     // MARK: - Playback
 
     /// `POST /api/playback/info`.

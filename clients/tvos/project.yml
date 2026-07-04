@@ -52,3 +52,16 @@ schemes:
     test:
       targets:
         - OrbixKitTests
+      # SP2 M1 live-gate passthrough: xcodebuild does NOT forward the
+      # invoking shell's environment into the simulator-hosted test
+      # process. `$(VAR)` here is an Xcode build-setting macro, resolved
+      # against the OrbixKit target's settings *including command-line
+      # overrides* — so `xcodebuild ... test ORBIX_TEST_BASE_URL=... ` (a
+      # plain build-setting override, no special prefix) makes it through
+      # to `ProcessInfo.processInfo.environment` inside
+      # PlaybackReadinessTests. Left unset, `$(VAR)` expands to empty, so
+      # the test's env-unset guards still fire and it skips cleanly.
+      environmentVariables:
+        ORBIX_TEST_BASE_URL: "$(ORBIX_TEST_BASE_URL)"
+        ORBIX_TEST_TOKEN: "$(ORBIX_TEST_TOKEN)"
+        ORBIX_TEST_FILE_IDS: "$(ORBIX_TEST_FILE_IDS)"

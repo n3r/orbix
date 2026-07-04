@@ -1,16 +1,28 @@
 import SwiftUI
 
-/// M0 acceptance surface: shows the configured server base URL, lets the
-/// user type or edit it, and reports reachability (`GET /health`) as a
-/// green/red result. No server address is hardcoded — `AppModel` resolves
-/// an initial value from a launch argument or environment variable, or
-/// leaves the field blank for manual entry.
+/// Routes to the M1 playback spike (`SpikeListView`) once both a server
+/// address and a device token are configured (`AppModel.isReadyForSpike`);
+/// otherwise shows the M0 acceptance surface — the configured server base
+/// URL, editable, reporting reachability (`GET /health`) as a green/red
+/// result. No server address is hardcoded — `AppModel` resolves an initial
+/// value from a launch argument or environment variable, or leaves the
+/// field blank for manual entry. (The device token has no on-screen entry
+/// yet — that's M2's pairing UI; the spike resolves it the same way, via
+/// launch arg/env.)
 struct RootView: View {
     @State private var model = AppModel()
     @State private var baseURLText = ""
     @FocusState private var isTextFieldFocused: Bool
 
     var body: some View {
+        if model.isReadyForSpike {
+            SpikeListView(model: model)
+        } else {
+            reachabilityView
+        }
+    }
+
+    private var reachabilityView: some View {
         VStack(spacing: 40) {
             Text("Orbix")
                 .font(.system(size: 96, weight: .bold))

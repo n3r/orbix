@@ -158,6 +158,30 @@ public struct HomeRows: Codable, Sendable, Equatable {
     }
 }
 
+// MARK: - Item detail
+
+/// Minimal decode target for `GET /api/items/:id`. The M1 playback spike
+/// only needs the ids of the item's playable files — `files[0]` is "best
+/// copy first" per the server's `orderBy` (height/bitrate desc, see
+/// `apps/api/src/routes/catalog.ts`) — so every other field on the full
+/// item-detail response (title, seasons, cast, ratings, ...) is simply
+/// ignored by Codable's synthesized `init(from:)`.
+public struct ItemDetail: Codable, Sendable, Equatable {
+    public struct FileRef: Codable, Sendable, Equatable {
+        public var id: String
+
+        public init(id: String) {
+            self.id = id
+        }
+    }
+
+    public var files: [FileRef]
+
+    public init(files: [FileRef]) {
+        self.files = files
+    }
+}
+
 // MARK: - Pairing
 
 /// Response of `POST /api/pair/initiate`.
