@@ -9,7 +9,10 @@ settings:
     SWIFT_VERSION: "6.0"
     TVOS_DEPLOYMENT_TARGET: "17.0"
     TARGETED_DEVICE_FAMILY: "3" # tvOS
-    CODE_SIGNING_ALLOWED: "NO" # simulator builds need no signing
+    # Simulator builds don't sign. Device builds pass CODE_SIGNING_ALLOWED=YES
+    # + DEVELOPMENT_TEAM=UG27UAHLA4 + CODE_SIGN_STYLE=Automatic on the
+    # xcodebuild command line (see the device install invocation).
+    CODE_SIGNING_ALLOWED: "NO"
 targets:
   Orbix:
     type: application

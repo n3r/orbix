@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { buildApp } from "../app";
 import type { Env } from "@orbix/config";
 
@@ -15,8 +15,18 @@ describe("GET /health", () => {
     (app as any).prisma.$queryRaw = async () => [{ "?column?": 1 }];
     const res = await app.inject({ method: "GET", url: "/health" });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ db: true });
+    expect(res.json()).toMatchObject({ db: true, service: "orbix" });
     await app.close();
+  });
+
+  it("carries the orbix discovery marker + name (ORBIX_SERVER_NAME override)", async () => {
+    vi.stubEnv("ORBIX_SERVER_NAME", "Living Room");
+    const app = await buildApp(env);
+    (app as any).prisma.$queryRaw = async () => [{ "?column?": 1 }];
+    const res = await app.inject({ method: "GET", url: "/health" });
+    expect(res.json()).toMatchObject({ service: "orbix", name: "Living Room" });
+    await app.close();
+    vi.unstubAllEnvs();
   });
 
   it("returns 503 db:false when the DB probe throws", async () => {
