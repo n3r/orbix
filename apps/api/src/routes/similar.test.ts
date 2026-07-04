@@ -19,11 +19,41 @@ function authed(app: any, profile: unknown) {
 
 const anchor = {
   id: "a", title: "Anchor", year: 2020, rating: "PG-13", posterPath: null, matchState: "matched",
-  overview: "x", genres: [{ genre: { name: "Action" } }], keywords: [], credits: [],
+  runtimeSec: 120 * 60, tmdbScore: 7.4, imdbRating: 7.6, rtRating: null, metacritic: null,
+  overview: "x",
+  genres: [{ genre: { name: "Action" } }, { genre: { name: "Crime" } }],
+  keywords: [{ keyword: { name: "heist" } }, { keyword: { name: "undercover" } }],
+  credits: [
+    { role: "Lead", department: "cast", order: 0, person: { name: "Actor A" } },
+    { role: "Director", department: "crew", order: 0, person: { name: "Director A" } },
+  ],
 };
-const other = {
-  id: "b", title: "Other", year: 2021, rating: "PG-13", posterPath: "poster/b.jpg", matchState: "matched",
-  overview: "y", genres: [{ genre: { name: "Action" } }], keywords: [], credits: [],
+const specific = {
+  id: "specific", title: "Specific", year: 2021, rating: "PG-13", posterPath: "poster/s.jpg", matchState: "matched",
+  runtimeSec: 118 * 60, tmdbScore: 7.1, imdbRating: 7.0, rtRating: null, metacritic: null,
+  overview: "y",
+  genres: [{ genre: { name: "Crime" } }],
+  keywords: [{ keyword: { name: "heist" } }, { keyword: { name: "undercover" } }],
+  credits: [
+    { role: "Supporting", department: "cast", order: 0, person: { name: "Actor B" } },
+    { role: "Director", department: "crew", order: 0, person: { name: "Director A" } },
+  ],
+};
+const broad = {
+  id: "broad", title: "Broad", year: 2022, rating: "PG-13", posterPath: "poster/b.jpg", matchState: "matched",
+  runtimeSec: 121 * 60, tmdbScore: 8.4, imdbRating: 8.2, rtRating: null, metacritic: null,
+  overview: "z",
+  genres: [{ genre: { name: "Action" } }],
+  keywords: [],
+  credits: [],
+};
+const unrelated = {
+  id: "unrelated", title: "Unrelated", year: 2023, rating: "PG-13", posterPath: "poster/u.jpg", matchState: "matched",
+  runtimeSec: 90 * 60, tmdbScore: 9.7, imdbRating: 9.7, rtRating: 100, metacritic: 100,
+  overview: "w",
+  genres: [{ genre: { name: "Romance" } }],
+  keywords: [{ keyword: { name: "wedding" } }],
+  credits: [],
 };
 
 describe("GET /items/:id/similar", () => {
@@ -40,13 +70,13 @@ describe("GET /items/:id/similar", () => {
     await app.close();
   });
 
-  it("excludes the anchor and ranks the rest (Jaccard fallback path)", async () => {
+  it("ranks specific related candidates above broad same-genre matches and drops unrelated fallback filler", async () => {
     const app = await buildApp(env);
     authed(app, { id: "p1", kind: "standard", maturityCap: null });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (app as any).prisma.mediaItem = {
       findUnique: async () => anchor,
-      findMany: async () => [other],
+      findMany: async () => [unrelated, broad, specific],
     };
     // Force the embeddings path to degrade: $queryRaw throws.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -57,7 +87,7 @@ describe("GET /items/:id/similar", () => {
     });
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.items.map((i: { id: string }) => i.id)).toEqual(["b"]);
+    expect(body.items.map((i: { id: string }) => i.id)).toEqual(["specific", "broad"]);
     await app.close();
   });
 

@@ -7,9 +7,10 @@
  */
 
 import { describe, it, expect } from "vitest";
+import type { PrismaClient } from "@orbix/db";
 import { embedItem, backfillEmbeddings } from "./embed-worker.js";
 
-function fakePrisma(overrides: Record<string, unknown> = {}) {
+function fakePrisma(overrides: Record<string, unknown> = {}): PrismaClient {
   return {
     mediaItem: {
       findUnique: async ({ where }: { where: { id: string } }) => ({
@@ -22,7 +23,7 @@ function fakePrisma(overrides: Record<string, unknown> = {}) {
     },
     $executeRawUnsafe: async () => 1,
     ...overrides,
-  } as any;
+  } as unknown as PrismaClient;
 }
 
 describe("embedItem — non-finite vector guard", () => {
@@ -45,6 +46,20 @@ describe("embedItem — non-finite vector guard", () => {
 });
 
 describe("backfillEmbeddings — counts", () => {
+  it("includes manual matches when finding items that need embeddings", async () => {
+    let sql = "";
+    const prisma = fakePrisma({
+      $queryRaw: async (strings: TemplateStringsArray) => {
+        sql = strings.join("");
+        return [];
+      },
+    });
+
+    await backfillEmbeddings(prisma, { embed: async () => new Array(384).fill(0.2) });
+
+    expect(sql).toContain(`m."matchState" IN ('matched', 'manual')`);
+  });
+
   it("returns processed/skipped totals, skipping items whose embed fails", async () => {
     const prisma = fakePrisma({
       $queryRaw: async () => [{ id: "a" }, { id: "b" }, { id: "c" }],
