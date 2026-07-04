@@ -40,6 +40,7 @@ export function computeBlockRect(
   windowStartMs: number,
   windowMs: number,
 ): { left: number; width: number } {
+  if (windowMs <= 0) return { left: 0, width: 0 }; // degenerate window — render nothing rather than divide-by-zero/NaN
   const startMs = Date.parse(programme.start);
   const stopMs = Date.parse(programme.stop);
   const rawLeft = ((startMs - windowStartMs) / windowMs) * 100;
@@ -79,6 +80,7 @@ export function generateTimeTicks(
  * (the line is hidden entirely rather than clamped to an edge).
  */
 export function nowLinePercent(windowStartMs: number, windowMs: number, atMs: number = Date.now()): number | null {
+  if (windowMs <= 0) return null; // degenerate window — no meaningful position, hide the line
   if (atMs < windowStartMs || atMs >= windowStartMs + windowMs) return null;
   return ((atMs - windowStartMs) / windowMs) * 100;
 }

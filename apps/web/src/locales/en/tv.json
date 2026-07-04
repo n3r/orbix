@@ -72,7 +72,8 @@
     "next": "Next",
     "today": "Today",
     "tomorrow": "Tomorrow",
-    "showingOf": "Showing {{shown}} of {{total}} — narrow the filter"
+    "showingOf": "Showing {{shown}} of {{total}} — narrow the filter",
+    "playProgramme": "Watch {{title}} on {{channel}}"
   },
   "channel": {
     "number": "Channel {{number}}",

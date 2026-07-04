@@ -74,7 +74,8 @@
     "next": "Вперёд",
     "today": "Сегодня",
     "tomorrow": "Завтра",
-    "showingOf": "Показано {{shown}} из {{total}} — уточните фильтр"
+    "showingOf": "Показано {{shown}} из {{total}} — уточните фильтр",
+    "playProgramme": "Смотреть «{{title}}» на «{{channel}}»"
   },
   "channel": {
     "number": "Канал {{number}}",

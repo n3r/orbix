@@ -105,6 +105,15 @@ describe("computeBlockRect", () => {
     );
     expect(rect.width).toBe(0);
   });
+
+  it("a programme entirely after the window collapses to zero width", () => {
+    const rect = computeBlockRect(
+      { start: "2026-07-03T19:00:00.000Z", stop: "2026-07-03T20:00:00.000Z" },
+      windowStart,
+      windowMs,
+    );
+    expect(rect.width).toBe(0);
+  });
 });
 
 describe("generateTimeTicks", () => {
@@ -136,5 +145,22 @@ describe("nowLinePercent", () => {
 
   it("returns null at/after the window end (half-open)", () => {
     expect(nowLinePercent(windowStart, windowMs, windowStart + windowMs)).toBeNull();
+  });
+
+  it("returns 0 at the exact inclusive lower boundary (atMs === windowStart)", () => {
+    expect(nowLinePercent(windowStart, windowMs, windowStart)).toBe(0);
+  });
+});
+
+describe("windowMs<=0 guard", () => {
+  it("computeBlockRect and nowLinePercent guard against a degenerate window instead of producing NaN", () => {
+    const windowStart = Date.parse("2026-07-03T14:00:00.000Z");
+    const rect = computeBlockRect(
+      { start: "2026-07-03T15:00:00.000Z", stop: "2026-07-03T16:00:00.000Z" },
+      windowStart,
+      0,
+    );
+    expect(rect).toEqual({ left: 0, width: 0 });
+    expect(nowLinePercent(windowStart, 0, windowStart)).toBeNull();
   });
 });

@@ -72,7 +72,8 @@
     "next": "Próxima",
     "today": "Hoje",
     "tomorrow": "Amanhã",
-    "showingOf": "Mostrando {{shown}} de {{total}} — restrinja o filtro"
+    "showingOf": "Mostrando {{shown}} de {{total}} — restrinja o filtro",
+    "playProgramme": "Assistir {{title}} em {{channel}}"
   },
   "channel": {
     "number": "Canal {{number}}",

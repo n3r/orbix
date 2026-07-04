@@ -30,9 +30,10 @@ const TOMORROW_HOUR = 18;
 // narrow it instead of silently truncating (see the "showing N of M" note).
 const CHANNEL_LIMIT = 80;
 
-// Layout constants — fixed pixel widths (not responsive fill) so the
-// now-line's pixel offset can be computed directly without measuring the
-// DOM. min time-track width is HOURS*240px per the brief.
+// Layout constants — fixed pixel widths (not responsive fill) so block/tick/
+// now-line positions can all be expressed as simple window-relative
+// percentages without ever measuring the DOM. min time-track width is
+// HOURS*240px per the brief.
 const CHANNEL_COL_WIDTH = 200;
 const TRACK_WIDTH = HOURS * 240;
 const ROW_HEIGHT = 64;
@@ -89,12 +90,15 @@ export default function TvGuideGrid({
 
   // Reset scroll when the shared filter changes (same reasoning as
   // TvGuidePage's list view: a stale scroll position would show the new
-  // filter's channels starting mid-list instead of at the top). The nav
-  // window (`start`) deliberately survives a filter change.
+  // filter's channels starting mid-list instead of at the top) — and when
+  // the nav window (`windowStartMs`) changes, so Prev/Next/Now/Tomorrow
+  // don't leave the time track scrolled to a stale horizontal offset.
+  // Changing the filter's *value* deliberately still leaves `start` alone —
+  // only the scroll position is reset here.
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0, left: 0 });
     rowVirtualizer.scrollToOffset(0);
-  }, [filter, rowVirtualizer]);
+  }, [filter, windowStartMs, rowVirtualizer]);
 
   const ticks = useMemo(() => generateTimeTicks(windowStartMs, WINDOW_MS, TICK_STEP_MS), [windowStartMs]);
 
@@ -227,7 +231,7 @@ export default function TvGuideGrid({
                                 type="button"
                                 title={p.title}
                                 onClick={() => onTune(channels, channel.id)}
-                                aria-label={t("tv:guidePage.play", { name: channel.name })}
+                                aria-label={t("tv:grid.playProgramme", { title: p.title, channel: channel.name })}
                                 style={{ left: `${rect.left}%`, width: `${rect.width}%`, top: 6, bottom: 6 }}
                                 className={cn(
                                   "absolute overflow-hidden truncate rounded-[var(--radius-sm)] px-2 text-left text-xs text-[var(--text)]",
@@ -240,21 +244,34 @@ export default function TvGuideGrid({
                             );
                           })
                         )}
+                        {/* Now-line: rendered per-row, inside this row's own
+                            time track, instead of one outer overlay. Each
+                            virtualized row's `transform` (translateY) makes
+                            it establish its own stacking context, which
+                            traps the row's `sticky left-0 z-10` channel cell
+                            — so a later-DOM-sibling outer overlay would
+                            paint on top of that trapped sticky cell, above
+                            the pinned channel column, when scrolled
+                            horizontally. Drawing the line inside the same
+                            row (and thus the same stacking context) lets the
+                            channel cell's z-10 correctly win again. Every
+                            row draws its segment at the same left% so, taken
+                            together, they still read as one continuous
+                            vertical line down the grid. z-[5] keeps the line
+                            above the programme blocks (default/z-auto
+                            stacking) but below the channel cell's z-10. */}
+                        {nowPct !== null && (
+                          <div
+                            aria-hidden
+                            className="pointer-events-none absolute top-0 bottom-0 z-[5] bg-red-500"
+                            style={{ left: `${nowPct}%`, width: 2 }}
+                          />
+                        )}
                       </div>
                     </div>
                   );
                 })}
               </div>
-
-              {/* Now-line: drawn after the rows (paints over programme blocks)
-                  but plain z-auto (under the sticky ruler/channel column, z-20/z-10). */}
-              {nowPct !== null && (
-                <div
-                  aria-hidden
-                  className="pointer-events-none absolute bottom-0 top-0 w-px bg-red-500"
-                  style={{ left: CHANNEL_COL_WIDTH + (nowPct / 100) * TRACK_WIDTH }}
-                />
-              )}
             </div>
           </div>
 
