@@ -225,18 +225,19 @@ export default function TvGuideGrid({
                             const rect = computeBlockRect(p, windowStartMs, WINDOW_MS);
                             if (rect.width <= 0) return null; // fully clipped by the window edge
                             const airing = Date.parse(p.start) <= nowMs && nowMs < Date.parse(p.stop);
+                            const label = t("tv:grid.playProgramme", { title: p.title, channel: channel.name });
                             return (
                               <button
                                 key={p.id}
                                 type="button"
                                 title={p.title}
                                 onClick={() => onTune(channels, channel.id)}
-                                aria-label={t("tv:grid.playProgramme", { title: p.title, channel: channel.name })}
+                                aria-label={airing ? `${label} — ${t("tv:channel.onNow")}` : label}
                                 style={{ left: `${rect.left}%`, width: `${rect.width}%`, top: 6, bottom: 6 }}
                                 className={cn(
                                   "absolute overflow-hidden truncate rounded-[var(--radius-sm)] px-2 text-left text-xs text-[var(--text)]",
                                   "bg-[var(--surface-2)] hover:bg-white/10 focus-visible:z-30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent)]",
-                                  airing && "border-l-2 border-[var(--accent)] bg-[var(--accent)]/20",
+                                  airing && "bg-[var(--accent)]/20",
                                 )}
                               >
                                 {p.title}

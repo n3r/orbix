@@ -69,7 +69,7 @@ export default function TitleHero({
           </h1>
         )}
 
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-[var(--text-dim)]">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-[var(--text-muted)]">
           <RatingBadges
             imdbRating={item.imdbRating}
             rtRating={item.rtRating}

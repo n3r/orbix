@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { cn, Input } from "@orbix/ui";
+import { cn, focusRingInset, Input } from "@orbix/ui";
 import { useTvGuide } from "@/lib/queries";
 import type { TvChannelCard, TvGridChannel } from "@/lib/types";
 import LiveTvOverlay from "@/components/tv/LiveTvOverlay";
@@ -257,7 +257,7 @@ export default function TvGuidePage() {
                       type="button"
                       onClick={() => setPlaying({ channels, id: c.id })}
                       aria-label={t("tv:guidePage.play", { name: c.name })}
-                      className="absolute inset-0 hover:bg-white/5 focus-visible:bg-white/5 focus-visible:outline-none"
+                      className={cn("absolute inset-0 hover:bg-white/5", focusRingInset)}
                     />
                     {/* Channel-details affordance, painted above the row button. */}
                     <Link

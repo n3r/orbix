@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import { cn } from "@orbix/ui";
+import { cn, focusRingInset } from "@orbix/ui";
 import type { MediaCard } from "@/lib/types";
 
 /**
@@ -22,8 +22,8 @@ export default function PosterCard({
       item.matchState === "manual");
 
   return (
-    <Link to={`/title/${item.id}`} className={cn("group flex flex-col gap-2", className)}>
-      <div className="aspect-[2/3] overflow-hidden rounded-[var(--radius)] bg-[var(--surface)] transition-transform duration-200 group-hover:scale-[1.03] group-hover:shadow-lg group-hover:shadow-black/40">
+    <Link to={`/title/${item.id}`} className={cn("group flex flex-col gap-2", focusRingInset, className)}>
+      <div className="aspect-[2/3] overflow-hidden rounded-[var(--radius)] bg-[var(--surface)] transition-transform duration-200 group-hover:scale-[1.03] group-hover:shadow-lg group-hover:shadow-black/40 motion-reduce:transition-none motion-reduce:group-hover:transform-none">
         {showImg ? (
           <img
             src={`/api/images/${item.posterPath}`}

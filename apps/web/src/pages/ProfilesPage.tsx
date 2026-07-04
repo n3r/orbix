@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
-import { Button, Card, Input, Avatar } from "@orbix/ui";
+import { Button, Card, Input, Avatar, Select, cn, focusRing } from "@orbix/ui";
 import { apiFetch } from "@/lib/api";
 import { errorMessage } from "@/lib/i18n/tError";
 import { SUPPORTED_LANGUAGES, LANGUAGE_LABELS, isLanguageCode } from "@/lib/i18n/languages";
@@ -108,7 +108,10 @@ export default function ProfilesPage() {
             <button
               key={profile.id}
               onClick={() => handleSelectProfile(profile)}
-              className="flex flex-col items-center gap-3 rounded-[var(--radius)] p-4 hover:bg-[var(--surface)] transition-colors cursor-pointer"
+              className={cn(
+                "flex flex-col items-center gap-3 rounded-[var(--radius)] p-4 hover:bg-[var(--surface)] transition-colors cursor-pointer",
+                focusRing,
+              )}
             >
               <Avatar name={profile.name} src={profile.avatar ?? undefined} size={80} />
               <span className="text-[var(--text)] font-medium">{profile.name}</span>
@@ -152,20 +155,19 @@ export default function ProfilesPage() {
               <label htmlFor="profile-language" className="text-sm font-medium text-[var(--text-dim)]">
                 {t("profiles:language.label")}
               </label>
-              <select
+              <Select
                 id="profile-language"
                 value={newLanguage}
                 onChange={(e) => {
                   if (isLanguageCode(e.target.value)) setNewLanguage(e.target.value);
                 }}
-                className="rounded-[var(--radius)] bg-[var(--surface)] px-3 py-2 text-[var(--text)]"
               >
                 {SUPPORTED_LANGUAGES.map((l) => (
                   <option key={l} value={l}>
                     {LANGUAGE_LABELS[l]}
                   </option>
                 ))}
-              </select>
+              </Select>
               <p className="text-xs text-[var(--text-dim)]">{t("profiles:language.help")}</p>
             </div>
             {formError && <p className="text-sm text-red-400">{formError}</p>}

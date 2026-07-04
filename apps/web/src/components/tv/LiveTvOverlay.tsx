@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { Button, cn } from "@orbix/ui";
+import { Button, cn, focusRing, useFocusTrap } from "@orbix/ui";
 import type { TvChannelCard, TvPlayResponse } from "@/lib/types";
 import LiveTvPlayer from "./LiveTvPlayer";
 import { NowProgressBar } from "./NowProgressBar";
@@ -43,6 +43,13 @@ export default function LiveTvOverlay({ channels, initialId, onClose }: Props) {
   const controlsRef = useRef<{ seekToLiveEdge: () => void } | null>(null);
   const osdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const guideRowRef = useRef<HTMLButtonElement | null>(null);
+  const guideListRef = useRef<HTMLDivElement | null>(null);
+  const closeRef = useRef<HTMLButtonElement | null>(null);
+
+  // Proper modal semantics: focus moves into the overlay on open, Tab is trapped
+  // inside it, and focus is restored to the trigger on close. Escape stays owned
+  // by the keyboard effect below (it respects fullscreen and the guide drawer).
+  const containerRef = useFocusTrap<HTMLDivElement>(true, { initialFocus: closeRef });
 
   const current = channels.find((c) => c.id === currentId) ?? channels[0] ?? null;
 
@@ -159,7 +166,15 @@ export default function LiveTvOverlay({ channels, initialId, onClose }: Props) {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [channels, currentId, guideIndex, guideOpen, onClose, showOsd, tune, zap]);
 
-  // Keep the focused mini-guide row in view.
+  // Move real DOM focus into the mini-guide when it opens (so its
+  // aria-activedescendant is announced by screen readers and arrow-key nav is
+  // scoped), and back to the Close button when it closes.
+  useEffect(() => {
+    if (guideOpen) guideListRef.current?.focus();
+    else closeRef.current?.focus();
+  }, [guideOpen]);
+
+  // Keep the active mini-guide row in view.
   useEffect(() => {
     if (guideOpen) guideRowRef.current?.scrollIntoView({ block: "nearest" });
   }, [guideIndex, guideOpen]);
@@ -177,7 +192,13 @@ export default function LiveTvOverlay({ channels, initialId, onClose }: Props) {
   if (!current) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 bg-black">
+    <div
+      ref={containerRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label={current.name}
+      className="fixed inset-0 z-[var(--z-overlay)] bg-black"
+    >
       {!offline && (
         <LiveTvPlayer
           channelId={current.id}
@@ -247,12 +268,17 @@ export default function LiveTvOverlay({ channels, initialId, onClose }: Props) {
         </div>
       )}
 
-      {/* Mini-guide drawer ("g"): the zap context's channels, Enter tunes in place */}
+      {/* Mini-guide drawer ("g"): the zap context's channels, Enter tunes in place.
+          A listbox with aria-activedescendant so the highlighted row is a real,
+          announced selection rather than a visual-only ring. */}
       {guideOpen && (
         <div
-          role="dialog"
+          ref={guideListRef}
+          role="listbox"
+          tabIndex={0}
           aria-label={t("tv:player.miniGuide")}
-          className="absolute inset-y-0 left-0 z-20 flex w-80 max-w-[80vw] flex-col border-r border-white/10 bg-black/85 backdrop-blur"
+          aria-activedescendant={channels[guideIndex] ? `ltv-ch-${channels[guideIndex]!.id}` : undefined}
+          className="absolute inset-y-0 left-0 z-20 flex w-80 max-w-[80vw] flex-col border-r border-white/10 bg-black/85 backdrop-blur focus:outline-none"
         >
           <p className="px-4 pb-2 pt-4 text-xs uppercase tracking-wide text-white/50">
             {t("tv:player.miniGuide")}
@@ -261,13 +287,18 @@ export default function LiveTvOverlay({ channels, initialId, onClose }: Props) {
             {channels.map((c, i) => (
               <button
                 key={c.id}
+                id={`ltv-ch-${c.id}`}
                 ref={i === guideIndex ? guideRowRef : undefined}
                 type="button"
+                role="option"
+                tabIndex={-1}
+                aria-selected={i === guideIndex}
+                aria-current={c.id === currentId ? "true" : undefined}
                 onClick={() => tune(c.id)}
                 className={cn(
                   "flex w-full items-center gap-3 px-4 py-2 text-left",
                   c.id === currentId ? "bg-[var(--accent)]/20 text-white" : "text-white/80 hover:bg-white/10",
-                  i === guideIndex && "ring-1 ring-inset ring-[var(--accent)]",
+                  i === guideIndex && "ring-2 ring-inset ring-[var(--accent)]",
                 )}
               >
                 <span className="w-8 shrink-0 text-right text-xs tabular-nums text-white/50">{c.number}</span>
@@ -284,10 +315,15 @@ export default function LiveTvOverlay({ channels, initialId, onClose }: Props) {
 
       {/* Close affordance — top-left, above everything (PlayerOverlay pattern). */}
       <button
+        ref={closeRef}
         type="button"
         onClick={onClose}
         aria-label={t("tv:player.close")}
-        className="absolute left-3 top-3 z-30 grid h-10 w-10 place-items-center rounded-full bg-black/40 text-white/90 transition-colors hover:bg-black/70 hover:text-white"
+        className={cn(
+          "absolute left-3 top-3 z-30 grid h-11 w-11 place-items-center rounded-full",
+          "bg-black/40 text-white/90 transition-colors hover:bg-black/70 hover:text-white",
+          focusRing,
+        )}
       >
         <ChevronDownIcon className="h-6 w-6" />
       </button>

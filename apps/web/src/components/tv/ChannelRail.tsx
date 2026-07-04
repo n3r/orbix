@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { cn } from "@orbix/ui";
 import type { TvChannelCard } from "@/lib/types";
 import ChannelCard from "./ChannelCard";
+import { scrollBehavior } from "@/lib/motion";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/components/shell/icons";
 
 /**
@@ -41,7 +42,7 @@ export default function ChannelRail({
   const page = (dir: 1 | -1) => {
     const el = scroller.current;
     if (!el) return;
-    el.scrollBy({ left: dir * el.clientWidth * 0.9, behavior: "smooth" });
+    el.scrollBy({ left: dir * el.clientWidth * 0.9, behavior: scrollBehavior() });
   };
 
   if (channels.length === 0) return null;
