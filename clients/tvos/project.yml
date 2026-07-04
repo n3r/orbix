@@ -33,3 +33,22 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.orbix.tvos.kit
         GENERATE_INFOPLIST_FILE: "YES" # embedded framework needs an Info.plist to pass app-bundle validation
+  OrbixKitTests:
+    type: bundle.unit-test
+    platform: tvOS
+    sources:
+      - path: Tests/OrbixKitTests
+    dependencies:
+      - target: OrbixKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.orbix.tvos.kittests
+schemes:
+  OrbixKit:
+    build:
+      targets:
+        OrbixKit: all
+        OrbixKitTests: [test]
+    test:
+      targets:
+        - OrbixKitTests
