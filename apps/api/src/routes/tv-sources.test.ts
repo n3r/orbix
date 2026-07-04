@@ -148,6 +148,33 @@ describe("POST /tv/sources", () => {
     await app.close();
   });
 
+  it("still 200s the source create when EPG seeding throws (seeding is best-effort)", async () => {
+    const app = await buildApp(env);
+    patchAuth(app);
+    let created: any = null;
+    (app as any).prisma.tvSource = {
+      findFirst: async () => null,
+      create: async (args: any) => {
+        created = { id: "s", ...args.data };
+        return created;
+      },
+    };
+    // The seeding path blows up — the route must swallow it, not 500.
+    (app as any).prisma.tvEpgSource = {
+      findFirst: async () => null,
+      create: async () => {
+        throw new Error("epg source unreachable");
+      },
+    };
+    const res = await app.inject({
+      method: "POST", url: "/api/tv/sources", cookies: COOKIES,
+      payload: { kind: "iptv-org", name: "Catalog", countries: ["RU"] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual(created);
+    await app.close();
+  });
+
   it("409s when the DB singleton index rejects a concurrent iptv-org create (P2002)", async () => {
     const app = await buildApp(env);
     patchAuth(app);

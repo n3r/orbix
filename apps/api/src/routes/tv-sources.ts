@@ -79,9 +79,18 @@ export function tvSourcesRoute(env: Env) {
               data: { kind: "iptv-org", name, countries },
             });
             // Auto-seed default EPG sources for the newly-enabled countries.
-            // Idempotent (upsert-by-url) — never duplicates or touches
-            // admin-configured sources.
-            await seedEpgSourcesForCountries(app.prisma, countries);
+            // Best-effort; idempotent under sequential use (findFirst-then-
+            // create) — never touches admin-configured sources. The source
+            // row above already committed, so a seeding failure must not
+            // fail this request.
+            try {
+              await seedEpgSourcesForCountries(app.prisma, countries);
+            } catch (seedErr) {
+              app.log.warn(
+                { err: seedErr, sourceId: created.id },
+                "tv EPG default-source seeding failed — continuing",
+              );
+            }
             return created;
           } catch (e) {
             // Belt-and-suspenders: the findFirst check above is a friendly
@@ -148,9 +157,19 @@ export function tvSourcesRoute(env: Env) {
             });
           }
           // Countries changed on the iptv-org source — auto-seed default EPG
-          // sources for the new set (idempotent, upsert-by-url).
+          // sources for the new set. Best-effort; idempotent under
+          // sequential use (findFirst-then-create). The update above
+          // already committed, so a seeding failure must not fail this
+          // request.
           if (updatedCountries && source.kind === "iptv-org") {
-            await seedEpgSourcesForCountries(app.prisma, updatedCountries);
+            try {
+              await seedEpgSourcesForCountries(app.prisma, updatedCountries);
+            } catch (seedErr) {
+              app.log.warn(
+                { err: seedErr, sourceId: source.id },
+                "tv EPG default-source seeding failed — continuing",
+              );
+            }
           }
           return source;
         } catch (e) {
