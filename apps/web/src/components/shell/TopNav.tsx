@@ -28,20 +28,6 @@ function useScrolled(threshold = 8) {
   return scrolled;
 }
 
-/** A visible-but-inert placeholder nav item (TV, Heart) for not-yet-built features. */
-function Placeholder({ label, comingSoon, children }: { label: string; comingSoon: string; children: React.ReactNode }) {
-  return (
-    <span
-      aria-disabled
-      title={comingSoon}
-      className="flex cursor-default items-center gap-1.5 text-sm text-[var(--text-dim)]/60"
-    >
-      {children}
-      <span className="sr-only">{label} — {comingSoon}</span>
-    </span>
-  );
-}
-
 export default function TopNav({ profile }: { profile: Profile | null }) {
   const { t } = useTranslation();
   const { pathname } = useLocation();
@@ -75,7 +61,20 @@ export default function TopNav({ profile }: { profile: Profile | null }) {
             >
               <HomeIcon className="h-4 w-4" /> {t("nav:home")}
             </Link>
-            <Placeholder label={t("nav:tv")} comingSoon={t("nav:comingSoon")}><TvIcon className="h-4 w-4" /> {t("nav:tv")}</Placeholder>
+            {profile?.kind !== "kids" && (
+              <Link
+                to="/tv"
+                aria-current={pathname.startsWith("/tv") ? "page" : undefined}
+                className={cn(
+                  "flex items-center gap-1.5 text-sm transition-colors",
+                  pathname.startsWith("/tv")
+                    ? "text-[var(--text)] font-medium"
+                    : "text-[var(--text-dim)] hover:text-[var(--text)]",
+                )}
+              >
+                <TvIcon className="h-4 w-4" /> {t("nav:tv")}
+              </Link>
+            )}
             <NavCategories items={items} pathname={pathname} />
           </div>
         </div>

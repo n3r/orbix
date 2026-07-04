@@ -1,0 +1,151 @@
+{
+  "title": "TV",
+  "guide": "Guide",
+  "rails": {
+    "recents": "Recently watched",
+    "favorites": "Favorites"
+  },
+  "empty": {
+    "title": "No channels yet",
+    "adminBody": "Sync the worldwide catalog or import an M3U playlist to start watching live TV.",
+    "adminCta": "Add channels",
+    "memberBody": "Ask your admin to add TV channels."
+  },
+  "badges": {
+    "offline": "Offline"
+  },
+  "card": {
+    "play": "Watch {{name}}",
+    "favorite": "Add to favorites",
+    "unfavorite": "Remove from favorites"
+  },
+  "guidePage": {
+    "title": "TV Guide",
+    "searchPlaceholder": "Search channels",
+    "all": "All",
+    "favorites": "Favorites",
+    "channelCount_one": "{{count}} channel",
+    "channelCount_other": "{{count}} channels",
+    "empty": "No channels match.",
+    "play": "Watch {{name}}",
+    "schedule": "Channel details",
+    "noEpg": "No guide data",
+    "next": "Next"
+  },
+  "channel": {
+    "number": "Channel {{number}}",
+    "watch": "Watch",
+    "schedule": "Schedule",
+    "today": "Today",
+    "tomorrow": "Tomorrow",
+    "onNow": "On now",
+    "noSchedule": "No schedule available for this day.",
+    "scheduleEmpty": "No guide data for this channel yet.",
+    "notFound": "Channel not found."
+  },
+  "player": {
+    "loading": "Tuning…",
+    "close": "Close player",
+    "offline": "Channel appears offline",
+    "nextChannel": "Next channel",
+    "reconnecting": "Reconnecting…",
+    "tryingSource": "Trying next source ({{n}}/{{total}})…",
+    "source": "Source {{n}}/{{total}}",
+    "miniGuide": "Channels",
+    "next": "Next"
+  },
+  "admin": {
+    "title": "Live TV",
+    "loadFailed": "Could not load TV sources.",
+    "saveFailed": "Could not save changes.",
+    "iptv": {
+      "heading": "Worldwide catalog (iptv-org)",
+      "description": "Opt-in sync of the iptv-org public-domain index of free, publicly available broadcasts. Pick the countries to import.",
+      "enable": "Enable worldwide catalog",
+      "countries": "Countries",
+      "addCountryPlaceholder": "Other code (e.g. JP)",
+      "addCountry": "Add"
+    },
+    "m3u": {
+      "heading": "M3U playlists",
+      "namePlaceholder": "Name (optional)",
+      "urlPlaceholder": "https://example.com/playlist.m3u8",
+      "addByUrl": "Add URL",
+      "orFile": "…or upload a playlist file (max 5 MB):",
+      "fileTooLarge": "File is larger than 5 MB.",
+      "empty": "No playlists added yet."
+    },
+    "source": {
+      "enabled": "Enabled",
+      "syncNow": "Sync now",
+      "syncing": "Syncing…",
+      "lastSync": "Last sync: {{when}}",
+      "never": "never"
+    },
+    "sync": {
+      "progress": "{{phase}} — {{processed}}/{{total}}",
+      "done": "Sync complete.",
+      "error": "Sync failed: {{message}}",
+      "streamError": "Lost the sync progress stream."
+    },
+    "legal": "Orbix ships no channels and no stream URLs. The worldwide catalog is an opt-in, at-runtime sync of the iptv-org public-domain index of publicly available broadcasts (DMCA blocklist honored, NSFW excluded). Imported playlists are your responsibility. Stream availability varies by country and network position; Orbix never bypasses DRM, tokens, or geo measures."
+  },
+  "wizard": {
+    "title": "Add channels",
+    "stepCountries": "1 · Pick countries",
+    "stepM3u": "2 · Add a playlist (optional)",
+    "stepSummary": "3 · Sync",
+    "next": "Next",
+    "skip": "Skip",
+    "finish": "Go to TV",
+    "summary": "Ready: {{countries}} countries enabled, {{sources}} M3U playlists."
+  },
+  "epg": {
+    "title": "EPG sources",
+    "intro": "XMLTV guide feeds matched to channels by tvg-id. Add a feed URL, then refresh to pull today's schedule.",
+    "refresh": "Refresh now",
+    "refreshing": "Refreshing…",
+    "refreshStarted": "Refresh started — programme data will update shortly.",
+    "added": "EPG source added.",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "offsetMin": "Offset (min)",
+    "delete": "Delete",
+    "deleteConfirm": "Delete this EPG source? Programme data it supplied will stop updating.",
+    "lastSync": "Last sync: {{when}}",
+    "never": "never",
+    "name": "Name",
+    "url": "https://example.com/guide.xml.gz",
+    "add": "Add source",
+    "empty": "No EPG sources yet.",
+    "status": {
+      "syncing": "Syncing…",
+      "error": "Error",
+      "ok": "OK"
+    }
+  },
+  "manager": {
+    "title": "Channel manager",
+    "intro": "Search, hide, restrict, or fix up the matched EPG id and channel number for any channel.",
+    "search": "Search channels",
+    "countryPlaceholder": "Country (e.g. RU)",
+    "columns": {
+      "number": "#",
+      "channel": "Channel",
+      "country": "Country",
+      "hidden": "Hidden",
+      "kids": "Kids",
+      "epgId": "EPG id"
+    },
+    "numberLabel": "Channel number for {{name}}",
+    "save": "Save",
+    "saved": "Saved",
+    "hiddenToggle": "Hide {{name}}",
+    "kidsToggle": "Allow {{name}} on kids profiles",
+    "epgIdPlaceholder": "tvg-id",
+    "empty": "No channels match.",
+    "pageOf": "{{from}}–{{to}} of {{total}}",
+    "prev": "Previous",
+    "next": "Next"
+  }
+}

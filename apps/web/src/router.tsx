@@ -4,6 +4,9 @@ import LoginPage from "./pages/LoginPage";
 import SetupPage from "./pages/SetupPage";
 import ProfilesPage from "./pages/ProfilesPage";
 import HomePage from "./pages/HomePage";
+import TvHomePage from "./pages/TvHomePage";
+import TvGuidePage from "./pages/TvGuidePage";
+import TvChannelPage from "./pages/TvChannelPage";
 import LibraryPage from "./pages/LibraryPage";
 import SearchPage from "./pages/SearchPage";
 import WishlistPage from "./pages/WishlistPage";
@@ -14,6 +17,7 @@ import AdminSettingsPage from "./pages/AdminSettingsPage";
 import AccountLayout from "./pages/account/AccountLayout";
 import AccountOverview from "./pages/account/AccountOverview";
 import AccountMenuPage from "./pages/account/AccountMenuPage";
+import AccountTvPage from "./pages/account/AccountTvPage";
 
 export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -23,6 +27,9 @@ export const router = createBrowserRouter([
     element: <RequireProfile />,
     children: [
       { path: "/", element: <HomePage /> },
+      { path: "/tv", element: <TvHomePage /> },
+      { path: "/tv/guide", element: <TvGuidePage /> },
+      { path: "/tv/channel/:id", element: <TvChannelPage /> },
       { path: "/library/:libraryId", element: <LibraryPage /> },
       { path: "/search", element: <SearchPage /> },
       { path: "/wishlist", element: <WishlistPage /> },
@@ -34,6 +41,7 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <AccountOverview /> },
           { path: "menu", element: <AccountMenuPage /> },
+          { path: "tv", element: <AccountTvPage /> },
           { path: "library", element: <AdminLibrariesPage /> },
           { path: "settings", element: <AdminSettingsPage /> },
         ],

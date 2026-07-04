@@ -1,6 +1,6 @@
 import path from "node:path";
 
-export type ImageKind = "poster" | "backdrop" | "logo" | "still";
+export type ImageKind = "poster" | "backdrop" | "logo" | "still" | "channel";
 
 interface ImageDeps {
   fetchImpl: typeof fetch;
@@ -17,6 +17,9 @@ const DEFAULT_SIZE: Record<ImageKind, string> = {
   // a hero title treatment while staying small on disk.
   logo: "w500",
   still: "w300",
+  // TV channel logos are cached from absolute URLs via cacheImageFromUrl,
+  // which ignores size — this entry only keeps the Record total.
+  channel: "w500",
 };
 
 /**
@@ -51,7 +54,15 @@ export async function cacheImageFromUrl(
   kind: ImageKind,
   deps: Omit<ImageDeps, "size">,
 ): Promise<string> {
-  const base = path.basename(new URL(url).pathname) || `${kind}.img`;
+  // Decode so the disk name matches the (Fastify-decoded) served path, then
+  // re-basename so a decoded "%2f%2e%2e" can't introduce path separators.
+  let base = path.basename(new URL(url).pathname);
+  try {
+    base = path.basename(decodeURIComponent(base));
+  } catch {
+    // malformed percent-encoding (e.g. a lone "%") — keep the raw basename
+  }
+  base = base || `${kind}.img`;
   const rel = `${kind}/${base}`;
   const abs = path.join(deps.baseDir, rel);
 

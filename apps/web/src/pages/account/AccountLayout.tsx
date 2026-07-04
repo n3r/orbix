@@ -20,9 +20,12 @@ export default function AccountLayout() {
   const isKids = profile.data?.kind === "kids";
   const isAdmin = (me.data?.isAdmin ?? false) && !isKids;
 
-  // Guard the admin tabs: a non-admin who deep-links to /account/library|settings
+  // Guard the admin tabs: a non-admin who deep-links to /account/library|settings|tv
   // is bounced to the overview. Wait for the queries to settle first.
-  const onAdminTab = pathname.startsWith("/account/library") || pathname.startsWith("/account/settings");
+  const onAdminTab =
+    pathname.startsWith("/account/library") ||
+    pathname.startsWith("/account/settings") ||
+    pathname.startsWith("/account/tv");
   if (onAdminTab && !me.isLoading && !profile.isLoading && !isAdmin) {
     return <Navigate to="/account" replace />;
   }
@@ -33,6 +36,7 @@ export default function AccountLayout() {
       <nav className="mt-4 flex gap-6 border-b border-[var(--surface-2)]">
         <NavLink to="/account" end className={tab}>{t("account:tabs.overview")}</NavLink>
         <NavLink to="/account/menu" className={tab}>{t("account:tabs.menu")}</NavLink>
+        {isAdmin && <NavLink to="/account/tv" className={tab}>{t("nav:tv")}</NavLink>}
         {isAdmin && <NavLink to="/account/library" className={tab}>{t("nav:library")}</NavLink>}
         {isAdmin && <NavLink to="/account/settings" className={tab}>{t("nav:settings")}</NavLink>}
       </nav>

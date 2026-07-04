@@ -1,0 +1,151 @@
+{
+  "title": "TV",
+  "guide": "Programm",
+  "rails": {
+    "recents": "Kürzlich angesehen",
+    "favorites": "Favoriten"
+  },
+  "empty": {
+    "title": "Noch keine Sender",
+    "adminBody": "Synchronisiere den weltweiten Katalog oder importiere eine M3U-Playlist, um Live-TV zu sehen.",
+    "adminCta": "Sender hinzufügen",
+    "memberBody": "Bitte deinen Administrator, TV-Sender hinzuzufügen."
+  },
+  "badges": {
+    "offline": "Offline"
+  },
+  "card": {
+    "play": "{{name}} ansehen",
+    "favorite": "Zu Favoriten hinzufügen",
+    "unfavorite": "Aus Favoriten entfernen"
+  },
+  "guidePage": {
+    "title": "TV-Programm",
+    "searchPlaceholder": "Sender suchen",
+    "all": "Alle",
+    "favorites": "Favoriten",
+    "channelCount_one": "{{count}} Sender",
+    "channelCount_other": "{{count}} Sender",
+    "empty": "Keine Sender gefunden.",
+    "play": "{{name}} ansehen",
+    "schedule": "Senderdetails",
+    "noEpg": "Keine Programmdaten",
+    "next": "Danach"
+  },
+  "channel": {
+    "number": "Sender {{number}}",
+    "watch": "Ansehen",
+    "schedule": "Programm",
+    "today": "Heute",
+    "tomorrow": "Morgen",
+    "onNow": "Läuft jetzt",
+    "noSchedule": "Für diesen Tag liegt kein Programm vor.",
+    "scheduleEmpty": "Für diesen Sender liegen noch keine Programmdaten vor.",
+    "notFound": "Sender nicht gefunden."
+  },
+  "player": {
+    "loading": "Sender wird gesucht…",
+    "close": "Player schließen",
+    "offline": "Sender scheint offline zu sein",
+    "nextChannel": "Nächster Sender",
+    "reconnecting": "Verbindung wird wiederhergestellt…",
+    "tryingSource": "Nächste Quelle wird ausprobiert ({{n}}/{{total}})…",
+    "source": "Quelle {{n}}/{{total}}",
+    "miniGuide": "Sender",
+    "next": "Danach"
+  },
+  "admin": {
+    "title": "Live-TV",
+    "loadFailed": "TV-Quellen konnten nicht geladen werden.",
+    "saveFailed": "Änderungen konnten nicht gespeichert werden.",
+    "iptv": {
+      "heading": "Weltweiter Katalog (iptv-org)",
+      "description": "Optionale Synchronisierung mit dem gemeinfreien Index von iptv-org für kostenlose, öffentlich zugängliche Sendungen. Wähle die Länder aus, die importiert werden sollen.",
+      "enable": "Weltweiten Katalog aktivieren",
+      "countries": "Länder",
+      "addCountryPlaceholder": "Anderer Code (z. B. JP)",
+      "addCountry": "Hinzufügen"
+    },
+    "m3u": {
+      "heading": "M3U-Playlists",
+      "namePlaceholder": "Name (optional)",
+      "urlPlaceholder": "https://example.com/playlist.m3u8",
+      "addByUrl": "URL hinzufügen",
+      "orFile": "…oder lade eine Playlist-Datei hoch (max. 5 MB):",
+      "fileTooLarge": "Die Datei ist größer als 5 MB.",
+      "empty": "Noch keine Playlists hinzugefügt."
+    },
+    "source": {
+      "enabled": "Aktiviert",
+      "syncNow": "Jetzt synchronisieren",
+      "syncing": "Wird synchronisiert…",
+      "lastSync": "Letzte Synchronisierung: {{when}}",
+      "never": "nie"
+    },
+    "sync": {
+      "progress": "{{phase}} – {{processed}}/{{total}}",
+      "done": "Synchronisierung abgeschlossen.",
+      "error": "Synchronisierung fehlgeschlagen: {{message}}",
+      "streamError": "Die Verbindung zum Synchronisierungsfortschritt wurde unterbrochen."
+    },
+    "legal": "Orbix liefert keine Sender und keine Stream-URLs. Der weltweite Katalog ist eine optionale Synchronisierung zur Laufzeit mit dem gemeinfreien Index von iptv-org für öffentlich zugängliche Sendungen (DMCA-Sperrliste wird beachtet, NSFW-Inhalte ausgeschlossen). Importierte Playlists liegen in deiner Verantwortung. Die Verfügbarkeit der Streams hängt von Land und Netzwerkposition ab; Orbix umgeht niemals DRM, Tokens oder Geo-Sperren."
+  },
+  "wizard": {
+    "title": "Sender hinzufügen",
+    "stepCountries": "1 · Länder auswählen",
+    "stepM3u": "2 · Playlist hinzufügen (optional)",
+    "stepSummary": "3 · Synchronisieren",
+    "next": "Weiter",
+    "skip": "Überspringen",
+    "finish": "Weiter zu TV",
+    "summary": "Bereit: {{countries}} Länder aktiviert, {{sources}} M3U-Playlists."
+  },
+  "epg": {
+    "title": "EPG-Quellen",
+    "intro": "XMLTV-Programmquellen, die Sendern anhand der tvg-id zugeordnet werden. Füge eine Feed-URL hinzu und aktualisiere, um das heutige Programm abzurufen.",
+    "refresh": "Jetzt aktualisieren",
+    "refreshing": "Wird aktualisiert…",
+    "refreshStarted": "Aktualisierung gestartet – die Programmdaten werden in Kürze aktualisiert.",
+    "added": "EPG-Quelle hinzugefügt.",
+    "enabled": "Aktiviert",
+    "disabled": "Deaktiviert",
+    "offsetMin": "Zeitversatz (Min.)",
+    "delete": "Löschen",
+    "deleteConfirm": "Diese EPG-Quelle löschen? Die von ihr gelieferten Programmdaten werden nicht mehr aktualisiert.",
+    "lastSync": "Letzte Synchronisierung: {{when}}",
+    "never": "nie",
+    "name": "Name",
+    "url": "https://example.com/guide.xml.gz",
+    "add": "Quelle hinzufügen",
+    "empty": "Noch keine EPG-Quellen.",
+    "status": {
+      "syncing": "Wird synchronisiert…",
+      "error": "Fehler",
+      "ok": "OK"
+    }
+  },
+  "manager": {
+    "title": "Senderverwaltung",
+    "intro": "Sender durchsuchen, ausblenden, einschränken oder die zugeordnete EPG-ID und Sendernummer korrigieren.",
+    "search": "Sender suchen",
+    "countryPlaceholder": "Land (z. B. RU)",
+    "columns": {
+      "number": "#",
+      "channel": "Sender",
+      "country": "Land",
+      "hidden": "Ausgeblendet",
+      "kids": "Kinder",
+      "epgId": "EPG-ID"
+    },
+    "numberLabel": "Sendernummer für {{name}}",
+    "save": "Speichern",
+    "saved": "Gespeichert",
+    "hiddenToggle": "{{name}} ausblenden",
+    "kidsToggle": "{{name}} für Kinderprofile zulassen",
+    "epgIdPlaceholder": "tvg-id",
+    "empty": "Keine Sender gefunden.",
+    "pageOf": "{{from}}–{{to}} von {{total}}",
+    "prev": "Zurück",
+    "next": "Weiter"
+  }
+}
