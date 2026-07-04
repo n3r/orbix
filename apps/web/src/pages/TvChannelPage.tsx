@@ -35,6 +35,7 @@ export default function TvChannelPage() {
     }
     void queryClient.invalidateQueries({ queryKey: ["tv-channel", c.id] });
     void queryClient.invalidateQueries({ queryKey: ["tv-home"] });
+    void queryClient.invalidateQueries({ queryKey: ["tv-guide"] });
     void queryClient.invalidateQueries({ queryKey: ["tv-favorites"] });
   };
 

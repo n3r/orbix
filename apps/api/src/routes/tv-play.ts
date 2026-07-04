@@ -123,7 +123,7 @@ export default function tvPlayRoute(
           id: channel.id,
           number: channel.number,
           name: channel.name,
-          logo: channel.logoPath,
+          logo: channel.logoPath ? `/api/images/${channel.logoPath}` : null,
           country: channel.country,
           quality: channel.quality,
         },

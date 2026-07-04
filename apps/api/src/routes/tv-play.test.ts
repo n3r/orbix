@@ -126,7 +126,7 @@ describe("GET /tv/channels/:id/play", () => {
     const res = await app.inject({ method: "GET", url: "/api/tv/channels/ch1/play", cookies });
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.channel).toMatchObject({ id: "ch1", number: 5, name: "One", logo: "channel/one.png", country: "RU", quality: "1080p" });
+    expect(body.channel).toMatchObject({ id: "ch1", number: 5, name: "One", logo: "/api/images/channel/one.png", country: "RU", quality: "1080p" });
     expect(body.nowNext).toEqual({ now: null, next: null });
     expect(body.sources.map((s: any) => s.streamId)).toEqual(["ok1", "ok2", "unk"]);
     expect(body.sources[0]).toMatchObject({ src: "/api/tv/proxy/ok1/index.m3u8", quality: "1080p", label: null });
