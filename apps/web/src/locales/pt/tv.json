@@ -1,151 +1,151 @@
 {
   "title": "TV",
-  "guide": "Guide",
+  "guide": "Programação",
   "rails": {
-    "recents": "Recently watched",
-    "favorites": "Favorites"
+    "recents": "Assistidos recentemente",
+    "favorites": "Favoritos"
   },
   "empty": {
-    "title": "No channels yet",
-    "adminBody": "Sync the worldwide catalog or import an M3U playlist to start watching live TV.",
-    "adminCta": "Add channels",
-    "memberBody": "Ask your admin to add TV channels."
+    "title": "Ainda não há canais",
+    "adminBody": "Sincronize o catálogo mundial ou importe uma playlist M3U para começar a assistir TV ao vivo.",
+    "adminCta": "Adicionar canais",
+    "memberBody": "Peça ao seu administrador para adicionar canais de TV."
   },
   "badges": {
     "offline": "Offline"
   },
   "card": {
-    "play": "Watch {{name}}",
-    "favorite": "Add to favorites",
-    "unfavorite": "Remove from favorites"
+    "play": "Assistir {{name}}",
+    "favorite": "Adicionar aos favoritos",
+    "unfavorite": "Remover dos favoritos"
   },
   "guidePage": {
-    "title": "TV Guide",
-    "searchPlaceholder": "Search channels",
-    "all": "All",
-    "favorites": "Favorites",
-    "channelCount_one": "{{count}} channel",
-    "channelCount_other": "{{count}} channels",
-    "empty": "No channels match.",
-    "play": "Watch {{name}}",
-    "schedule": "Channel details",
+    "title": "Guia de TV",
+    "searchPlaceholder": "Buscar canais",
+    "all": "Todos",
+    "favorites": "Favoritos",
+    "channelCount_one": "{{count}} canal",
+    "channelCount_other": "{{count}} canais",
+    "empty": "Nenhum canal encontrado.",
+    "play": "Assistir {{name}}",
+    "schedule": "Detalhes do canal",
     "noEpg": "Sem dados de guia",
     "next": "A seguir"
   },
   "channel": {
-    "number": "Channel {{number}}",
-    "watch": "Watch",
+    "number": "Canal {{number}}",
+    "watch": "Assistir",
     "schedule": "Programação",
     "today": "Hoje",
     "tomorrow": "Amanhã",
     "onNow": "No ar",
     "noSchedule": "Sem programação para este dia.",
-    "scheduleEmpty": "No guide data for this channel yet.",
-    "notFound": "Channel not found."
+    "scheduleEmpty": "Ainda não há dados de guia para este canal.",
+    "notFound": "Canal não encontrado."
   },
   "player": {
-    "loading": "Tuning…",
-    "close": "Close player",
-    "offline": "Channel appears offline",
-    "nextChannel": "Next channel",
-    "reconnecting": "Reconnecting…",
-    "tryingSource": "Trying next source ({{n}}/{{total}})…",
-    "source": "Source {{n}}/{{total}}",
-    "miniGuide": "Channels",
+    "loading": "Sintonizando…",
+    "close": "Fechar o player",
+    "offline": "O canal parece estar offline",
+    "nextChannel": "Próximo canal",
+    "reconnecting": "Reconectando…",
+    "tryingSource": "Tentando a próxima fonte ({{n}}/{{total}})…",
+    "source": "Fonte {{n}}/{{total}}",
+    "miniGuide": "Canais",
     "next": "A seguir"
   },
   "admin": {
-    "title": "Live TV",
-    "loadFailed": "Could not load TV sources.",
-    "saveFailed": "Could not save changes.",
+    "title": "TV ao vivo",
+    "loadFailed": "Falha ao carregar as fontes de TV.",
+    "saveFailed": "Falha ao salvar as alterações.",
     "iptv": {
-      "heading": "Worldwide catalog (iptv-org)",
-      "description": "Opt-in sync of the iptv-org public-domain index of free, publicly available broadcasts. Pick the countries to import.",
-      "enable": "Enable worldwide catalog",
-      "countries": "Countries",
-      "addCountryPlaceholder": "Other code (e.g. JP)",
-      "addCountry": "Add"
+      "heading": "Catálogo mundial (iptv-org)",
+      "description": "Sincronização opcional do índice de domínio público da iptv-org com transmissões gratuitas e disponíveis publicamente. Escolha os países que deseja importar.",
+      "enable": "Ativar catálogo mundial",
+      "countries": "Países",
+      "addCountryPlaceholder": "Outro código (ex.: JP)",
+      "addCountry": "Adicionar"
     },
     "m3u": {
-      "heading": "M3U playlists",
-      "namePlaceholder": "Name (optional)",
+      "heading": "Playlists M3U",
+      "namePlaceholder": "Nome (opcional)",
       "urlPlaceholder": "https://example.com/playlist.m3u8",
-      "addByUrl": "Add URL",
-      "orFile": "…or upload a playlist file (max 5 MB):",
-      "fileTooLarge": "File is larger than 5 MB.",
-      "empty": "No playlists added yet."
+      "addByUrl": "Adicionar URL",
+      "orFile": "…ou envie um arquivo de playlist (máx. 5 MB):",
+      "fileTooLarge": "O arquivo é maior que 5 MB.",
+      "empty": "Ainda não há playlists adicionadas."
     },
     "source": {
-      "enabled": "Enabled",
-      "syncNow": "Sync now",
-      "syncing": "Syncing…",
-      "lastSync": "Last sync: {{when}}",
-      "never": "never"
+      "enabled": "Ativada",
+      "syncNow": "Sincronizar agora",
+      "syncing": "Sincronizando…",
+      "lastSync": "Última sincronização: {{when}}",
+      "never": "nunca"
     },
     "sync": {
       "progress": "{{phase}} — {{processed}}/{{total}}",
-      "done": "Sync complete.",
-      "error": "Sync failed: {{message}}",
-      "streamError": "Lost the sync progress stream."
+      "done": "Sincronização concluída.",
+      "error": "Falha na sincronização: {{message}}",
+      "streamError": "A conexão com o progresso da sincronização foi perdida."
     },
-    "legal": "Orbix ships no channels and no stream URLs. The worldwide catalog is an opt-in, at-runtime sync of the iptv-org public-domain index of publicly available broadcasts (DMCA blocklist honored, NSFW excluded). Imported playlists are your responsibility. Stream availability varies by country and network position; Orbix never bypasses DRM, tokens, or geo measures."
+    "legal": "O Orbix não fornece canais nem URLs de transmissão. O catálogo mundial é uma sincronização opcional, em tempo de execução, do índice de domínio público da iptv-org com transmissões disponíveis publicamente (a lista de bloqueio da DMCA é respeitada, conteúdo NSFW é excluído). As playlists importadas são de sua responsabilidade. A disponibilidade da transmissão varia de acordo com o país e a posição de rede; o Orbix nunca contorna DRM, tokens ou medidas de geolocalização."
   },
   "wizard": {
-    "title": "Add channels",
-    "stepCountries": "1 · Pick countries",
-    "stepM3u": "2 · Add a playlist (optional)",
-    "stepSummary": "3 · Sync",
-    "next": "Next",
-    "skip": "Skip",
-    "finish": "Go to TV",
-    "summary": "Ready: {{countries}} countries enabled, {{sources}} M3U playlists."
+    "title": "Adicionar canais",
+    "stepCountries": "1 · Escolha os países",
+    "stepM3u": "2 · Adicione uma playlist (opcional)",
+    "stepSummary": "3 · Sincronizar",
+    "next": "Avançar",
+    "skip": "Pular",
+    "finish": "Ir para a TV",
+    "summary": "Pronto: {{countries}} países ativados, {{sources}} playlists M3U."
   },
   "epg": {
-    "title": "EPG sources",
-    "intro": "XMLTV guide feeds matched to channels by tvg-id. Add a feed URL, then refresh to pull today's schedule.",
-    "refresh": "Refresh now",
-    "refreshing": "Refreshing…",
-    "refreshStarted": "Refresh started — programme data will update shortly.",
-    "added": "EPG source added.",
-    "enabled": "Enabled",
-    "disabled": "Disabled",
-    "offsetMin": "Offset (min)",
-    "delete": "Delete",
-    "deleteConfirm": "Delete this EPG source? Programme data it supplied will stop updating.",
-    "lastSync": "Last sync: {{when}}",
-    "never": "never",
-    "name": "Name",
+    "title": "Fontes de EPG",
+    "intro": "Fontes de guia XMLTV associadas aos canais pelo tvg-id. Adicione a URL de uma fonte e atualize para obter a programação de hoje.",
+    "refresh": "Atualizar agora",
+    "refreshing": "Atualizando…",
+    "refreshStarted": "Atualização iniciada — os dados de programação serão atualizados em breve.",
+    "added": "Fonte de EPG adicionada.",
+    "enabled": "Ativada",
+    "disabled": "Desativada",
+    "offsetMin": "Ajuste de horário (min)",
+    "delete": "Excluir",
+    "deleteConfirm": "Excluir esta fonte de EPG? Os dados de programação fornecidos por ela deixarão de ser atualizados.",
+    "lastSync": "Última sincronização: {{when}}",
+    "never": "nunca",
+    "name": "Nome",
     "url": "https://example.com/guide.xml.gz",
-    "add": "Add source",
-    "empty": "No EPG sources yet.",
+    "add": "Adicionar fonte",
+    "empty": "Ainda não há fontes de EPG.",
     "status": {
-      "syncing": "Syncing…",
-      "error": "Error",
+      "syncing": "Sincronizando…",
+      "error": "Erro",
       "ok": "OK"
     }
   },
   "manager": {
-    "title": "Channel manager",
-    "intro": "Search, hide, restrict, or fix up the matched EPG id and channel number for any channel.",
-    "search": "Search channels",
-    "countryPlaceholder": "Country (e.g. RU)",
+    "title": "Gerenciador de canais",
+    "intro": "Pesquise, oculte, restrinja ou corrija o id de EPG e o número correspondentes a qualquer canal.",
+    "search": "Buscar canais",
+    "countryPlaceholder": "País (ex.: RU)",
     "columns": {
       "number": "#",
-      "channel": "Channel",
-      "country": "Country",
-      "hidden": "Hidden",
-      "kids": "Kids",
-      "epgId": "EPG id"
+      "channel": "Canal",
+      "country": "País",
+      "hidden": "Oculto",
+      "kids": "Infantil",
+      "epgId": "ID de EPG"
     },
-    "numberLabel": "Channel number for {{name}}",
-    "save": "Save",
-    "saved": "Saved",
-    "hiddenToggle": "Hide {{name}}",
-    "kidsToggle": "Allow {{name}} on kids profiles",
+    "numberLabel": "Número do canal para {{name}}",
+    "save": "Salvar",
+    "saved": "Salvo",
+    "hiddenToggle": "Ocultar {{name}}",
+    "kidsToggle": "Permitir {{name}} em perfis infantis",
     "epgIdPlaceholder": "tvg-id",
-    "empty": "No channels match.",
-    "pageOf": "{{from}}–{{to}} of {{total}}",
-    "prev": "Previous",
-    "next": "Next"
+    "empty": "Nenhum canal encontrado.",
+    "pageOf": "{{from}}–{{to}} de {{total}}",
+    "prev": "Anterior",
+    "next": "Próxima"
   }
 }
