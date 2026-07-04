@@ -57,6 +57,26 @@ describe("EPG sources CRUD", () => {
     await app.close();
   });
 
+  it("PATCH /tv/epg-sources/:id 409s when updating url to a duplicate", async () => {
+    const app = await adminApp();
+    (app as any).prisma.tvEpgSource = {
+      findUnique: async () => ({ id: "e1", name: "existing", url: "https://epg.old.xml", enabled: true, offsetMin: 0, status: "ok", statusMessage: null, lastSyncAt: null, createdAt: new Date() }),
+      update: async () => {
+        throw new Prisma.PrismaClientKnownRequestError("unique violation", {
+          code: "P2002",
+          clientVersion: "x",
+        });
+      },
+    };
+    const res = await app.inject({
+      method: "PATCH", url: "/api/tv/epg-sources/e1", cookies: { orbix_session: "s1" },
+      payload: { url: "https://epg.iptvx.one/EPG_LITE.xml.gz" },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({ error: "epg_source_exists" });
+    await app.close();
+  });
+
   it("POST /api/tv/epg/refresh returns a jobId", async () => {
     const app = await adminApp();
     const res = await app.inject({ method: "POST", url: "/api/tv/epg/refresh", cookies: { orbix_session: "s1" } });

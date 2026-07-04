@@ -94,7 +94,16 @@ export default async function tvAdminRoute(app: FastifyInstance): Promise<void> 
       if (!Number.isInteger(body.offsetMin)) return reply.code(400).send({ error: "invalid_offset" });
       data.offsetMin = body.offsetMin;
     }
-    return app.prisma.tvEpgSource.update({ where: { id }, data });
+    try {
+      return await app.prisma.tvEpgSource.update({ where: { id }, data });
+    } catch (e) {
+      // The DB-level unique constraint on `url` (TvEpgSource_url_key) rejects
+      // duplicate URLs — translate its P2002 into a friendly 409.
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+        return reply.code(409).send({ error: "epg_source_exists" });
+      }
+      throw e;
+    }
   });
 
   app.delete("/tv/epg-sources/:id", guards, async (req, reply) => {
