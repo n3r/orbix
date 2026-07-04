@@ -9,7 +9,8 @@ import SwiftUI
 /// - `.needsPairing` — the M2 pairing screen (`PairingView`): a code to
 ///   enter on another device.
 /// - `.needsProfile` — the M2 profile picker (`ProfilePickerView`).
-/// - `.ready` — the M1 playback spike (`SpikeListView`), replaced in M3.
+/// - `.ready` — the M3 home screen (`HomeView`): Netflix-style rails loaded
+///   from `/api/home/rows`, replacing the M1 playback spike (`SpikeListView`).
 struct RootView: View {
     @State private var model = AppModel()
     @State private var baseURLText = ""
@@ -24,7 +25,7 @@ struct RootView: View {
         case .needsProfile:
             profilePickerOrFallback
         case .ready:
-            SpikeListView(model: model)
+            HomeView(model: model)
         }
     }
 

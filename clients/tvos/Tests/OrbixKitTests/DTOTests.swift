@@ -84,9 +84,11 @@ final class DTOTests: XCTestCase {
         XCTAssertEqual(response.expiresInSec, 300)
     }
 
-    func testDecodeHomeRowsIgnoresExtraFields() throws {
-        // The server's home-row cards carry extra fields (backdropPath,
-        // addedAt, progress, resume) that MediaCard deliberately ignores.
+    func testDecodeHomeRowsIgnoresAddedAt() throws {
+        // The server's home-row cards carry `addedAt`, which MediaCard still
+        // deliberately ignores (nothing in the app needs it yet); every
+        // other field on this fixture — backdropPath, progress, resume:null
+        // — is now modeled and must decode too (M3 Task 1).
         let json = """
         {"rows":[{"key":"continue-watching","title":"Continue Watching","items":[
           {"id":"m1","title":"Arrival","year":2016,"posterPath":"/p1.jpg",
@@ -97,9 +99,38 @@ final class DTOTests: XCTestCase {
         let rows = try JSONDecoder().decode(HomeRows.self, from: json)
         XCTAssertEqual(rows.rows.count, 1)
         XCTAssertEqual(rows.rows.first?.key, "continue-watching")
-        XCTAssertEqual(rows.rows.first?.items.first?.id, "m1")
-        XCTAssertEqual(rows.rows.first?.items.first?.year, 2016)
-        XCTAssertEqual(rows.rows.first?.items.first?.posterPath, "/p1.jpg")
+        let card = try XCTUnwrap(rows.rows.first?.items.first)
+        XCTAssertEqual(card.id, "m1")
+        XCTAssertEqual(card.year, 2016)
+        XCTAssertEqual(card.posterPath, "/p1.jpg")
+        XCTAssertEqual(card.backdropPath, "/b1.jpg")
+        XCTAssertEqual(card.progress, MediaCard.Progress(positionSec: 120, durationSec: 9000))
+        XCTAssertNil(card.resume)
+    }
+
+    func testDecodeHomeRowsItemWithProgressAndResume() throws {
+        // A series continue-watching card: `progress` is the episode's
+        // playback position; `resume` carries the season/episode/title the
+        // server resolved from that state's `episodeId` (see `epById`/`ep`
+        // in `apps/api/src/routes/discovery.ts`). `episodeTitle` can itself
+        // be null (an episode with no title), so this fixture exercises
+        // that too rather than always supplying one.
+        let json = """
+        {"rows":[{"key":"continue-watching","title":"Continue Watching","items":[
+          {"id":"s1","title":"Some Series","year":2020,"posterPath":"/p2.jpg",
+           "backdropPath":"/b2.jpg","addedAt":"2026-01-01T00:00:00.000Z",
+           "progress":{"positionSec":300,"durationSec":1500},
+           "resume":{"seasonNumber":1,"episodeNumber":3,"episodeTitle":null}}
+        ]}]}
+        """.data(using: .utf8)!
+        let rows = try JSONDecoder().decode(HomeRows.self, from: json)
+        let card = try XCTUnwrap(rows.rows.first?.items.first)
+        XCTAssertEqual(card.backdropPath, "/b2.jpg")
+        XCTAssertEqual(card.progress, MediaCard.Progress(positionSec: 300, durationSec: 1500))
+        let resume = try XCTUnwrap(card.resume)
+        XCTAssertEqual(resume.seasonNumber, 1)
+        XCTAssertEqual(resume.episodeNumber, 3)
+        XCTAssertNil(resume.episodeTitle)
     }
 
     func testDecodeProfile() throws {

@@ -120,20 +120,68 @@ public struct PlaybackInfo: Codable, Sendable, Equatable {
 
 // MARK: - Catalog
 
-/// Decodes the common fields of a home-row / catalog item. The server's rows
-/// include several other fields (backdropPath, addedAt, progress, resume,
-/// ...) that are simply ignored by Codable's synthesized `init(from:)`.
+/// Decodes the common fields of a home-row / catalog item, per the shape
+/// `GET /api/home/rows` sends (see `apps/api/src/routes/discovery.ts`'s
+/// `rows` hydration step). `addedAt` is the one field on the server's card
+/// this type still doesn't model — simply ignored by Codable's synthesized
+/// `init(from:)` — since nothing in the tvOS app needs it yet.
 public struct MediaCard: Codable, Sendable, Equatable {
+    /// A movie/series' resume position, as sent on a home-row card with an
+    /// in-progress `PlaybackState` (`cw` in the server's row-hydration
+    /// step). `durationSec` is expected `> 0` in practice, but nothing here
+    /// enforces that — callers computing a fraction (e.g. `PosterCard`'s
+    /// resume bar) must guard the divide themselves.
+    public struct Progress: Codable, Sendable, Equatable {
+        public var positionSec: Int
+        public var durationSec: Int
+
+        public init(positionSec: Int, durationSec: Int) {
+            self.positionSec = positionSec
+            self.durationSec = durationSec
+        }
+    }
+
+    /// The season/episode a series' resume `Progress` belongs to, resolved
+    /// server-side from the in-progress `PlaybackState.episodeId`. Absent
+    /// (`nil`) for a movie card even when `progress` is present — the
+    /// server only attaches `resume` when the continue-watching state's
+    /// `episodeId` is non-empty (see `epById`/`ep` in `discovery.ts`).
+    public struct Resume: Codable, Sendable, Equatable {
+        public var seasonNumber: Int
+        public var episodeNumber: Int
+        public var episodeTitle: String?
+
+        public init(seasonNumber: Int, episodeNumber: Int, episodeTitle: String? = nil) {
+            self.seasonNumber = seasonNumber
+            self.episodeNumber = episodeNumber
+            self.episodeTitle = episodeTitle
+        }
+    }
+
     public var id: String
     public var title: String
     public var year: Int?
     public var posterPath: String?
+    public var backdropPath: String?
+    public var progress: Progress?
+    public var resume: Resume?
 
-    public init(id: String, title: String, year: Int? = nil, posterPath: String? = nil) {
+    public init(
+        id: String,
+        title: String,
+        year: Int? = nil,
+        posterPath: String? = nil,
+        backdropPath: String? = nil,
+        progress: Progress? = nil,
+        resume: Resume? = nil
+    ) {
         self.id = id
         self.title = title
         self.year = year
         self.posterPath = posterPath
+        self.backdropPath = backdropPath
+        self.progress = progress
+        self.resume = resume
     }
 }
 

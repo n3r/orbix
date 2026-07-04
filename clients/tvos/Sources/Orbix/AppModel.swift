@@ -22,7 +22,7 @@ final class AppModel {
     /// once reachable, `.needsPairing` (no usable device token) or
     /// `.needsProfile` (token present, no active profile yet); `.ready`
     /// once both a token and an active profile are resolved, which routes
-    /// to the M1 spike's `SpikeListView`. `RootView` switches on this.
+    /// to the M3 home screen (`HomeView`). `RootView` switches on this.
     enum OnboardingPhase: Equatable {
         case needsServer
         case needsPairing
@@ -264,8 +264,7 @@ final class AppModel {
     }
 
     /// Called by `ProfilePickerView` once `ProfilePickerModel.select`
-    /// succeeds: advances to the M1 home list (`SpikeListView`, replaced in
-    /// M3).
+    /// succeeds: advances to the M3 home screen (`HomeView`).
     func profileSelected() {
         phase = .ready
     }

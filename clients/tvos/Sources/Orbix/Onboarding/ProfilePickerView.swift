@@ -123,7 +123,7 @@ struct ProfilePickerView: View {
     }
 
     /// Renders the profile's avatar image if one is set, resolved the same
-    /// way `SpikeListView` resolves poster art (relative to `baseURL` under
+    /// way `PosterCard` resolves poster art (relative to `baseURL` under
     /// `api/images/`, the only image-serving route this API exposes —
     /// see `apps/api/src/routes/images.ts`); falls back to initials on a
     /// missing avatar, a bad URL, or a failed fetch.

@@ -89,15 +89,16 @@ final class PlaybackReadinessTests: XCTestCase {
             return
         }
 
-        // AVURLAsset + AVPlayerItem, exactly what SpikeListView hands to
-        // PlayerViewController — this is what actually proves Apple's HLS
-        // stack accepts our playlist, not just that the HTTP request for
-        // playbackInfo succeeded.
+        // AVURLAsset + AVPlayerItem, exactly what the app hands to
+        // PlayerViewController when it plays a title — this is what
+        // actually proves Apple's HLS stack accepts our playlist, not just
+        // that the HTTP request for playbackInfo succeeded.
         let asset = AVURLAsset(url: streamURL)
         let item = AVPlayerItem(asset: asset)
         // AVPlayerItem.status only advances once the item is attached to an
         // AVPlayer that drives the asset load — exactly what AVPlayer(url:) does
-        // inside SpikeListView. Without a player, status stays .unknown forever.
+        // when the app starts playback. Without a player, status stays
+        // .unknown forever.
         let player = AVPlayer(playerItem: item)
         player.isMuted = true
 
