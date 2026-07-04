@@ -6,6 +6,7 @@ import ProfilesPage from "./pages/ProfilesPage";
 import HomePage from "./pages/HomePage";
 import TvHomePage from "./pages/TvHomePage";
 import TvGuidePage from "./pages/TvGuidePage";
+import TvChannelPage from "./pages/TvChannelPage";
 import LibraryPage from "./pages/LibraryPage";
 import SearchPage from "./pages/SearchPage";
 import WishlistPage from "./pages/WishlistPage";
@@ -27,6 +28,7 @@ export const router = createBrowserRouter([
       { path: "/", element: <HomePage /> },
       { path: "/tv", element: <TvHomePage /> },
       { path: "/tv/guide", element: <TvGuidePage /> },
+      { path: "/tv/channel/:id", element: <TvChannelPage /> },
       { path: "/library/:libraryId", element: <LibraryPage /> },
       { path: "/search", element: <SearchPage /> },
       { path: "/wishlist", element: <WishlistPage /> },
