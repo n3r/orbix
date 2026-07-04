@@ -177,12 +177,20 @@ export default function LiveTvPlayer({ channelId, attempt, onInfo, onControls, o
       if (data.type === Hls.ErrorTypes.NETWORK_ERROR && hls && !retriedNetworkRef.current) {
         retriedNetworkRef.current = true;
         showToast(t("tv:player.reconnecting"));
+        if (healthTimerRef.current) {
+          clearTimeout(healthTimerRef.current);
+          healthTimerRef.current = null;
+        }
         hls.startLoad();
         return;
       }
       if (data.type === Hls.ErrorTypes.MEDIA_ERROR && hls && !recoveredMediaRef.current) {
         recoveredMediaRef.current = true;
         showToast(t("tv:player.reconnecting"));
+        if (healthTimerRef.current) {
+          clearTimeout(healthTimerRef.current);
+          healthTimerRef.current = null;
+        }
         hls.recoverMediaError();
         return;
       }
