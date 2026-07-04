@@ -2,7 +2,7 @@ import { useQuery, useInfiniteQuery, useMutation, useQueryClient, keepPreviousDa
 import { apiJson, apiFetch, ApiError } from "./api";
 import type {
   AuthMe, HomeRow, MediaCard, MenuConfig, MenuItem, Profile, TitleDetail,
-  TvChannelCard, TvGuideResponse, TvHome, TvProgramme,
+  TvChannelCard, TvGridResponse, TvGuideResponse, TvHome, TvProgramme,
 } from "./types";
 
 export interface SetupStatus { complete: boolean }
@@ -143,6 +143,36 @@ export function useTvGuide(params: TvGuideParams) {
     getNextPageParam: (last: TvGuideResponse, all: TvGuideResponse[]) => {
       const loaded = all.reduce((n, p) => n + p.channels.length, 0);
       return loaded < last.total ? loaded : undefined;
+    },
+  });
+}
+
+export interface TvGridParams {
+  start?: string;
+  hours?: number;
+  country?: string;
+  category?: string;
+  favorites?: boolean;
+  q?: string;
+  offset?: number;
+  limit?: number;
+}
+
+/** Windowed time×channel grid page: each visible channel's programmes over [start, start+hours). */
+export function useTvGrid(params: TvGridParams) {
+  return useQuery({
+    queryKey: ["tv-grid", params],
+    queryFn: () => {
+      const qs = new URLSearchParams();
+      if (params.start) qs.set("start", params.start);
+      if (params.hours) qs.set("hours", String(params.hours));
+      if (params.country) qs.set("country", params.country);
+      if (params.category) qs.set("category", params.category);
+      if (params.favorites) qs.set("favorites", "1");
+      if (params.q) qs.set("q", params.q);
+      if (params.offset) qs.set("offset", String(params.offset));
+      if (params.limit) qs.set("limit", String(params.limit));
+      return apiJson<TvGridResponse>(`/tv/grid?${qs}`);
     },
   });
 }
