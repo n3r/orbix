@@ -5,17 +5,23 @@ import SwiftUI
 /// (see `apps/api/src/routes/discovery.ts`'s smart-rows hydration), replacing
 /// the M1 `SpikeListView` flat poster grid. Each row renders as a titled,
 /// horizontally-scrolling, independently focus-sectioned rail of
-/// `PosterCard`s. Owns the `NavigationStack` for the whole home→title
-/// flow: selecting a card pushes a `TitleRoute` (M3 Task 2); `TitlePage`'s
-/// own "More Like This" rail is handed the same `path` binding, so
-/// selecting a similar title there pushes another `TitlePage` onto this
-/// same stack rather than needing a stack of its own.
+/// `PosterCard`s. Owns the `NavigationStack` for the whole home→title→
+/// season flow: selecting a card pushes a `TitleRoute` (M3 Task 2);
+/// `TitlePage`'s own "More Like This" rail is handed the same `path`
+/// binding, so selecting a similar title there pushes another `TitlePage`
+/// onto this same stack rather than needing a stack of its own; a series'
+/// season chip likewise pushes a `SeasonRoute` (M3 Task 4) onto this same
+/// stack. `path` is a type-erased `NavigationPath` (rather than
+/// `[TitleRoute]`) specifically so it can carry both route types — each
+/// route is still a distinct `Hashable` type with its own
+/// `.navigationDestination(for:)` below, so `TitleRoute` and `SeasonRoute`
+/// can never collide with each other on the same stack.
 struct HomeView: View {
     let model: AppModel
 
     @State private var homeModel = HomeModel()
     @State private var imageLoader = ImageLoader()
-    @State private var path: [TitleRoute] = []
+    @State private var path = NavigationPath()
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -32,6 +38,9 @@ struct HomeView: View {
             }
             .navigationDestination(for: TitleRoute.self) { route in
                 TitlePage(itemId: route.itemId, model: model, path: $path)
+            }
+            .navigationDestination(for: SeasonRoute.self) { route in
+                SeasonEpisodeView(seriesId: route.seriesId, seasonNumber: route.seasonNumber, model: model)
             }
         }
     }

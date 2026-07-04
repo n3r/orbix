@@ -321,4 +321,89 @@ final class DTOTests: XCTestCase {
         XCTAssertNil(card.progress)
         XCTAssertNil(card.resume)
     }
+
+    // MARK: - Episodes (M3 Task 4)
+
+    func testDecodeEpisodesResponse() throws {
+        // A representative GET /api/items/:id/seasons/:n/episodes response
+        // (see apps/api/src/routes/series.ts): one in-progress episode with
+        // a fileId + progress (reusing ProgressState's shape), one entirely
+        // unmatched episode (no file yet, so fileId is null; every other
+        // optional is also null).
+        let json = """
+        {"episodes":[
+          {"id":"e1","episodeNumber":1,"title":"Pilot",
+           "overview":"The one where it begins.","stillPath":"/e1.jpg",
+           "runtimeSec":2700,"airDate":"2020-01-05T00:00:00.000Z",
+           "fileId":"f1","progress":{"positionSec":300,"durationSec":2700,"finished":false}},
+          {"id":"e2","episodeNumber":2,"title":null,"overview":null,
+           "stillPath":null,"runtimeSec":null,"airDate":null,
+           "fileId":null,"progress":null}
+        ]}
+        """.data(using: .utf8)!
+        let response = try JSONDecoder().decode(EpisodesResponse.self, from: json)
+        XCTAssertEqual(response.episodes.count, 2)
+
+        let first = response.episodes[0]
+        XCTAssertEqual(first.id, "e1")
+        XCTAssertEqual(first.episodeNumber, 1)
+        XCTAssertEqual(first.title, "Pilot")
+        XCTAssertEqual(first.overview, "The one where it begins.")
+        XCTAssertEqual(first.stillPath, "/e1.jpg")
+        XCTAssertEqual(first.runtimeSec, 2700)
+        XCTAssertEqual(first.airDate, "2020-01-05T00:00:00.000Z")
+        XCTAssertEqual(first.fileId, "f1")
+        XCTAssertEqual(first.progress, ProgressState(positionSec: 300, durationSec: 2700, finished: false))
+
+        let second = response.episodes[1]
+        XCTAssertEqual(second.id, "e2")
+        XCTAssertEqual(second.episodeNumber, 2)
+        XCTAssertNil(second.title)
+        XCTAssertNil(second.overview)
+        XCTAssertNil(second.stillPath)
+        XCTAssertNil(second.runtimeSec)
+        XCTAssertNil(second.airDate)
+        XCTAssertNil(second.fileId)
+        XCTAssertNil(second.progress)
+    }
+
+    func testDecodeEpisodesResponseEmptySeason() throws {
+        // series.ts sends {episodes: []} for an unknown season rather than
+        // 404ing — must decode cleanly to an empty array, not throw.
+        let json = """
+        {"episodes":[]}
+        """.data(using: .utf8)!
+        let response = try JSONDecoder().decode(EpisodesResponse.self, from: json)
+        XCTAssertTrue(response.episodes.isEmpty)
+    }
+
+    func testDecodeEpisodeToleratesMissingOptionalFields() throws {
+        // Only the two truly-required fields present — every other key
+        // entirely absent (not even null). Decode-safety parity with
+        // ItemDetail's equivalent test.
+        let json = """
+        {"episodes":[{"id":"e3","episodeNumber":3}]}
+        """.data(using: .utf8)!
+        let response = try JSONDecoder().decode(EpisodesResponse.self, from: json)
+        let episode = try XCTUnwrap(response.episodes.first)
+        XCTAssertEqual(episode.id, "e3")
+        XCTAssertEqual(episode.episodeNumber, 3)
+        XCTAssertNil(episode.title)
+        XCTAssertNil(episode.overview)
+        XCTAssertNil(episode.fileId)
+        XCTAssertNil(episode.progress)
+    }
+
+    func testDecodeEpisodeProgressFinished() throws {
+        // A fully-watched episode: finished:true must round-trip, and is
+        // what SeasonEpisodeView's resume-bar logic uses to suppress the
+        // bar for a completed episode (see resumeFraction(_:)).
+        let json = """
+        {"episodes":[{"id":"e4","episodeNumber":4,
+          "progress":{"positionSec":2650,"durationSec":2700,"finished":true}}]}
+        """.data(using: .utf8)!
+        let response = try JSONDecoder().decode(EpisodesResponse.self, from: json)
+        let episode = try XCTUnwrap(response.episodes.first)
+        XCTAssertEqual(episode.progress?.finished, true)
+    }
 }

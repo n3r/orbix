@@ -371,6 +371,69 @@ public struct SimilarResponse: Codable, Sendable, Equatable {
     }
 }
 
+// MARK: - Episodes (series)
+
+/// One entry of `GET /api/items/:id/seasons/:n/episodes`'s `episodes` array
+/// (see `apps/api/src/routes/series.ts`), the M3 Task 4 season/episode
+/// page's data source. `fileId` is the episode's single owned `MediaFile`
+/// id (the route's `files: {select: {id: true}, take: 1}`) or `nil` when
+/// the episode isn't in the library yet — the row still renders (still art,
+/// title, runtime) but there's nothing to play, so `SeasonEpisodeView`
+/// disables that row rather than hiding it. `progress` reuses
+/// `ProgressState` rather than a bespoke nested type: the route's
+/// per-episode progress hydration (`progressByEpisode`/`states` in
+/// series.ts) reads the same `PlaybackState` row `GET .../progress` does,
+/// just keyed by `episodeId` instead of a bare item id, and sends the exact
+/// same `{positionSec,durationSec,finished}` shape — there's no reason to
+/// model it twice. Every field but `id`/`episodeNumber` is `Optional` for
+/// the same decode-safety reasons as `ItemDetail` (a missing key and an
+/// explicit `null` both decode to `nil` without throwing).
+public struct Episode: Codable, Sendable, Equatable {
+    public var id: String
+    public var episodeNumber: Int
+    public var title: String?
+    public var overview: String?
+    public var stillPath: String?
+    public var runtimeSec: Int?
+    public var airDate: String?
+    public var fileId: String?
+    public var progress: ProgressState?
+
+    public init(
+        id: String,
+        episodeNumber: Int,
+        title: String? = nil,
+        overview: String? = nil,
+        stillPath: String? = nil,
+        runtimeSec: Int? = nil,
+        airDate: String? = nil,
+        fileId: String? = nil,
+        progress: ProgressState? = nil
+    ) {
+        self.id = id
+        self.episodeNumber = episodeNumber
+        self.title = title
+        self.overview = overview
+        self.stillPath = stillPath
+        self.runtimeSec = runtimeSec
+        self.airDate = airDate
+        self.fileId = fileId
+        self.progress = progress
+    }
+}
+
+/// Response of `GET /api/items/:id/seasons/:n/episodes`. An unknown season
+/// number decodes to the same shape with an empty `episodes` array — the
+/// route sends `{episodes: []}` rather than 404ing (see series.ts's
+/// `if (!season) return reply.send({episodes: []})`).
+public struct EpisodesResponse: Codable, Sendable, Equatable {
+    public var episodes: [Episode]
+
+    public init(episodes: [Episode]) {
+        self.episodes = episodes
+    }
+}
+
 // MARK: - Pairing
 
 /// Response of `POST /api/pair/initiate`.

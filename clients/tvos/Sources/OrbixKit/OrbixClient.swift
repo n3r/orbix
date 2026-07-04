@@ -123,6 +123,25 @@ public actor OrbixClient {
         return detail.files?.map(\.id) ?? []
     }
 
+    // MARK: - Episodes (series)
+
+    /// `GET /api/items/:id/seasons/:n/episodes` (see
+    /// `apps/api/src/routes/series.ts`) — one season's episode list, each
+    /// carrying its owned `fileId` (`nil` when not in the library) and the
+    /// active profile's per-episode progress. Unwrapped to the bare array
+    /// since nothing else on the envelope is needed (same convention as
+    /// `similar(id:)`). A series id that doesn't exist, or is kids-blocked
+    /// (episodes inherit the series rating), 404s; an unknown season number
+    /// does not — it decodes to an empty array (see `EpisodesResponse`'s
+    /// doc comment).
+    public func episodes(itemId: String, season: Int) async throws -> [Episode] {
+        let response: EpisodesResponse = try await send(
+            method: "GET",
+            url: baseURL.appending(path: "api/items/\(itemId)/seasons/\(season)/episodes")
+        )
+        return response.episodes
+    }
+
     // MARK: - Playback
 
     /// `POST /api/playback/info`.

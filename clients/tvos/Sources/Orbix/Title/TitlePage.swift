@@ -3,11 +3,13 @@ import SwiftUI
 import UIKit
 
 /// A pushed title/detail-page destination on the shared `NavigationStack`
-/// path `HomeView` owns (see `HomeView.path`). A dedicated wrapper type
-/// (rather than pushing a bare `String`) so `.navigationDestination(for:)`
-/// can't collide with some unrelated `String`-valued destination a future
-/// task pushes onto the same stack (e.g. a search query) — `TitleRoute` is
-/// specifically "go to the title page for this item id."
+/// path `HomeView` owns (see `HomeView.path`, a type-erased `NavigationPath`
+/// specifically so it can also carry `SeasonRoute` — see that type in
+/// `SeasonEpisodeView.swift`). A dedicated wrapper type (rather than pushing
+/// a bare `String`) so `.navigationDestination(for:)` can't collide with
+/// some unrelated `String`-valued destination a future task pushes onto the
+/// same stack (e.g. a search query) — `TitleRoute` is specifically "go to
+/// the title page for this item id."
 struct TitleRoute: Hashable {
     let itemId: String
 }
@@ -18,12 +20,13 @@ struct TitleRoute: Hashable {
 /// stack — see `path`). Loads `GET /api/items/:id` (+ `/similar`, best
 /// effort) via `TitleModel` and renders a full-bleed, dimmed backdrop with
 /// title/logo, a year·rating·runtime·genres metadata row, the overview, and
-/// either a **Play** button (movie) or a season strip (series — episode
-/// lists land in M3 Task 4).
+/// either a **Play** button (movie) or a season strip (series — a season
+/// chip pushes a `SeasonRoute` onto `path`; see `SeasonEpisodeView.swift`
+/// for the M3 Task 4 episode list + per-episode playback + next-episode).
 struct TitlePage: View {
     let itemId: String
     let model: AppModel
-    @Binding var path: [TitleRoute]
+    @Binding var path: NavigationPath
 
     @State private var titleModel = TitleModel()
     @State private var imageLoader = ImageLoader()
@@ -273,10 +276,7 @@ struct TitlePage: View {
 
     private func seasonChip(_ season: ItemDetail.SeasonSummary) -> some View {
         Button {
-            // TODO(M3 Task 4): navigate to a SeasonEpisodeView(seasonNumber:)
-            // — episode lists + per-episode playback land there. A visible,
-            // focusable season strip is this task's whole job for a series.
-            print("[TitlePage] season \(season.seasonNumber) tapped — episode navigation lands in M3 Task 4")
+            path.append(SeasonRoute(seriesId: itemId, seasonNumber: season.seasonNumber))
         } label: {
             VStack(spacing: 8) {
                 Text(seasonLabel(season))
@@ -518,5 +518,5 @@ private struct LogoImage: View {
 }
 
 #Preview {
-    TitlePage(itemId: "m1", model: AppModel(), path: .constant([]))
+    TitlePage(itemId: "m1", model: AppModel(), path: .constant(NavigationPath()))
 }
