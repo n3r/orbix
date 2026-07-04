@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@orbix/ui";
@@ -23,6 +24,7 @@ export default function ChannelCard({
 }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const [imgFailed, setImgFailed] = useState(false);
 
   const toggleFavorite = async () => {
     try {
@@ -52,12 +54,13 @@ export default function ChannelCard({
           reason for the dimming is still legible. */}
       <div className={cn(!channel.healthy && "opacity-50")}>
         <div className="grid aspect-video w-full place-items-center">
-          {channel.logo ? (
+          {channel.logo && !imgFailed ? (
             <img
               src={channel.logo}
               alt=""
               loading="lazy"
               className="max-h-[55%] max-w-[70%] object-contain"
+              onError={() => setImgFailed(true)}
             />
           ) : (
             <div

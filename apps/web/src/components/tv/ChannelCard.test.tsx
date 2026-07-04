@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import ChannelCard from "./ChannelCard";
 import type { TvChannelCard } from "@/lib/types";
@@ -36,6 +36,19 @@ describe("ChannelCard", () => {
 
   it("renders the monogram fallback (no img) when logo is null", () => {
     const { container } = wrap(<ChannelCard channel={{ ...base, logo: null }} onPlay={() => {}} />);
+    expect(container.querySelector("img")).toBeNull();
+    expect(screen.getByText("NO")).toBeTruthy();
+  });
+
+  it("falls back to the monogram when the logo img fails to load", () => {
+    const { container } = wrap(
+      <ChannelCard channel={{ ...base, logo: "/api/images/channel/x.png" }} onPlay={() => {}} />,
+    );
+    const img = container.querySelector("img");
+    expect(img).not.toBeNull();
+
+    fireEvent.error(img!);
+
     expect(container.querySelector("img")).toBeNull();
     expect(screen.getByText("NO")).toBeTruthy();
   });
