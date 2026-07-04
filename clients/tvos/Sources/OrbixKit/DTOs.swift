@@ -251,3 +251,36 @@ public struct Profile: Codable, Sendable, Equatable {
         self.language = language
     }
 }
+
+/// Response of `GET /api/me/profile`: this session's (or bearer device's)
+/// currently-active profile. Unlike `Profile`, every field — including
+/// `id`/`name` — is optional: when no profile has been selected yet, the
+/// server responds `{id: null, name: null, avatar: null, kind: null,
+/// maturityCap: null}` rather than 404ing (see
+/// `apps/api/src/routes/profiles.ts`'s `/me/profile` handler), so `id ==
+/// nil` is the drives-`.needsProfile` case `AppModel` checks for, not a
+/// decode failure.
+public struct MeProfile: Codable, Sendable, Equatable {
+    public var id: String?
+    public var name: String?
+    public var avatar: String?
+    public var kind: String?
+    public var maturityCap: Int?
+    public var language: String?
+
+    public init(
+        id: String? = nil,
+        name: String? = nil,
+        avatar: String? = nil,
+        kind: String? = nil,
+        maturityCap: Int? = nil,
+        language: String? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.avatar = avatar
+        self.kind = kind
+        self.maturityCap = maturityCap
+        self.language = language
+    }
+}

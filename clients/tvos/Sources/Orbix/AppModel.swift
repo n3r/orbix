@@ -2,19 +2,34 @@ import Foundation
 import Observation
 import OrbixKit
 
-/// Top-level app state: the configured server `baseURL`, the device auth
-/// `token`, the `OrbixClient` built from both, and (for the M0 reachability
-/// screen) the result of the last reachability check.
+/// Top-level app state: the configured server `baseURL`, the resolved
+/// device auth `token`, the `OrbixClient` built from both, the result of
+/// the last reachability check, and the SP2 M2 onboarding `phase` that
+/// drives `RootView`'s routing.
 ///
 /// Neither the server address nor the token is ever hardcoded:
-/// `resolveBaseURLString()` / `resolveTokenString()` each read a launch
-/// argument, then an environment variable, else default to `""` (SP2 Global
-/// Constraint: "No hardcoded server origin in committed code" — the same
-/// reasoning extends to the M1 spike's device token, which in production is
-/// minted through the real pairing UI, deferred to M2).
+/// `resolveBaseURLString()` reads a launch argument/environment variable
+/// (or leaves the field blank for manual entry, per SP2's "no hardcoded
+/// server origin in committed code" constraint); the device token is
+/// resolved from the persisted `TokenStore` first and only falls back to a
+/// launch-arg/env value as a dev convenience (see `resolveOnboarding`
+/// below) — the real path is the M2 pairing UI.
 @MainActor
 @Observable
 final class AppModel {
+    /// Onboarding progression (SP2 M2): `.needsServer` while no reachable
+    /// server is configured yet (the existing M0 reachability screen);
+    /// once reachable, `.needsPairing` (no usable device token) or
+    /// `.needsProfile` (token present, no active profile yet); `.ready`
+    /// once both a token and an active profile are resolved, which routes
+    /// to the M1 spike's `SpikeListView`. `RootView` switches on this.
+    enum OnboardingPhase: Equatable {
+        case needsServer
+        case needsPairing
+        case needsProfile
+        case ready
+    }
+
     /// The last successfully parsed server base URL, or `nil` if none has
     /// been configured yet (or the last attempt failed to parse as a URL).
     private(set) var baseURL: URL?
@@ -24,49 +39,32 @@ final class AppModel {
     /// `isChecking`), `true`/`false` once it resolves.
     private(set) var reachable: Bool?
 
-    /// The client built for `baseURL` (constructed with `token`, if one was
-    /// resolved at launch). `nil` until `configure` succeeds.
+    /// The client built for `baseURL`. `nil` until `configure` succeeds.
+    /// Once a token is resolved, it's attached via `setToken` on this same
+    /// instance rather than rebuilding — see `resolveOnboarding`.
     private(set) var client: OrbixClient?
 
     /// `true` while a `serverReachable()` request is in flight, so the UI
     /// can distinguish "never checked" from "checking".
     private(set) var isChecking = false
 
-    /// The device token resolved at launch (see `resolveTokenString()`).
-    /// `nil` until one is supplied via launch arg/env — there is no
-    /// on-screen entry for it; that's M2's pairing UI (on-screen code +
-    /// poll). The M1 spike's stand-in is a token minted through the
-    /// web/API pairing flow and passed in via `-orbixToken`/`ORBIX_TOKEN`.
+    /// The device token currently attached to `client`, if any resolved —
+    /// either loaded from the persisted `TokenStore`, a dev launch-arg/env
+    /// stand-in, or minted just now by a completed pairing.
     private(set) var token: String?
+
+    /// The current onboarding phase. See `OnboardingPhase`.
+    private(set) var phase: OnboardingPhase = .needsServer
 
     private let tokenStore: TokenStore
 
     init(tokenStore: TokenStore = TokenStore()) {
         self.tokenStore = tokenStore
 
-        let resolvedToken = Self.resolveTokenString()
-        if !resolvedToken.isEmpty {
-            token = resolvedToken
-            // Fire-and-forget: persist to Keychain via TokenStore per the
-            // Task 4 interfaces. A failure here (e.g. no Keychain
-            // access-group entitlement in some simulator/CI hosts) doesn't
-            // block the spike, which only ever reads `token` from this
-            // launch-time resolution, not from the store.
-            let store = tokenStore
-            Task { try? await store.save(token: resolvedToken) }
-        }
-
         let resolvedBaseURL = Self.resolveBaseURLString()
         if !resolvedBaseURL.isEmpty {
             configure(baseURLString: resolvedBaseURL)
         }
-    }
-
-    /// `true` once both a server address and a device token are configured
-    /// — `RootView`'s signal to route to `SpikeListView` (the M1 spike)
-    /// instead of the M0 reachability screen.
-    var isReadyForSpike: Bool {
-        client != nil && token != nil
     }
 
     /// Resolution order for the initial base URL (SP2 Task 3): a launch
@@ -87,11 +85,13 @@ final class AppModel {
         return ""
     }
 
-    /// Resolution order for the M1 spike's device token (SP2 Task 4): a
-    /// launch argument `-orbixToken <token>` (same `UserDefaults`-via-
-    /// scheme-arguments mechanism as `resolveBaseURLString()`), then the
-    /// `ORBIX_TOKEN` environment variable, else `""` (no token configured;
-    /// `RootView` falls back to the M0 reachability screen).
+    /// Dev-only fallback device token (SP2 Task 4, kept working per the M2
+    /// brief): a launch argument `-orbixToken <token>` (same
+    /// `UserDefaults`-via-scheme-arguments mechanism as
+    /// `resolveBaseURLString()`), then the `ORBIX_TOKEN` environment
+    /// variable, else `""`. Only consulted by `resolveOnboarding` when
+    /// `TokenStore.load()` has nothing persisted — the real path for a
+    /// human is the M2 pairing UI (`PairingView`/`PairingModel`).
     static func resolveTokenString() -> String {
         if let launchArg = UserDefaults.standard.string(forKey: "orbixToken"), !launchArg.isEmpty {
             return launchArg
@@ -102,25 +102,30 @@ final class AppModel {
         return ""
     }
 
-    /// Builds an `OrbixClient` for `baseURLString` (carrying `token`, if
-    /// any was resolved) and checks reachability. An empty or unparseable
-    /// string clears any prior configuration and reports `reachable =
-    /// false` immediately, rather than leaving a stale green/red result on
-    /// screen from a previously configured address.
+    /// Builds an `OrbixClient` for `baseURLString` and checks reachability;
+    /// once reachable, kicks off token/profile resolution
+    /// (`resolveOnboarding`). An empty or unparseable string clears any
+    /// prior configuration and reports `reachable = false` immediately
+    /// (and resets `phase` to `.needsServer`), rather than leaving a stale
+    /// green/red result — or a stale further-along phase — on screen from a
+    /// previously configured address.
     func configure(baseURLString: String) {
         guard let url = URL(string: baseURLString), url.scheme != nil, url.host != nil else {
             baseURL = nil
             client = nil
             reachable = false
             isChecking = false
+            phase = .needsServer
             return
         }
 
         baseURL = url
-        let newClient = OrbixClient(baseURL: url, token: token)
+        let newClient = OrbixClient(baseURL: url)
         client = newClient
         reachable = nil
         isChecking = true
+        token = nil
+        phase = .needsServer
 
         Task {
             // `OrbixClient` is an actor, so this `await` hops off the
@@ -137,6 +142,91 @@ final class AppModel {
             }
             self.reachable = isReachable
             self.isChecking = false
+            if isReachable {
+                await self.resolveOnboarding(client: newClient)
+            }
         }
+    }
+
+    /// Runs once `client` is confirmed reachable: resolves a device token
+    /// — the persisted `TokenStore` first, else the dev launch-arg/env
+    /// stand-in (persisted back to the store so a later tokenless launch
+    /// on the same simulator picks it up the same way a real pairing
+    /// would have) — then, if one was found, attaches it to `client` and
+    /// asks the server which profile (if any) is already active for it.
+    /// No token at all routes to `.needsPairing`.
+    private func resolveOnboarding(client: OrbixClient) async {
+        guard self.client === client else { return }
+
+        var resolvedToken = await tokenStore.load()
+        if resolvedToken == nil {
+            let devToken = Self.resolveTokenString()
+            if !devToken.isEmpty {
+                resolvedToken = devToken
+                let store = tokenStore
+                try? await store.save(token: devToken)
+            }
+        }
+
+        guard let resolvedToken else {
+            guard self.client === client else { return }
+            phase = .needsPairing
+            return
+        }
+
+        await client.setToken(resolvedToken)
+        guard self.client === client else { return }
+        token = resolvedToken
+        await checkActiveProfile(client: client)
+    }
+
+    /// `GET /api/me/profile`: a non-null `id` means this token already has
+    /// an active profile (persisted server-side on the device row for
+    /// bearer clients) — skip straight to `.ready`; a null `id` means the
+    /// picker is still needed. Per spec §7 ("401 on missing/revoked token
+    /// → app drops to pairing screen"), an unauthorized response clears the
+    /// now-known-bad persisted token and routes back to `.needsPairing`;
+    /// any other failure (transient network blip, etc.) also routes to
+    /// `.needsPairing` — the only phase with a concrete recovery action —
+    /// but leaves the stored token alone since it hasn't actually been
+    /// disproven.
+    private func checkActiveProfile(client: OrbixClient) async {
+        do {
+            let me = try await client.meProfile()
+            guard self.client === client else { return }
+            phase = (me.id != nil) ? .ready : .needsProfile
+        } catch {
+            if let orbixError = error as? OrbixError, case .http(401) = orbixError {
+                let store = tokenStore
+                await store.clear()
+            }
+            guard self.client === client else { return }
+            token = nil
+            phase = .needsPairing
+        }
+    }
+
+    /// Called by `PairingView` once `PairingModel` reaches
+    /// `.approved(token:)`: persists the new device token to the Keychain,
+    /// attaches it to the current client, and advances to the profile
+    /// picker. `async` and attaches the token before flipping `phase` so
+    /// there's no race between "client has the token" and "ProfilePickerView
+    /// starts loading `/api/profiles`".
+    func pairingApproved(token: String) async {
+        guard let client else { return }
+        await client.setToken(token)
+        guard self.client === client else { return }
+        self.token = token
+        phase = .needsProfile
+
+        let store = tokenStore
+        Task { try? await store.save(token: token) }
+    }
+
+    /// Called by `ProfilePickerView` once `ProfilePickerModel.select`
+    /// succeeds: advances to the M1 home list (`SpikeListView`, replaced in
+    /// M3).
+    func profileSelected() {
+        phase = .ready
     }
 }

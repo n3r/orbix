@@ -59,6 +59,14 @@ public actor OrbixClient {
 
     // MARK: - Profiles
 
+    /// `GET /api/me/profile` — the session's (or this bearer device's)
+    /// currently-active profile, or an all-null `MeProfile` if none is
+    /// selected yet. `AppModel` uses `id != nil` to decide `.ready` vs
+    /// `.needsProfile` once a token is resolved.
+    public func meProfile() async throws -> MeProfile {
+        try await send(method: "GET", url: baseURL.appending(path: "api/me/profile"))
+    }
+
     /// `GET /api/profiles`.
     public func profiles() async throws -> [Profile] {
         try await send(method: "GET", url: baseURL.appending(path: "api/profiles"))

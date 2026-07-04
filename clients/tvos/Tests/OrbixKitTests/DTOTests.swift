@@ -114,4 +114,30 @@ final class DTOTests: XCTestCase {
         XCTAssertEqual(profile.language, "en")
         XCTAssertNil(profile.avatar)
     }
+
+    func testDecodeMeProfileWithActiveProfile() throws {
+        let json = """
+        {"id":"p1","name":"Alex","avatar":null,"kind":"kids","maturityCap":1,"language":"en"}
+        """.data(using: .utf8)!
+        let me = try JSONDecoder().decode(MeProfile.self, from: json)
+        XCTAssertEqual(me.id, "p1")
+        XCTAssertEqual(me.name, "Alex")
+        XCTAssertEqual(me.kind, "kids")
+        XCTAssertEqual(me.maturityCap, 1)
+    }
+
+    func testDecodeMeProfileAllNullWhenNoneSelected() throws {
+        // The exact all-null shape apps/api/src/routes/profiles.ts sends
+        // when no orbix_profile cookie / device activeProfileId is set —
+        // must decode cleanly (not throw), with id == nil driving
+        // AppModel's .needsProfile branch.
+        let json = """
+        {"id":null,"name":null,"avatar":null,"kind":null,"maturityCap":null}
+        """.data(using: .utf8)!
+        let me = try JSONDecoder().decode(MeProfile.self, from: json)
+        XCTAssertNil(me.id)
+        XCTAssertNil(me.name)
+        XCTAssertNil(me.kind)
+        XCTAssertNil(me.maturityCap)
+    }
 }

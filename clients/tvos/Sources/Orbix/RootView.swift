@@ -1,22 +1,52 @@
 import SwiftUI
 
-/// Routes to the M1 playback spike (`SpikeListView`) once both a server
-/// address and a device token are configured (`AppModel.isReadyForSpike`);
-/// otherwise shows the M0 acceptance surface — the configured server base
-/// URL, editable, reporting reachability (`GET /health`) as a green/red
-/// result. No server address is hardcoded — `AppModel` resolves an initial
-/// value from a launch argument or environment variable, or leaves the
-/// field blank for manual entry. (The device token has no on-screen entry
-/// yet — that's M2's pairing UI; the spike resolves it the same way, via
-/// launch arg/env.)
+/// Routes by `AppModel.OnboardingPhase`:
+/// - `.needsServer` — the M0 acceptance surface: the configured server base
+///   URL, editable, reporting reachability (`GET /health`) as a green/red
+///   result. No server address is hardcoded — `AppModel` resolves an
+///   initial value from a launch argument or environment variable, or
+///   leaves the field blank for manual entry.
+/// - `.needsPairing` — the M2 pairing screen (`PairingView`): a code to
+///   enter on another device.
+/// - `.needsProfile` — the M2 profile picker (`ProfilePickerView`).
+/// - `.ready` — the M1 playback spike (`SpikeListView`), replaced in M3.
 struct RootView: View {
     @State private var model = AppModel()
     @State private var baseURLText = ""
     @FocusState private var isTextFieldFocused: Bool
 
     var body: some View {
-        if model.isReadyForSpike {
+        switch model.phase {
+        case .needsServer:
+            reachabilityView
+        case .needsPairing:
+            pairingOrFallback
+        case .needsProfile:
+            profilePickerOrFallback
+        case .ready:
             SpikeListView(model: model)
+        }
+    }
+
+    /// `.needsPairing` is only reached once `configure(baseURLString:)` has
+    /// built a client and confirmed it reachable, so `model.client` is
+    /// always non-nil here in practice; this fallback just avoids force-
+    /// unwrapping across that invariant.
+    @ViewBuilder
+    private var pairingOrFallback: some View {
+        if model.client != nil {
+            PairingView(model: model)
+        } else {
+            reachabilityView
+        }
+    }
+
+    /// Same invariant/fallback reasoning as `pairingOrFallback`, for the
+    /// profile-picker phase.
+    @ViewBuilder
+    private var profilePickerOrFallback: some View {
+        if model.client != nil {
+            ProfilePickerView(model: model)
         } else {
             reachabilityView
         }
