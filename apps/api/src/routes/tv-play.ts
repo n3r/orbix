@@ -13,10 +13,9 @@ import { requireAuth } from "../lib/auth";
 import { requireTvAccess } from "../lib/tv-access";
 import { makeTvUpstream, type TvUpstream, type UpstreamResult } from "../lib/tv-upstream";
 import { loadNowNext } from "../lib/tv-now-next";
+import { nextStreamHealth } from "../lib/tv-health-state";
 
 const MAX_SOURCES = 3;
-const DEGRADED_AT = 3;
-const DEAD_AT = 8;
 
 interface StreamRow {
   id: string;
@@ -72,11 +71,10 @@ export default function tvPlayRoute(
 
     /** failCount++ with degraded/dead thresholds (proxy-side upstream failures). */
     async function bumpFailure(stream: { id: string; failCount: number; status: string }) {
-      const failCount = stream.failCount + 1;
-      const status = failCount >= DEAD_AT ? "dead" : failCount >= DEGRADED_AT ? "degraded" : stream.status;
+      const next = nextStreamHealth(stream, false);
       await app.prisma.tvStream.update({
         where: { id: stream.id },
-        data: { failCount, status, lastCheckAt: new Date() },
+        data: { ...next, lastCheckAt: new Date() },
       });
     }
 
@@ -267,17 +265,17 @@ export default function tvPlayRoute(
 
         const now = new Date();
         if (req.body?.ok === true) {
+          const next = nextStreamHealth(stream, true);
           await app.prisma.tvStream.update({
             where: { id: stream.id },
-            data: { status: "ok", failCount: 0, lastOkAt: now, lastCheckAt: now },
+            data: { ...next, lastOkAt: now, lastCheckAt: now },
           });
         } else {
           if (req.body?.code) req.log.info({ streamId: stream.id, code: req.body.code }, "tv stream failure reported");
-          const failCount = stream.failCount + 1;
-          const status = failCount >= DEAD_AT ? "dead" : failCount >= DEGRADED_AT ? "degraded" : stream.status;
+          const next = nextStreamHealth(stream, false);
           await app.prisma.tvStream.update({
             where: { id: stream.id },
-            data: { failCount, status, lastCheckAt: now },
+            data: { ...next, lastCheckAt: now },
           });
         }
         return { ok: true };

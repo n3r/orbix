@@ -16,6 +16,7 @@ import {
 import { buildIptvOrgDeps, fetchIptvOrgCatalog } from "../lib/iptv-org";
 import { makeTvUpstream } from "../lib/tv-upstream";
 import { runTvEpgSync } from "../jobs/tv-epg";
+import { runTvHealthSweep } from "../jobs/tv-health";
 
 // ── Module-level in-process EventEmitter for SSE progress ──────────────────
 
@@ -359,6 +360,42 @@ export function tvQueuePlugin(env: Env) {
             // Mirrors tv-play.ts's upstream lifecycle: this job builds its own
             // TvUpstream (own keep-alive Agent) per run, so it must close it
             // itself — nothing else owns this instance.
+            await upstream.close();
+          }
+          break;
+        }
+        case "tv-health": {
+          const { jobId } = job.data as TvHealthJobData;
+          const upstream = makeTvUpstream();
+          try {
+            const r = await runTvHealthSweep(app.prisma, {
+              // Same adapter as the tv-epg case: TvHealthDeps' optional-string
+              // userAgent/referrer vs TvUpstream's required-but-nullable ones
+              // (undefined behaves the same as null at both of fetchUpstream's
+              // use sites — `init.userAgent ?? BROWSER_UA` / `if (init.referrer)`).
+              fetchUpstream: (url, opts) =>
+                upstream.fetchUpstream(url, {
+                  userAgent: opts.userAgent ?? null,
+                  referrer: opts.referrer ?? null,
+                  wantText: opts.wantText,
+                  timeoutMs: opts.timeoutMs,
+                }),
+            });
+            // phase:"done" on the jobId channel — see the tv-epg case note (SSE contract).
+            const done = { phase: "done", kind: "health", ...r };
+            tvDoneCache.set(jobId, done);
+            const t = setTimeout(() => tvDoneCache.delete(jobId), 5 * 60 * 1000);
+            t.unref?.();
+            tvEvents.emit(jobId, done);
+          } catch (err) {
+            const evt = { phase: "error", kind: "health", message: err instanceof Error ? err.message : String(err) };
+            tvDoneCache.set(jobId, evt);
+            const t = setTimeout(() => tvDoneCache.delete(jobId), 5 * 60 * 1000);
+            t.unref?.();
+            tvEvents.emit(jobId, evt);
+          } finally {
+            // Per-job TvUpstream (own keep-alive Agent) — mirrors the tv-epg
+            // case's lifecycle; nothing else owns this instance.
             await upstream.close();
           }
           break;

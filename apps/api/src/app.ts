@@ -117,6 +117,32 @@ export async function buildApp(
   }, TV_SYNC_INTERVAL_MS);
   tvSyncTimer.unref(); // don't block process shutdown
 
+  // ── Periodic TV jobs: EPG every 12 h; stream health nightly, offset 1 h so the
+  // two never enqueue on the same tick. Cheap enqueues; the worker no-ops when
+  // nothing is configured, and we skip entirely while no channels are imported.
+  const TV_EPG_INTERVAL_MS = 12 * 60 * 60 * 1000;
+  const TV_HEALTH_INTERVAL_MS = 24 * 60 * 60 * 1000;
+  const TV_HEALTH_OFFSET_MS = 60 * 60 * 1000;
+
+  async function enqueueTvJob(name: "tv-epg" | "tv-health"): Promise<void> {
+    try {
+      const channelCount = await app.prisma.tvChannel.count();
+      if (channelCount === 0) return; // TV unconfigured — skip
+      await app.tvQueue.add(name, { jobId: randomUUID() });
+    } catch (err) {
+      app.log.error({ err }, `Scheduled ${name} enqueue failed`);
+    }
+  }
+
+  const tvEpgTimer = setInterval(() => void enqueueTvJob("tv-epg"), TV_EPG_INTERVAL_MS);
+  tvEpgTimer.unref();
+  const tvHealthKickoff = setTimeout(() => {
+    void enqueueTvJob("tv-health");
+    const tvHealthTimer = setInterval(() => void enqueueTvJob("tv-health"), TV_HEALTH_INTERVAL_MS);
+    tvHealthTimer.unref();
+  }, TV_HEALTH_INTERVAL_MS + TV_HEALTH_OFFSET_MS);
+  tvHealthKickoff.unref();
+
   // Serve the built SPA last so its catch-all fallback sits below the API routes.
   await app.register(staticWebPlugin, {});
 
