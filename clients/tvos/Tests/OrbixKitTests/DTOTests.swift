@@ -322,6 +322,56 @@ final class DTOTests: XCTestCase {
         XCTAssertNil(card.resume)
     }
 
+    // MARK: - Search (M3 Task 5)
+
+    func testDecodeSearchResponse() throws {
+        // A representative GET /api/search?q= response (see
+        // apps/api/src/routes/discovery.ts's "/search" route): the
+        // embeddings-ranking path, usedEmbeddings: true.
+        let json = """
+        {"items":[{"id":"m1","title":"Arrival","year":2016,
+                   "posterPath":"/p1.jpg","matchState":"matched"}],
+         "usedEmbeddings":true}
+        """.data(using: .utf8)!
+        let response = try JSONDecoder().decode(SearchResponse.self, from: json)
+        XCTAssertEqual(response.items.count, 1)
+        let card = try XCTUnwrap(response.items.first)
+        XCTAssertEqual(card.id, "m1")
+        XCTAssertEqual(card.title, "Arrival")
+        XCTAssertEqual(card.year, 2016)
+        XCTAssertEqual(card.posterPath, "/p1.jpg")
+        XCTAssertNil(card.backdropPath)
+        XCTAssertNil(card.progress)
+        XCTAssertNil(card.resume)
+        XCTAssertEqual(response.usedEmbeddings, true)
+    }
+
+    func testDecodeSearchResponseZeroCandidatesKeywordDegrade() throws {
+        // The route's `candidates.length === 0` early return sends
+        // {items: [], usedEmbeddings: false} rather than 404ing or omitting
+        // the flag — must decode to an empty array, not throw.
+        let json = """
+        {"items":[],"usedEmbeddings":false}
+        """.data(using: .utf8)!
+        let response = try JSONDecoder().decode(SearchResponse.self, from: json)
+        XCTAssertTrue(response.items.isEmpty)
+        XCTAssertEqual(response.usedEmbeddings, false)
+    }
+
+    func testDecodeSearchResponseToleratesMissingUsedEmbeddings() throws {
+        // Decode-safety parity with this file's other wrapper-response
+        // tests: usedEmbeddings absent entirely (not even null) must still
+        // decode cleanly, with the field nil rather than throwing.
+        let json = """
+        {"items":[{"id":"m2","title":"Interstellar","year":2014,
+                   "posterPath":null,"matchState":"matched"}]}
+        """.data(using: .utf8)!
+        let response = try JSONDecoder().decode(SearchResponse.self, from: json)
+        XCTAssertEqual(response.items.count, 1)
+        XCTAssertEqual(response.items.first?.title, "Interstellar")
+        XCTAssertNil(response.usedEmbeddings)
+    }
+
     // MARK: - Episodes (M3 Task 4)
 
     func testDecodeEpisodesResponse() throws {

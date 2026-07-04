@@ -371,6 +371,33 @@ public struct SimilarResponse: Codable, Sendable, Equatable {
     }
 }
 
+// MARK: - Search
+
+/// Response of `GET /api/search?q=` (see `apps/api/src/routes/discovery.ts`'s
+/// `/search` route): `{items: [...], usedEmbeddings: boolean}`. `items`
+/// shares `SimilarResponse`'s narrow per-card shape (`id,title,year,
+/// posterPath,matchState`; `matchState` unmodeled, same rationale as
+/// `SimilarResponse`'s doc comment — `backdropPath`/`progress`/`resume`
+/// simply aren't on the wire here either, decoding to `nil` since all three
+/// are already `Optional` on `MediaCard`). `usedEmbeddings` reports whether
+/// the route's vector-similarity ranking actually fired for this query
+/// versus its keyword-degrade fallback (`EmbedderUnavailable`, no
+/// embeddings backfilled yet, a non-finite query vector, ...) — modeled
+/// `Optional` per this file's general decode-safety stance even though
+/// every branch of the route currently sends it (including the
+/// zero-candidates early return); nothing in the app surfaces it today, but
+/// it decodes rather than being dropped so a future "was this a semantic
+/// match" affordance doesn't need a DTO change.
+public struct SearchResponse: Codable, Sendable, Equatable {
+    public var items: [MediaCard]
+    public var usedEmbeddings: Bool?
+
+    public init(items: [MediaCard], usedEmbeddings: Bool? = nil) {
+        self.items = items
+        self.usedEmbeddings = usedEmbeddings
+    }
+}
+
 // MARK: - Episodes (series)
 
 /// One entry of `GET /api/items/:id/seasons/:n/episodes`'s `episodes` array

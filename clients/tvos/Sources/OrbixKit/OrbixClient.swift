@@ -89,6 +89,24 @@ public actor OrbixClient {
         try await send(method: "GET", url: baseURL.appending(path: "api/home/rows"))
     }
 
+    /// `GET /api/search?q=<query>` (see `apps/api/src/routes/discovery.ts`'s
+    /// `/search` route) → `{items: [...], usedEmbeddings: boolean}`,
+    /// unwrapped to the bare array — same convention as `similar(id:)` —
+    /// since no caller needs `usedEmbeddings` yet. `query` is percent-encoded
+    /// by `URL.appending(queryItems:)`, so callers pass the raw typed text
+    /// (spaces, punctuation, non-ASCII) verbatim; an empty string is still a
+    /// well-formed request — the route treats "no residual text" as
+    /// "sort by recency/title" rather than erroring — but `SearchModel`
+    /// (the tvOS search screen) never actually calls this for an empty
+    /// query, since a blank search box has nothing worth showing results for.
+    public func search(query: String) async throws -> [MediaCard] {
+        let url = baseURL
+            .appending(path: "api/search")
+            .appending(queryItems: [URLQueryItem(name: "q", value: query)])
+        let response: SearchResponse = try await send(method: "GET", url: url)
+        return response.items
+    }
+
     // MARK: - Item detail
 
     /// `GET /api/items/:id` — full item detail (movie or series; see

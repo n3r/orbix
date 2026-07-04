@@ -9,8 +9,12 @@ import SwiftUI
 /// - `.needsPairing` — the M2 pairing screen (`PairingView`): a code to
 ///   enter on another device.
 /// - `.needsProfile` — the M2 profile picker (`ProfilePickerView`).
-/// - `.ready` — the M3 home screen (`HomeView`): Netflix-style rails loaded
-///   from `/api/home/rows`, replacing the M1 playback spike (`SpikeListView`).
+/// - `.ready` — a top-level `TabView` (the tvOS-standard top tab bar) with
+///   two tabs: "Home" (`HomeView`, the M3 Netflix-style rails loaded from
+///   `/api/home/rows`, replacing the M1 playback spike `SpikeListView`) and
+///   "Search" (`SearchView`, M3 Task 5). Each tab owns its own
+///   `NavigationStack`, so drilling into a title from Search doesn't affect
+///   Home's navigation state or vice versa.
 struct RootView: View {
     @State private var model = AppModel()
     @State private var baseURLText = ""
@@ -25,7 +29,14 @@ struct RootView: View {
         case .needsProfile:
             profilePickerOrFallback
         case .ready:
-            HomeView(model: model)
+            TabView {
+                HomeView(model: model)
+                    .tabItem { Label("Home", systemImage: "house.fill") }
+                    .accessibilityIdentifier("tab_home")
+                SearchView(model: model)
+                    .tabItem { Label("Search", systemImage: "magnifyingglass") }
+                    .accessibilityIdentifier("tab_search")
+            }
         }
     }
 
