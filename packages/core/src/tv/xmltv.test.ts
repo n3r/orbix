@@ -68,7 +68,9 @@ describe("parseXmltvDate", () => {
 
 describe("createXmltvCollector", () => {
   it("collects wanted programmes inside the window; first title/category win; lang from first title", () => {
-    const { c, programmes } = collect({ wantedIds: new Set(["ChannelOne.ru", "zdf.de"]) });
+    // wantedIds is matched case-insensitively — the collector requires callers to
+    // pass lowercased ids, so this (and every other fixture below) is lowercased.
+    const { c, programmes } = collect({ wantedIds: new Set(["channelone.ru", "zdf.de"]) });
     c.write(XML);
     c.end();
     // programme 2 (07:00–08:00Z) ends before windowStart → dropped; programme 3 untracked → dropped
@@ -84,7 +86,7 @@ describe("createXmltvCollector", () => {
   });
 
   it("applies offsetMin AFTER parsing", () => {
-    const { c, programmes } = collect({ wantedIds: new Set(["ChannelOne.ru"]), offsetMin: 60 });
+    const { c, programmes } = collect({ wantedIds: new Set(["channelone.ru"]), offsetMin: 60 });
     c.write(XML);
     c.end();
     expect(programmes[0].start.toISOString()).toBe("2026-07-03T17:30:00.000Z");
@@ -92,7 +94,7 @@ describe("createXmltvCollector", () => {
   });
 
   it("emits channel display-names via onChannel", () => {
-    const { c, channels } = collect({ wantedIds: new Set(["ChannelOne.ru"]) });
+    const { c, channels } = collect({ wantedIds: new Set(["channelone.ru"]) });
     c.write(XML);
     c.end();
     expect(channels).toEqual([
@@ -110,7 +112,7 @@ describe("createXmltvCollector", () => {
   });
 
   it("is chunk-boundary safe (split mid-tag and mid-Cyrillic text)", () => {
-    const { c, programmes, channels } = collect({ wantedIds: new Set(["ChannelOne.ru"]) });
+    const { c, programmes, channels } = collect({ wantedIds: new Set(["channelone.ru"]) });
     const cut1 = XML.indexOf("Первый кан") + 9; // inside a Cyrillic display-name
     const cut2 = XML.indexOf("<programme") + 5; // inside a tag name
     c.write(XML.slice(0, cut1));
@@ -132,7 +134,7 @@ describe("createXmltvCollector", () => {
       windowEnd,
       onProgramme: (p) => programmes.push(p),
       onChannel: (ch) => {
-        if (ch.id === "ChannelOne.ru") wanted.add("ChannelOne.ru"); // simulate name-match admission
+        if (ch.id === "ChannelOne.ru") wanted.add(ch.id.toLowerCase()); // simulate name-match admission
       },
     });
     c.write(XML);

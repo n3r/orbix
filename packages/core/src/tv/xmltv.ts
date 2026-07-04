@@ -39,6 +39,7 @@ export interface XmltvCollectorOptions {
    * Membership is checked LIVE at each `</programme>` — callers may add ids
    * mid-stream (XMLTV orders all <channel> elements before any <programme>,
    * so ids admitted while channels stream in still catch every programme).
+   * Matching is case-insensitive: callers MUST pass LOWERCASED ids.
    */
   wantedIds: Set<string> | null;
   /** Minutes added to every parsed start/stop (the "guide is hours off" knob). */
@@ -141,7 +142,7 @@ export function createXmltvCollector(opts: XmltvCollectorOptions): {
     } else if (name === "programme" && inProgramme) {
       inProgramme = false;
       if (opts.wantedIds === null) return; // discovery pass
-      if (!opts.wantedIds.has(progChannel)) return; // untracked channel
+      if (!opts.wantedIds.has(progChannel.toLowerCase())) return; // untracked channel (case-insensitive; wantedIds must be lowercased)
       if (!progStart || !progStop || !title) return; // malformed row → skip
       const start = new Date(progStart.getTime() + offsetMs); // offset AFTER parsing
       const stop = new Date(progStop.getTime() + offsetMs);

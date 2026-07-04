@@ -355,6 +355,11 @@ export function tvQueuePlugin(env: Env) {
             const t = setTimeout(() => tvDoneCache.delete(jobId), 5 * 60 * 1000);
             t.unref?.();
             tvEvents.emit(jobId, evt);
+          } finally {
+            // Mirrors tv-play.ts's upstream lifecycle: this job builds its own
+            // TvUpstream (own keep-alive Agent) per run, so it must close it
+            // itself — nothing else owns this instance.
+            await upstream.close();
           }
           break;
         }

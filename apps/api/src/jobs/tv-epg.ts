@@ -12,6 +12,7 @@ import {
 export const EPG_WINDOW_BACK_MS = 6 * 60 * 60 * 1000; // now − 6 h
 export const EPG_WINDOW_FWD_MS = 48 * 60 * 60 * 1000; // now + 48 h
 const BATCH = 500;
+const EPG_FETCH_TIMEOUT_MS = 5 * 60_000; // 5 min — whole streaming download+parse budget; EPG feeds are multi-MB gzip
 
 export interface TvEpgDeps {
   fetchUpstream: (
@@ -93,12 +94,16 @@ export async function runTvEpgSync(prisma: PrismaClient, deps: TvEpgDeps): Promi
   if (channels.length === 0) return result;
 
   // Direct epgId → channelId[] (several channels/sources can share an epgId).
+  // Keyed lowercase so a stored epgId's casing need not match the feed's
+  // xmltv id exactly (case-insensitive throughout this job, mirroring
+  // matchEpgChannels' own case-insensitive Pass 1).
   const direct = new Map<string, string[]>();
   for (const ch of channels) {
     if (!ch.epgId) continue;
-    const list = direct.get(ch.epgId) ?? [];
+    const key = ch.epgId.toLowerCase();
+    const list = direct.get(key) ?? [];
     list.push(ch.id);
-    direct.set(ch.epgId, list);
+    direct.set(key, list);
   }
   // Normalized DB names — used to admit candidate xmltv ids during the stream.
   const dbNames = new Set<string>();
@@ -119,10 +124,10 @@ export async function runTvEpgSync(prisma: PrismaClient, deps: TvEpgDeps): Promi
       data: { status: "syncing", statusMessage: null },
     });
     try {
-      const res = await deps.fetchUpstream(source.url, { wantText: false, timeoutMs: 30_000 });
+      const res = await deps.fetchUpstream(source.url, { wantText: false, timeoutMs: EPG_FETCH_TIMEOUT_MS });
       if (res.status !== 200) throw new Error(`upstream responded ${res.status}`);
 
-      const wanted = new Set(direct.keys()); // LIVE set — candidates admitted below
+      const wanted = new Set(direct.keys()); // LIVE set — candidates admitted below (already lowercased)
       const xmltvChannels: XmltvChannelName[] = [];
       const directRows: Row[] = [];
       const candidateRows: XmltvProgramme[] = []; // ids admitted by name collision
@@ -135,14 +140,16 @@ export async function runTvEpgSync(prisma: PrismaClient, deps: TvEpgDeps): Promi
         windowEnd,
         onChannel: (c) => {
           xmltvChannels.push(c);
-          // Admit colliding ids so their rows are captured in THIS pass; the
+          // Admit colliding ids (lowercased, to match the wantedIds/direct-map
+          // casing convention) so their rows are captured in THIS pass; the
           // final unique mapping is decided by matchEpgChannels afterwards.
-          if (!wanted.has(c.id) && c.names.some((n) => dbNames.has(normalizeChannelName(n)))) {
-            wanted.add(c.id);
+          const idKey = c.id.toLowerCase();
+          if (!wanted.has(idKey) && c.names.some((n) => dbNames.has(normalizeChannelName(n)))) {
+            wanted.add(idKey);
           }
         },
         onProgramme: (p) => {
-          const chIds = direct.get(p.epgId);
+          const chIds = direct.get(p.epgId.toLowerCase());
           if (chIds) {
             for (const channelId of chIds) directRows.push({ channelId, p });
           } else {
@@ -152,7 +159,13 @@ export async function runTvEpgSync(prisma: PrismaClient, deps: TvEpgDeps): Promi
       });
 
       const raw = toNodeReadable(res.body);
-      const stream = isGzUrl(source.url) || isGzUrl(res.finalUrl) ? raw.pipe(createGunzip()) : raw;
+      const gunzip = isGzUrl(source.url) || isGzUrl(res.finalUrl) ? createGunzip() : null;
+      // .pipe() does not destroy the source when the destination errors (a
+      // documented Node caveat) — without this, a corrupt/truncated gzip body
+      // would leak `raw` (and its underlying upstream connection). The
+      // per-source try/catch below still isolates the failure either way.
+      if (gunzip) gunzip.on("error", (err) => raw.destroy(err));
+      const stream = gunzip ? raw.pipe(gunzip) : raw;
       const decoder = new TextDecoder("utf-8"); // stream:true → multibyte-safe across chunks
       for await (const chunk of stream) {
         collector.write(decoder.decode(chunk as Buffer, { stream: true }));
@@ -169,17 +182,21 @@ export async function runTvEpgSync(prisma: PrismaClient, deps: TvEpgDeps): Promi
       // Name-based mapping for channels whose epgId found no direct rows.
       // NOTE (v1): an xmltv id that is ALSO some channel's direct epgId only
       // feeds that channel this run — its rows were flushed live, not buffered.
+      // byXmltvId is keyed lowercase (matchEpgChannels returns real-cased xmltv
+      // ids) so the pass-1 skip check and the candidateRows lookup below stay
+      // case-insensitive, consistent with the rest of this job.
       const byXmltvId = new Map<string, string[]>();
       for (const [chId, xid] of matchEpgChannels(channels, xmltvChannels)) {
-        if (chById.get(chId)?.epgId === xid) continue; // pass-1 → already direct
+        if (chById.get(chId)?.epgId?.toLowerCase() === xid.toLowerCase()) continue; // pass-1 → already direct
         result.channelsMatchedByName++;
-        const list = byXmltvId.get(xid) ?? [];
+        const key = xid.toLowerCase();
+        const list = byXmltvId.get(key) ?? [];
         list.push(chId);
-        byXmltvId.set(xid, list);
+        byXmltvId.set(key, list);
       }
       const matchedRows: Row[] = [];
       for (const p of candidateRows) {
-        for (const channelId of byXmltvId.get(p.epgId) ?? []) matchedRows.push({ channelId, p });
+        for (const channelId of byXmltvId.get(p.epgId.toLowerCase()) ?? []) matchedRows.push({ channelId, p });
       }
       while (matchedRows.length > 0) {
         processed += await upsertBatch(prisma, matchedRows.splice(0, BATCH));

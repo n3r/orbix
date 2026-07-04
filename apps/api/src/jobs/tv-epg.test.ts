@@ -28,13 +28,13 @@ const XML = `<?xml version="1.0" encoding="UTF-8"?>
 
 interface UpsertCall { where: { channelId_start: { channelId: string; start: Date } }; create: { title: string; channelId: string } }
 
-function fakePrisma(opts?: { sources?: object[] }) {
+function fakePrisma(opts?: { sources?: object[]; channels?: object[] }) {
   const upserts: UpsertCall[] = [];
   const sourceUpdates: { id: string; data: Record<string, unknown> }[] = [];
   let deleteWhere: unknown = null;
   const prisma = {
     tvChannel: {
-      findMany: async () => [
+      findMany: async () => opts?.channels ?? [
         { id: "ch-one", epgId: "ChannelOne.ru", name: "Первый канал", altNames: [] },
         { id: "ch-zdf", epgId: null, name: "ZDF HD", altNames: [] }, // name-match only
         { id: "ch-none", epgId: "absent.id", name: "Nothing Ever Matches", altNames: [] },
@@ -87,6 +87,27 @@ describe("runTvEpgSync", () => {
     const last = sourceUpdates.at(-1)!.data;
     expect(last.status).toBe("ok");
     expect(last.lastSyncAt).toBeInstanceOf(Date);
+  });
+
+  it("matches a channel's epgId case-insensitively (stored UPPERCASE vs feed lowercase)", async () => {
+    // Stored epgId "ZDF.DE" vs the fixture's <programme channel="zdf.de"> — a
+    // case-mismatched direct id must still hit the SAX gate and be upserted,
+    // not silently dropped (regression guard for the case-sensitivity bug).
+    const { prisma, upserts } = fakePrisma({
+      channels: [{ id: "ch-zdf-upper", epgId: "ZDF.DE", name: "ZDF Uppercase", altNames: [] }],
+    });
+    const deps: TvEpgDeps = {
+      fetchUpstream: async (url) => ({ finalUrl: url, status: 200, headers: {}, body: gzBody(XML) }),
+      now: () => NOW,
+    };
+    const result = await runTvEpgSync(prisma, deps);
+
+    const zdf = upserts.find((u) => u.create.channelId === "ch-zdf-upper");
+    expect(zdf?.create.title).toBe("heute journal"); // upserted, not dropped
+    expect(upserts).toHaveLength(1);
+    expect(result.programmesUpserted).toBe(1);
+    expect(result.channelsMatchedByName).toBe(0); // direct hit, not a name-match fallback
+    expect(result.errors).toHaveLength(0);
   });
 
   it("applies the source offsetMin to stored rows", async () => {
