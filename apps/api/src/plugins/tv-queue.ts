@@ -14,6 +14,8 @@ import {
   type ChannelUpsertPlan,
 } from "@orbix/core";
 import { buildIptvOrgDeps, fetchIptvOrgCatalog } from "../lib/iptv-org";
+import { makeTvUpstream } from "../lib/tv-upstream";
+import { runTvEpgSync } from "../jobs/tv-epg";
 
 // ── Module-level in-process EventEmitter for SSE progress ──────────────────
 
@@ -32,6 +34,14 @@ export interface TvSyncJobData {
   sourceId?: string;
 }
 
+export interface TvEpgJobData {
+  jobId: string;
+}
+export interface TvHealthJobData {
+  jobId: string;
+} // used by Task 6; declare both now
+export type TvJobData = TvSyncJobData | TvEpgJobData | TvHealthJobData;
+
 // ── Plugin factory ───────────────────────────────────────────────────────────
 
 export function tvQueuePlugin(env: Env) {
@@ -41,12 +51,12 @@ export function tvQueuePlugin(env: Env) {
     // ioredis DNS failures as unhandled rejections. Decorate an inert stub.
     if (env.NODE_ENV === "test") {
       const stub = { add: async () => undefined, close: async () => undefined };
-      app.decorate("tvQueue", stub as unknown as Queue<TvSyncJobData>);
+      app.decorate("tvQueue", stub as unknown as Queue<TvJobData>);
       return;
     }
 
     const connection = { url: env.REDIS_URL };
-    const queue = new Queue<TvSyncJobData>("tv", { connection });
+    const queue = new Queue<TvJobData>("tv", { connection });
 
     interface SyncCounters {
       channels: number;
@@ -264,50 +274,96 @@ export function tvQueuePlugin(env: Env) {
 
     // ── Processor ───────────────────────────────────────────────────────────
 
-    async function processor(job: Job<TvSyncJobData>): Promise<void> {
-      if (job.name !== "tv-sync") return;
-      const { jobId, sourceId } = job.data;
-      try {
-        const sources = await app.prisma.tvSource.findMany({
-          where: sourceId ? { id: sourceId } : { enabled: true },
-          select: { id: true, kind: true, name: true, url: true, filePath: true, countries: true },
-          orderBy: { createdAt: "asc" },
-        });
-        const totals: Record<string, number> = { channels: 0, streams: 0, logosCached: 0 };
-        let sourcesFailed = 0;
-        for (const source of sources) {
+    async function processor(job: Job<TvJobData>): Promise<void> {
+      switch (job.name) {
+        case "tv-sync": {
+          const { jobId, sourceId } = job.data as TvSyncJobData;
           try {
-            const c = await syncSource(source, jobId);
-            totals.channels += c.channels;
-            totals.streams += c.streams;
-            totals.logosCached += c.logosCached;
+            const sources = await app.prisma.tvSource.findMany({
+              where: sourceId ? { id: sourceId } : { enabled: true },
+              select: { id: true, kind: true, name: true, url: true, filePath: true, countries: true },
+              orderBy: { createdAt: "asc" },
+            });
+            const totals: Record<string, number> = { channels: 0, streams: 0, logosCached: 0 };
+            let sourcesFailed = 0;
+            for (const source of sources) {
+              try {
+                const c = await syncSource(source, jobId);
+                totals.channels += c.channels;
+                totals.streams += c.streams;
+                totals.logosCached += c.logosCached;
+              } catch (err) {
+                sourcesFailed++;
+                app.log.warn({ err, sourceId: source.id }, "tv-sync source failed — continuing");
+              }
+            }
+            const doneEvent: Record<string, unknown> = { phase: "done", ...totals, sourcesFailed };
+            // Cache so late SSE subscribers get the result; evict after 5 min.
+            tvDoneCache.set(jobId, doneEvent);
+            const doneTimer = setTimeout(() => tvDoneCache.delete(jobId), 5 * 60 * 1000);
+            doneTimer.unref?.();
+            tvEvents.emit(jobId, doneEvent);
           } catch (err) {
-            sourcesFailed++;
-            app.log.warn({ err, sourceId: source.id }, "tv-sync source failed — continuing");
+            const errEvt: Record<string, unknown> = {
+              phase: "error",
+              message: err instanceof Error ? err.message : String(err),
+            };
+            tvDoneCache.set(jobId, errEvt);
+            const errTimer = setTimeout(() => tvDoneCache.delete(jobId), 5 * 60 * 1000);
+            errTimer.unref?.();
+            tvEvents.emit(jobId, errEvt);
+            throw err;
           }
+          break;
         }
-        const doneEvent: Record<string, unknown> = { phase: "done", ...totals, sourcesFailed };
-        // Cache so late SSE subscribers get the result; evict after 5 min.
-        tvDoneCache.set(jobId, doneEvent);
-        const doneTimer = setTimeout(() => tvDoneCache.delete(jobId), 5 * 60 * 1000);
-        doneTimer.unref?.();
-        tvEvents.emit(jobId, doneEvent);
-      } catch (err) {
-        const errEvt: Record<string, unknown> = {
-          phase: "error",
-          message: err instanceof Error ? err.message : String(err),
-        };
-        tvDoneCache.set(jobId, errEvt);
-        const errTimer = setTimeout(() => tvDoneCache.delete(jobId), 5 * 60 * 1000);
-        errTimer.unref?.();
-        tvEvents.emit(jobId, errEvt);
-        throw err;
+        case "tv-epg": {
+          const { jobId } = job.data as TvEpgJobData;
+          const upstream = makeTvUpstream();
+          try {
+            const r = await runTvEpgSync(app.prisma, {
+              // Adapt TvUpstream's required-but-nullable userAgent/referrer to
+              // TvEpgDeps' optional-string shape (undefined behaves the same
+              // as null at both call sites below — `?? BROWSER_UA` / `if (x)`).
+              fetchUpstream: (url, opts) =>
+                upstream.fetchUpstream(url, {
+                  userAgent: opts.userAgent ?? null,
+                  referrer: opts.referrer ?? null,
+                  wantText: opts.wantText,
+                  timeoutMs: opts.timeoutMs,
+                }),
+              onProgress: (p) =>
+                tvEvents.emit(jobId, { phase: "epg", source: p.source, processed: p.processed }),
+            });
+            // Terminal event MUST use phase:"done" — the /tv/sync/events SSE route
+            // (phase 1) listens on the jobId channel and closes on phase done|error.
+            const done = {
+              phase: "done",
+              kind: "epg",
+              sources: r.sources,
+              programmesUpserted: r.programmesUpserted,
+              channelsMatchedByName: r.channelsMatchedByName,
+              pruned: r.pruned,
+              errors: r.errors,
+            };
+            tvDoneCache.set(jobId, done);
+            const t = setTimeout(() => tvDoneCache.delete(jobId), 5 * 60 * 1000);
+            t.unref?.();
+            tvEvents.emit(jobId, done);
+          } catch (err) {
+            const evt = { phase: "error", kind: "epg", message: err instanceof Error ? err.message : String(err) };
+            tvDoneCache.set(jobId, evt);
+            const t = setTimeout(() => tvDoneCache.delete(jobId), 5 * 60 * 1000);
+            t.unref?.();
+            tvEvents.emit(jobId, evt);
+          }
+          break;
+        }
       }
     }
 
     // ── Worker ───────────────────────────────────────────────────────────────
 
-    const worker = new Worker<TvSyncJobData, void>("tv", processor, { connection });
+    const worker = new Worker<TvJobData, void>("tv", processor, { connection });
     worker.on("error", (err) => app.log.error({ err }, "tv worker error"));
 
     app.decorate("tvQueue", queue);
@@ -323,6 +379,6 @@ export function tvQueuePlugin(env: Env) {
 
 declare module "fastify" {
   interface FastifyInstance {
-    tvQueue: Queue<TvSyncJobData>;
+    tvQueue: Queue<TvJobData>;
   }
 }
