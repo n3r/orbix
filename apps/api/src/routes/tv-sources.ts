@@ -7,6 +7,7 @@ import { Prisma } from "@orbix/db";
 import { requireAuth, requireAdmin } from "../lib/auth";
 import { requireNonKids } from "../lib/catalog-filter";
 import { tvEvents, tvDoneCache } from "../plugins/tv-queue";
+import { seedEpgSourcesForCountries } from "../lib/tv-epg";
 
 interface TvSourceBody {
   kind?: string;
@@ -74,9 +75,14 @@ export function tvSourcesRoute(env: Env) {
             return reply.code(400).send({ error: "countries_required" });
           }
           try {
-            return await app.prisma.tvSource.create({
+            const created = await app.prisma.tvSource.create({
               data: { kind: "iptv-org", name, countries },
             });
+            // Auto-seed default EPG sources for the newly-enabled countries.
+            // Idempotent (upsert-by-url) — never duplicates or touches
+            // admin-configured sources.
+            await seedEpgSourcesForCountries(app.prisma, countries);
+            return created;
           } catch (e) {
             // Belt-and-suspenders: the findFirst check above is a friendly
             // pre-check, but two concurrent requests can both pass it (TOCTOU).
@@ -123,12 +129,14 @@ export function tvSourcesRoute(env: Env) {
         if (typeof body.enabled === "boolean") data.enabled = body.enabled;
         if (typeof body.url === "string") data.url = body.url.trim() || null;
         if (typeof body.epgUrl === "string") data.epgUrl = body.epgUrl.trim() || null;
+        let updatedCountries: string[] | null = null;
         if (body.countries !== undefined) {
           const countries = parseCountries(body.countries);
           if (!countries || countries.length === 0) {
             return reply.code(400).send({ error: "countries_required" });
           }
           data.countries = countries;
+          updatedCountries = countries;
         }
         try {
           let source = await app.prisma.tvSource.update({ where: { id: req.params.id }, data });
@@ -138,6 +146,11 @@ export function tvSourcesRoute(env: Env) {
               where: { id: source.id },
               data: { filePath },
             });
+          }
+          // Countries changed on the iptv-org source — auto-seed default EPG
+          // sources for the new set (idempotent, upsert-by-url).
+          if (updatedCountries && source.kind === "iptv-org") {
+            await seedEpgSourcesForCountries(app.prisma, updatedCountries);
           }
           return source;
         } catch (e) {

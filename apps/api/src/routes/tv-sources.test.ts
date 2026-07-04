@@ -133,6 +133,12 @@ describe("POST /tv/sources", () => {
         return { id: "s", ...args.data };
       },
     };
+    // Country-change hook seeds default EPG sources — stub tvEpgSource so it
+    // doesn't fall through to the real Prisma client.
+    (app as any).prisma.tvEpgSource = {
+      findFirst: async () => null,
+      create: async () => ({ id: "e" }),
+    };
     const res = await app.inject({
       method: "POST", url: "/api/tv/sources", cookies: COOKIES,
       payload: { kind: "iptv-org", name: "Catalog", countries: ["ru", "uk "] },
@@ -174,6 +180,34 @@ describe("PATCH /tv/sources/:id", () => {
     });
     expect(res.statusCode).toBe(400);
     expect(res.json()).toEqual({ error: "countries_required" });
+    await app.close();
+  });
+
+  it("seeds default EPG sources when iptv-org countries change", async () => {
+    const app = await buildApp(env);
+    patchAuth(app);
+    (app as any).prisma.tvSource = {
+      update: async (args: any) => ({ id: "src1", kind: "iptv-org", ...args.data }),
+    };
+    const epgCreates: { url: string }[] = [];
+    (app as any).prisma.tvEpgSource = {
+      findFirst: async () => null,
+      create: async ({ data }: { data: { url: string } }) => {
+        epgCreates.push(data);
+        return { id: "e1", ...data };
+      },
+    };
+    const res = await app.inject({
+      method: "PATCH", url: "/api/tv/sources/src1", cookies: COOKIES,
+      payload: { countries: ["RU", "DE"] },
+    });
+    expect(res.statusCode).toBeLessThan(300);
+    expect(epgCreates.map((c) => c.url).sort()).toEqual(
+      [
+        "https://epg.iptvx.one/EPG_LITE.xml.gz",
+        "https://epgshare01.online/epgshare01/epg_ripper_DE1.xml.gz",
+      ].sort(),
+    );
     await app.close();
   });
 });
