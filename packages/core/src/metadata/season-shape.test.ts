@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { seasonShapeScore, matchSpecialEpisode, type LocalSeasonShape } from "./season-shape";
+import { seasonShapeScore, matchSpecialEpisode, pickBestByShape, type LocalSeasonShape } from "./season-shape";
 
 const local = (tuples: [number, number, number][]): LocalSeasonShape[] =>
   tuples.map(([seasonNumber, episodeCount, maxEpisode]) => ({ seasonNumber, episodeCount, maxEpisode }));
@@ -99,5 +99,26 @@ describe("matchSpecialEpisode", () => {
 
   it("never title-matches on a sub-threshold similarity", () => {
     expect(matchSpecialEpisode({ title: "completely unrelated" }, dwSpecials)).toBeUndefined();
+  });
+});
+
+describe("pickBestByShape candidate budget", () => {
+  it("shape-checks beyond the top three so a lower-ranked exact fit can win", async () => {
+    const finalists = ["ranch16", "ranch12", "ranch04", "leranch"];
+    const shapes: Record<string, { seasonNumber: number; episodeCount: number }[]> = {
+      ranch16: [{ seasonNumber: 1, episodeCount: 20 }],
+      ranch12: [{ seasonNumber: 1, episodeCount: 10 }],
+      ranch04: [{ seasonNumber: 1, episodeCount: 8 }],
+      leranch: [
+        { seasonNumber: 1, episodeCount: 26 },
+        { seasonNumber: 2, episodeCount: 26 },
+      ],
+    };
+    const local = [
+      { seasonNumber: 1, episodeCount: 26, maxEpisode: 26 },
+      { seasonNumber: 2, episodeCount: 26, maxEpisode: 26 },
+    ];
+    const winner = await pickBestByShape(finalists, local, async (f) => shapes[f]!);
+    expect(winner).toBe("leranch");
   });
 });

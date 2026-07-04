@@ -242,3 +242,103 @@ describe("buildQueryLadder", () => {
     expect(ladder.every((a) => a.year === undefined)).toBe(true);
   });
 });
+
+describe("cartoon/documentary noise (library audit)", () => {
+  it("cuts at bare resolutions and upscale tags", () => {
+    expect(cleanSearchTitle("Darkwing Duck 1080 Upscale")).toBe("Darkwing Duck");
+    expect(cleanSearchTitle("Утиные истории DVD AI Upscale")).toBe("Утиные истории");
+  });
+
+  it("keeps titles whose number is part of the name", () => {
+    expect(cleanSearchTitle("Blade Runner 2049")).toBe("Blade Runner 2049");
+    expect(cleanSearchTitle("Death Race 2000")).toBe("Death Race 2000");
+  });
+
+  it("cuts at SAT/IPTV/TV rip tags", () => {
+    expect(cleanSearchTitle("Megafactories Supercars Lexus LFA SATRip by Alex Smit")).toBe(
+      "Megafactories Supercars Lexus LFA",
+    );
+    expect(cleanSearchTitle("Дуэль титанов II IPTVRip")).toBe("Дуэль титанов II");
+  });
+
+  it("strips a leading [Group] release tag", () => {
+    expect(cleanSearchTitle("[Beatrice-Raws] Tonari no Totoro")).toBe("Tonari no Totoro");
+    expect(cleanSearchTitle("[DS27]Zootopia+")).toBe("Zootopia+");
+  });
+
+  it("never empties a fully bracketed title ([REC])", () => {
+    expect(cleanSearchTitle("[REC]")).toBe("REC");
+  });
+
+  it("drops .ru / piracy-TLD domain brackets", () => {
+    expect(cleanSearchTitle("Korolev-Braun [torrents.ru]")).toBe("Korolev-Braun");
+    expect(cleanSearchTitle("Exo-Squad [cartoons.flybb.ru]")).toBe("Exo-Squad");
+  });
+
+  it("offers a channel-prefix-free ladder attempt (BBC / Культура)", () => {
+    const attempts = buildQueryLadder({ title: "BBC Космос Руководство для начинающих" });
+    expect(attempts.some((a) => a.query === "Космос Руководство для начинающих")).toBe(true);
+    const ru = buildQueryLadder({ title: "Культура Тайна Млечного Пути" });
+    expect(ru.some((a) => a.query === "Тайна Млечного Пути")).toBe(true);
+  });
+
+  it("does not invent a channel attempt for titles that merely start with a channel-like word", () => {
+    // "Discovery" as the movie's actual first word with no separator context stays intact.
+    const attempts = buildQueryLadder({ title: "Discovery" });
+    expect(attempts[0]!.query).toBe("Discovery");
+    expect(attempts).toHaveLength(1);
+  });
+});
+
+describe("mixed-script and spelling-variant rescue rungs", () => {
+  it("repairs Latin homoglyphs inside a Cyrillic word (Миньoны)", () => {
+    const attempts = buildQueryLadder({ title: "Миньoны", year: 2015 });
+    expect(attempts.some((a) => a.query === "Миньоны")).toBe(true);
+  });
+
+  it("repairs Cyrillic homoglyphs inside a Latin word (Lilо)", () => {
+    const attempts = buildQueryLadder({ title: "Lilо and Stitch 2 Stitch Has a Glitch", year: 2005 });
+    expect(attempts.some((a) => a.query === "Lilo and Stitch 2 Stitch Has a Glitch")).toBe(true);
+  });
+
+  it("adds no repair attempt for clean single-script titles", () => {
+    const attempts = buildQueryLadder({ title: "Миньоны", year: 2015 });
+    expect(attempts.filter((a) => a.query === "Миньоны" && a.yearFiltered)).toHaveLength(1);
+  });
+
+  it("consumes quality tokens after a channel prefix (BBC HD Supervolcano)", () => {
+    const attempts = buildQueryLadder({ title: "BBC HD Supervolcano" });
+    expect(attempts.some((a) => a.query === "Supervolcano")).toBe(true);
+  });
+
+  it("tries the joined spelling of a hyphenated name (Exo-Squad → ExoSquad)", () => {
+    const attempts = buildQueryLadder({ title: "Exo-Squad" });
+    expect(attempts.some((a) => a.query === "ExoSquad")).toBe(true);
+  });
+
+  it("does not join hyphens in multi-word titles beyond the hyphenated word", () => {
+    const attempts = buildQueryLadder({ title: "Spider-Man Homecoming" });
+    expect(attempts.some((a) => a.query === "SpiderMan Homecoming")).toBe(true);
+  });
+});
+
+describe("review hardening — bracket titles, dedup, channel tails", () => {
+  it("preserves a bracket-title sequel where a bare number follows ([REC] 2)", () => {
+    // Must not strip "[REC]" leaving a bare "2" as the primary query.
+    const attempts = buildQueryLadder({ title: "[REC] 2", year: 2009 });
+    expect(attempts[0]!.query).toBe("REC 2");
+    expect(attempts.some((a) => a.query === "2")).toBe(false);
+  });
+
+  it("still strips a leading [group] before a letter-led title", () => {
+    expect(cleanSearchTitle("[DS27]Zootopia+")).toBe("Zootopia+");
+    expect(cleanSearchTitle("[Beatrice-Raws] Tonari no Totoro")).toBe("Tonari no Totoro");
+  });
+
+  it("dedups accent/fullwidth variants but keeps a homoglyph-repaired attempt distinct", () => {
+    const q = buildQueryLadder({ title: "Миньoны", year: 2015 }).map((a) => `${a.query}|${a.year ?? ""}`);
+    // repaired all-Cyrillic attempt survives the dedup
+    expect(q).toContain("Миньоны|2015");
+    expect(q).toContain("Миньoны|2015");
+  });
+});

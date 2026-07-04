@@ -7,6 +7,7 @@ export * from "./library/library";
 export * from "./scanner/parse";
 export * from "./scanner/probe";
 export * from "./scanner/scan";
+export * from "./scanner/scan-context";
 export * from "./metadata/tmdb";
 export * from "./metadata/images";
 export * from "./metadata/localize";

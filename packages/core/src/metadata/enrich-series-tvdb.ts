@@ -3,8 +3,9 @@ import type { ImageKind } from "./images";
 import type { ExternalRatings } from "./omdb";
 import type { EnrichResult, MetadataTranslation } from "./enrich";
 import type { SaveSeriesInput, SaveSeriesSeason, SaveSeriesEpisode } from "./enrich-series";
-import { titleSimilarity, acronymMatches, normalizeForMatch, TITLE_STRONG, TITLE_WEAK } from "./match-score";
+import { titleSimilarity, acronymMatches, TITLE_STRONG, TITLE_WEAK } from "./match-score";
 import { yearMatches, buildLadders } from "./resolve";
+import { queryKey } from "./search-title";
 import { pickBestByShape, type LocalSeasonShape, type ProviderSeasonShape } from "./season-shape";
 
 /** Structural surface of TvdbClient needed to enrich a series. */
@@ -68,12 +69,15 @@ export async function resolveTvdbId(
   const faithful = [...new Set(ladder.filter((a) => !a.derived).map((a) => a.query))];
   const shapeMode = year == null && !!client.seasonEpisodes && !!opts?.localShape?.length;
   // TVDB search has no year/language params — dedupe attempts by query text.
+  // queryKey (not normalizeForMatch) so a homoglyph-repaired spelling stays a
+  // distinct search: normalizeForMatch folds the twins and would collapse the
+  // repaired attempt into the polluted original TVDB can't match.
   const seen = new Set<string>();
   let best: { tvdbId: number; sim: number; exactYear: boolean } | undefined;
   const accepted = new Map<number, { tvdbId: number; sim: number }>();
 
   for (const attempt of ladder) {
-    const key = normalizeForMatch(attempt.query);
+    const key = queryKey(attempt.query);
     if (seen.has(key)) continue;
     seen.add(key);
 

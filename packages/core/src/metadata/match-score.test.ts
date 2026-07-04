@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   normalizeForMatch,
+  repairHomoglyphs,
   levenshtein,
   titleSimilarity,
   scoreCandidate,
@@ -14,8 +15,11 @@ describe("normalizeForMatch", () => {
     expect(normalizeForMatch("Léon (Director's Cut)")).toBe("leon director s cut");
   });
 
-  it("keeps Cyrillic script intact", () => {
+  it("keeps a pure-Cyrillic title in Cyrillic (no cross-script fold)", () => {
+    // Homoglyph folding is MIXED-script only, so a pure-Cyrillic title is left
+    // in Cyrillic and can never collide with a Latin lookalike.
     expect(normalizeForMatch("Горько! 2")).toBe("горько 2");
+    expect(normalizeForMatch("Горько! 2")).toBe(normalizeForMatch("горько 2"));
   });
 
   it("folds fullwidth characters (common in CJK filenames)", () => {
@@ -186,5 +190,41 @@ describe("degenerate numeric queries", () => {
   it("leaves longer numeric titles alone (1917, 2012)", () => {
     const m1917 = { title: "1917", year: 2019, voteCount: 9000 };
     expect(isAcceptable("1917", m1917, undefined, true)).toBe(true);
+  });
+});
+
+describe("Latin/Cyrillic homoglyph folding", () => {
+  it("treats a mixed-script title as equal to its pure-Cyrillic form", () => {
+    // "Миньoны" from the NAS carries a LATIN "o" — visually identical.
+    expect(normalizeForMatch("Миньoны")).toBe(normalizeForMatch("Миньоны"));
+    expect(titleSimilarity("Миньoны", { title: "Миньоны" })).toBe(1);
+  });
+
+  it("folds the common homoglyph set both ways", () => {
+    expect(normalizeForMatch("Lilо and Stitch")).toBe(normalizeForMatch("Lilo and Stitch"));
+  });
+
+  it("does not conflate genuinely different Cyrillic words with Latin ones", () => {
+    expect(normalizeForMatch("щит")).not.toBe(normalizeForMatch("shield"));
+  });
+});
+
+describe("mixed-script homoglyph repair (review hardening)", () => {
+  it("repairs a lone Latin twin inside a Cyrillic word toward Cyrillic", () => {
+    expect(repairHomoglyphs("Миньoны")).toBe("Миньоны"); // Latin o → Cyrillic о
+    expect(normalizeForMatch("Миньoны")).toBe(normalizeForMatch("Миньоны"));
+  });
+
+  it("repairs a lone Cyrillic twin inside a Latin word toward Latin", () => {
+    expect(repairHomoglyphs("Lilо")).toBe("Lilo"); // Cyrillic о → Latin o
+  });
+
+  it("leaves a genuine bilingual token intact (minority > 2 letters)", () => {
+    expect(repairHomoglyphs("BBC-Космос")).toBe("BBC-Космос");
+  });
+
+  it("never folds a pure single-script token", () => {
+    expect(repairHomoglyphs("сор")).toBe("сор");
+    expect(normalizeForMatch("сор")).not.toBe(normalizeForMatch("cop"));
   });
 });

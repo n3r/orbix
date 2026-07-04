@@ -1,5 +1,6 @@
-import { basename, dirname } from "node:path";
+import { basename, dirname, sep } from "node:path";
 import { filenameParse } from "@ctrl/video-filename-parser";
+import type { ScanContext } from "./scan-context";
 
 export interface ParsedMediaPath {
   title: string;
@@ -38,13 +39,20 @@ const SS_EE_RE = /(?:^|[\s._-])(\d{2})[-–](\d{2})(?=[\s._-]|$)/;
 // Bare episode tag without a season: ".e01." / " E05 " (digits required, both
 // sides separator-delimited, so "WALL-E", "E.T." and hex tags never match).
 const BARE_E_RE = /(?:^|[\s._-])[eE](\d{1,3})(?=[\s._-]|$)/;
-const SPECIALS_FOLDER_RE = /^(?:specials|спецвыпуски)$/i;
+const SPECIALS_FOLDER_RE = /^(?:specials?|спец[\s._-]?выпуски?)$/i;
 const SPECIAL_KEYWORD_RE = /(?:^|[\s._-])specials?(?=[\s._-]|$)/i;
 
 // Library-root-ish folder names that can never be a show title — used when a
 // season pack sits directly under the library root and has no show parent.
+// Composable: optional genre words ("Documentary", "Cartoons", "Детские")
+// before a media word ("Series", "Фильмы"), plus bare genre roots — so
+// "Documentary Series" / "Cartoons Series" / "TV Shows" are all generic.
+// A library-root-ish name that can never be a show title. Genre words may
+// precede a media word ("Documentary Series", "Cartoons Series", "TV Shows").
+// Deliberately excludes "library"/"collection" — those are plausible real
+// show-folder names, and blanking them would strip a legitimate title.
 const GENERIC_ROOT_RE =
-  /^(?:series|serials?|tv(?:[\s._-]?shows?)?|shows?|anime|аниме|сериалы|кино|movies?|films?|фильмы|мультфильмы|мультсериалы|video|видео|media)$/i;
+  /^(?:(?:documentary|documentaries|cartoons?|animations?|animated|anime|kids?|children'?s?|детск(?:ие|ое)|аниме|документальн\w*|мульт\w*|познавательн\w*|tv|hd|uhd|4k)[\s._-]+)*(?:series|serials?|tv(?:[\s._-]?shows?)?|shows?|сериалы|кино|movies?|films?|фильмы|мультфильмы|мультсериалы|документалки|video|видео|media)$|^(?:documentary|documentaries|cartoons?|anime|аниме|мульт(?:ики|фильмы|сериалы)?|документалистика|документальное)$/i;
 
 // Season markers ANYWHERE in a folder name — real libraries wrap the season in
 // junk ("Сезон 4 (Season 4) 2001-2002", "Family Guy Season 11 (WEB-DL 1080p)",
@@ -85,7 +93,7 @@ function extractBareYear(s: string): number | undefined {
 // collection legitimately named "Shorts"/"Trailers" is real content, so the
 // caller additionally requires a non-generic ancestor above the extras dir.
 const EXTRAS_FOLDER_RE =
-  /^(?:extras?|featurettes?|behind[\s._-]+the[\s._-]+scenes?|deleted[\s._-]+(?:and[\s._-]+alternate[\s._-]+)?scenes?|interviews?|samples?|shorts?|trailers?|bonus(?:es)?|special[\s._-]+features?)$/i;
+  /^(?:extras?|featurettes?|behind[\s._-]+the[\s._-]+scenes?|deleted[\s._-]+(?:and[\s._-]+alternate[\s._-]+)?scenes?|interviews?|samples?|shorts?|trailers?|bonus(?:es)?|бонусы?|special[\s._-]+features?)$/i;
 const PROMO_FOLDER_RE = /(?:^|[\s._-])promos?$/i;
 
 function isExtrasFolder(name: string): boolean {
@@ -140,6 +148,33 @@ function seriyaEpisode(s: string): number | undefined {
   return m ? parseInt(m[1], 10) : undefined;
 }
 
+// ── "(N из M)" episode counters ──────────────────────────────────────────────
+// The RU broadcast convention for mini-series parts, in filenames as
+// "(1 из 6)", "(2.serija.iz.5)", "(seria.1.iz.4)" or a range "(1-2.serii.iz.4)"
+// (ranges attach to their first episode). The из/iz/of word is mandatory, and
+// the number needs a separator in front, so "CD1 of 2" (letter before the
+// digit) can never match.
+const SERIYA_WORD = "(?:сери[ияй]|серии|seri[jy]?[aiy]|serij)";
+const IZ_NUM_FIRST_RE = new RegExp(
+  `(?:^|[\\s._([-])(\\d{1,3})(?:[\\s._-]*[-–][\\s._-]*\\d{1,3})?[\\s._-]*${SERIYA_WORD}?[\\s._-]*(?:из|iz|of)[\\s._-]*\\d{1,3}(?=[\\s._)\\]-]|$)`,
+  "iu",
+);
+const IZ_WORD_FIRST_RE = new RegExp(`(?:^|[\\s._([-])${SERIYA_WORD}[\\s._-]*(\\d{1,3})[\\s._-]*(?:из|iz|of)[\\s._-]*\\d{1,3}`, "iu");
+// A "N of M" whose number belongs to a CD/part split of one movie.
+const IZ_SPLIT_GUARD_RE = /(?:cd|dis[ck]|dvd|pt|part|часть|chast)[\s._-]*\d{1,3}[\s._-]*(?:из|iz|of)[\s._-]*\d/i;
+
+function izEpisode(s: string): number | undefined {
+  if (IZ_SPLIT_GUARD_RE.test(s)) return undefined;
+  const m = IZ_WORD_FIRST_RE.exec(s) ?? IZ_NUM_FIRST_RE.exec(s);
+  return m ? parseInt(m[1]!, 10) : undefined;
+}
+
+// Standalone "Episode N" / "Ep. N" keyword ("Planet.Earth.II.Episode.1.1080p").
+// Only trusted on year-less names: a movie rip virtually always carries its
+// release year, and franchise titles do use the word ("Star Wars Episode 3
+// 2005" must stay a movie).
+const EPISODE_WORD_RE = /(?:^|[\s._-])ep(?:isode)?[\s._]*(\d{1,3})(?=\D|$)/i;
+
 // ── Anime-style episodes (no season folder) ──────────────────────────────────
 // Canonical fansub layouts number episodes absolutely, directly in the show
 // folder: "[SubsPlease] Attack on Titan - 05 (1080p).mkv". Two rules, lowest
@@ -159,7 +194,10 @@ const GROUP_TAG_RE = /^\[([^\]]+)\]\s*/;
 // ("[BDRemux Rutracker.org]"). Same idea as metadata/search-title.ts, kept
 // local: scanner/ and metadata/ deliberately don't import from each other.
 const TRACKER_TAG_RE = /rutracker|nnmclub|kinozal|rarbg|hdclub|rutor|torrent/i;
-const DOMAIN_TAG_RE = /[\w-]+\.(?:org|com|net|to|se|me|tv|info)\b/i;
+// Piracy-tracker TLDs only. Deliberately NOT the generic new-gTLDs
+// (.fun/.club/.io/.top…) — those collide with real fansub group names
+// ("[Judas.fun]") and title words.
+const DOMAIN_TAG_RE = /[\w-]+\.(?:org|com|net|to|se|me|tv|info|ru|su|ua|by)\b/i;
 
 /** Case- and separator-insensitive key for the folder-echo comparison. */
 function echoKey(s: string): string {
@@ -266,6 +304,8 @@ const PREFIX_MARKER_RES: RegExp[] = [
   /(?:^|[\s._-])сери[ияюей][\s._-]*\d{1,3}/i,
   /\d{1,3}[\s._-]*сери[ияюей]/i,
   /\d{1,3}[\s._-]*serij/i,
+  IZ_NUM_FIRST_RE,
+  IZ_WORD_FIRST_RE,
 ];
 
 /**
@@ -294,17 +334,49 @@ function episodePrefixTitle(filenameNoExt: string): { title: string; year?: numb
 }
 
 /**
+ * Space out dots/underscores between word characters while preserving
+ * initialisms: a separator is collapsed when EITHER side has 2+ alnum chars
+ * ("Malysh.i.Karlson" → "Malysh i Karlson"), and kept only between two
+ * single-letter tokens (S.W.A.T, A.I.). Underscores are never meaningful in
+ * titles and always become spaces.
+ */
+function spaceSeparators(s: string): string {
+  return s
+    .replace(/_+/g, " ")
+    .replace(/(?<=[\p{L}\p{N}]{2})\.(?=[\p{L}\p{N}])/gu, " ")
+    .replace(/(?<=[\p{L}\p{N}])\.(?=[\p{L}\p{N}]{2})/gu, " ")
+    // A dotted single LOWERCASE letter is a transliterated preposition the
+    // release parser dotted ("Malysh i. Karlson", "idyot v. gosti") — an
+    // uppercase one is a real initial (J. Edgar) and keeps its dot.
+    .replace(/(?<=(?:^|\s)\p{Ll})\.(?=\s?[\p{L}\p{N}])/gu, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+// Release-noise tail inside a would-be SERIES title (movie titles go through
+// the release parser, but a show folder like "Тайная жизнь птиц 720p
+// -ukraine-" reaches us raw). Cut at the first noise token.
+const SERIES_NOISE_TAIL_RE =
+  /[\s._([-]+(?:\d{3,4}[pi]|4k|uhd|hdr(?:10)?|bd(?:rip|remux)?|remux|blu-?ray|web[\s._-]?(?:dl|rip)|hdtv(?:rip)?|dvd(?:rip)?|sat[\s._-]?rip|iptv[\s._-]?rip|tv[\s._-]?rip|vhs[\s._-]?rip|hd[\s._-]?rip|x26[45]|h[\s._-]?26[45]|hevc|avc|xvid|divx|upscaled?|10bit|8bit|multi)(?=[\s._)\]-]|$).*$/iu;
+
+/**
  * Strip season-pack phrasing from a would-be series title: "Season. 1-3",
- * "5 sezonov iz 5", "The Complete Series", trailing year ranges. Applied to
- * every series-title candidate; falls back to the input when it would empty it.
+ * "5 sezonov iz 5", "The Complete Series", "(Все сезоны)", trailing year
+ * ranges, release-noise tails, tracker-domain brackets and a leading [Group]
+ * tag. Applied to every series-title candidate; falls back to the input when
+ * it would empty it.
  */
 function cleanSeriesTitle(raw: string): string {
   if (!raw) return raw;
   let s = raw;
+  s = s.replace(/^\s*\[[^\]\s]*\][\s._-]*(?=\p{L})/u, "");
+  s = s.replace(/[[({][^[\]{}()]*[)\]}]/g, (seg) => (DOMAIN_TAG_RE.test(seg) || TRACKER_TAG_RE.test(seg) ? " " : seg));
+  s = s.replace(/[([]\s*(?:все[\s._-]*сезоны|all[\s._-]*seasons?)\s*[)\]]/gi, " ");
   s = s.replace(/(?:^|[\s._-])(?:the[\s._-]+)?complete[\s._-]+(?:series|collection|edition|seasons?)(?=[\s._-]|$)/gi, " ");
   s = s.replace(/(?:^|[\s._-])(?:seasons?|сезоны?|sezony?)[\s.]*\d{1,2}(?:[\s._-]*[-–][\s._-]*\d{1,2})?(?=[\s._-]|$)/gi, " ");
   s = s.replace(/(?:^|[\s._-])\d{1,2}[\s._-]*(?:seasons?|сезон(?:а|ов)?|sezon(?:a|ov)?)(?:[\s._-]*(?:iz|из)[\s._-]*\d{1,2})?(?=[\s._-]|$)/giu, " ");
   s = s.replace(/(?:^|[\s._-])(?:19|20)\d{2}[\s._-]*[-–][\s._-]*(?:19|20)\d{2}(?=[\s._-]|$)/g, " ");
+  s = s.replace(SERIES_NOISE_TAIL_RE, "");
   s = s.replace(/\s{2,}/g, " ").replace(/^[\s._-]+/u, "").replace(/[\s._-]+$/u, "").trim();
   return s || raw.trim();
 }
@@ -406,6 +478,20 @@ function detectEpisode(filenameNoExt: string, folder: string): EpisodeMarker | n
   const seriya = seriyaEpisode(filenameNoExt);
   if (seriya !== undefined) return { seasonNumber: 1, episodeNumber: seriya };
 
+  // "(N из M)" mini-series counters, both word orders. Deliberately NOT
+  // year-guarded (unlike the bare "Episode N" keyword below): the counter is
+  // an explicit serialization marker and real localized doc series carry a
+  // year with it ("Chudesa.Solnechnoj.Sistemy.(2.serija.iz.5).2010"). A
+  // franchise mislabeled "Рэмбо.1982.(1.из.4)" is the rare cost.
+  const iz = izEpisode(filenameNoExt);
+  if (iz !== undefined) return { seasonNumber: folderSeason ?? 1, episodeNumber: iz };
+
+  // "Episode N" keyword without any other marker — year-less names only.
+  const epWord = EPISODE_WORD_RE.exec(filenameNoExt);
+  if (epWord && !YEAR_RE.test(filenameNoExt) && !BARE_YEAR_RE.test(filenameNoExt)) {
+    return { seasonNumber: folderSeason ?? 1, episodeNumber: parseInt(epWord[1]!, 10) };
+  }
+
   return null;
 }
 
@@ -430,20 +516,58 @@ function titleBeforeYear(nameNoExt: string): string {
   return s.slice(0, cut).replace(/[\s([{\-–—:,]+$/u, "").trim();
 }
 
-export function parseMediaPath(fullPath: string): ParsedMediaPath {
+/** BDMV/AVCHD disc structures — stream fragments, not library items. */
+const DISC_STRUCTURE_RE = /[/\\](?:BDMV|CERTIFICATE|VIDEO_TS|AVCHD)[/\\]/i;
+
+/**
+ * Ancestor folder names nearest-first, bounded by the source root when known.
+ * With a root the list covers every level below it plus a "" sentinel (the
+ * walk may legitimately consume ALL of them — a flat pack directly under the
+ * root has no show folder); without one, the legacy three levels.
+ */
+function ancestorChain(fullPath: string, root: string | undefined): string[] {
+  if (root) {
+    const normalizedRoot = root.replace(/[/\\]+$/, "");
+    if (fullPath.startsWith(normalizedRoot + sep)) {
+      const segments = fullPath
+        .slice(normalizedRoot.length + 1)
+        .split(sep)
+        .slice(0, -1) // drop the filename
+        .map((s) => s.normalize("NFC"))
+        .reverse();
+      return [...segments, ""];
+    }
+  }
+  return [
+    basename(dirname(fullPath)).normalize("NFC"),
+    basename(dirname(dirname(fullPath))).normalize("NFC"),
+    basename(dirname(dirname(dirname(fullPath)))).normalize("NFC"),
+  ];
+}
+
+export function parseMediaPath(fullPath: string, ctx?: ScanContext): ParsedMediaPath {
   // Compose to NFC first: macOS filesystems hand out decomposed names (й as
   // и + combining breve), which breaks TMDB search and dedup keys downstream.
   const filename = basename(fullPath).normalize("NFC");
-  const folder = basename(dirname(fullPath)).normalize("NFC");
 
   // Strip extension from filename for the library parser
   const filenameNoExt = filename.replace(/\.[^.]+$/, "");
 
+  if (DISC_STRUCTURE_RE.test(fullPath)) {
+    return { title: filenameNoExt, skip: true };
+  }
+
+  const ancestors = ancestorChain(fullPath, ctx?.root);
+  const folder = ancestors[0] ?? "";
+  const grandparent = ancestors[1] ?? "";
+
   // Extras/bonus folders are never library items — but ONLY inside an item
   // folder. A root-level collection named "Shorts"/"Trailers" (grandparent is
-  // a generic library root) is real content and must ingest normally.
-  const grandparent = basename(dirname(dirname(fullPath))).normalize("NFC");
-  const insideItemFolder = !!grandparent && !GENERIC_ROOT_RE.test(grandparent) && grandparent !== "/";
+  // a generic library root — or the source root itself) is real content and
+  // must ingest normally.
+  const insideItemFolder = ctx?.root
+    ? !!grandparent
+    : !!grandparent && !GENERIC_ROOT_RE.test(grandparent) && grandparent !== "/";
   if (isExtrasFolder(folder) && insideItemFolder) {
     return { title: filenameNoExt, skip: true };
   }
@@ -451,9 +575,23 @@ export function parseMediaPath(fullPath: string): ParsedMediaPath {
   // A "Specials" dir is a season-0 marker only in the same item-folder
   // context — a movie library's own "/Specials/" collection (standup specials
   // are movies) must stay in the movie branch.
-  const episode =
+  let episode =
     detectEpisode(filenameNoExt, folder) ??
     (insideItemFolder || !SPECIALS_FOLDER_RE.test(folder) ? detectSpecial(filenameNoExt, folder) : null);
+
+  // Sibling context: a marker-less file inside a detected ordinal run IS an
+  // episode — the folder's numbering scheme vouches for it (Plex/Jellyfin
+  // read "Show/001 - Title.mkv" the same way).
+  const dirInfo = ctx?.dirs?.get(dirname(fullPath));
+  if (!episode && dirInfo?.run) {
+    const entry = dirInfo.run.get(filename);
+    if (entry) {
+      episode = {
+        seasonNumber: folderSeasonNumber(folder) ?? dirInfo.seasonHint ?? 1,
+        episodeNumber: entry.episodeNumber,
+      };
+    }
+  }
 
   // Marker-less extras files in a series context: inside a season pack
   // ("Family.Guy.Deleted.Scenes…") or carrying a season token themselves
@@ -486,18 +624,24 @@ export function parseMediaPath(fullPath: string): ParsedMediaPath {
       SE_RE.test(name) ||
       X_RE.test(name) ||
       (immediate && episode.seasonNumber > 0 && standaloneSeason.test(name));
-    // NFC like filename/folder above — a raw macOS path stays decomposed.
-    const ancestors = [folder, grandparent, basename(dirname(dirname(dirname(fullPath)))).normalize("NFC")];
     let idx = 0;
     let packFolder = "";
     while (idx < ancestors.length - 1 && ancestors[idx] && isPackName(ancestors[idx]!, idx === 0)) {
-      if (!packFolder && !SPECIALS_FOLDER_RE.test(ancestors[idx]!)) packFolder = ancestors[idx]!;
+      // Keep the first pack level that carries actual title text — a bare
+      // "S01" dir must not shadow its named parent ("Le ranch S01-02/S01").
+      const level = ancestors[idx]!;
+      if (!SPECIALS_FOLDER_RE.test(level) && (!packFolder || !titleBeforeSeasonMarker(packFolder))) {
+        packFolder = level;
+      }
       idx++;
     }
     let showFolder = ancestors[idx] ?? "";
     // A pack directly under the library root has no usable parent — fall back
     // to the episode-filename title below instead of "Series"/"TV".
     if (idx > 0 && GENERIC_ROOT_RE.test(showFolder)) showFolder = "";
+    // A leading whitespace-free "[Group]" release tag before a letter-led title
+    // is never part of a show folder's name.
+    showFolder = showFolder.replace(/^\[[^\]\s]*\][\s._-]*(?=\p{L})/u, "");
 
     let folderTitle = showFolder ? filenameParse(showFolder, false).title?.trim() || "" : "";
     // Same library mangling as the movie branch: a multi-word Cyrillic show
@@ -531,9 +675,9 @@ export function parseMediaPath(fullPath: string): ParsedMediaPath {
       seriesTitle = folderCleaned || episode.seriesTitleHint || prefixTitle || packTitle || tvTitle || showFolder || folder;
     }
     seriesTitle = cleanTail(cleanSeriesTitle(seriesTitle));
-    // Space out dots between multi-letter tokens ("Rick.And.Morty" — a folder
-    // the release parser left dotted) while preserving initialisms (S.W.A.T).
-    seriesTitle = seriesTitle.replace(/(?<=[\p{L}\p{N}]{2})\.(?=[\p{L}\p{N}]{2})/gu, " ");
+    // Space out dots/underscores between word tokens ("Rick.And.Morty",
+    // "Masha_i_Medved") while preserving initialisms (S.W.A.T).
+    seriesTitle = spaceSeparators(seriesTitle);
 
     // Every materially different faithful name is a matcher variant.
     const variants: string[] = [];
@@ -578,15 +722,19 @@ export function parseMediaPath(fullPath: string): ParsedMediaPath {
   }
 
   // ── Movie ───────────────────────────────────────────────────────────────
+  // In a numbered collection ("1.Vinni-Pukh.1969…" next to "2.Karlson…1970"),
+  // the leading ordinal is a list index, not part of the title.
+  const movieName = dirInfo?.listIndex?.has(filename) ? filenameNoExt.replace(/^\d{1,3}[.)\s_-]+/, "") : filenameNoExt;
+
   // Use the library to parse the filename
-  const parsed = filenameParse(filenameNoExt, false);
+  const parsed = filenameParse(movieName, false);
   let filenameTitle = parsed.title?.trim() || "";
   const filenameYear = parsed.year != null ? parseInt(String(parsed.year), 10) : undefined;
 
   // The library mangles some titles (notably multi-word Cyrillic + year) down to
   // a single letter. When its output is degenerate, recover from the raw name.
   if (alnumLen(filenameTitle) <= 2) {
-    const recovered = titleBeforeYear(filenameNoExt);
+    const recovered = titleBeforeYear(movieName);
     if (recovered && alnumLen(recovered) >= alnumLen(filenameTitle)) filenameTitle = recovered;
   }
 
@@ -611,7 +759,16 @@ export function parseMediaPath(fullPath: string): ParsedMediaPath {
   // folder" heuristic — in a collection folder ("Властелин колец (2001)/1
   // Братство кольца.mkv") it would give every disc the folder's title and the
   // tmdbId dedupe would collapse a trilogy into one movie.
-  const title = filenameTitle || folderTitle;
+  let title = spaceSeparators(filenameTitle || folderTitle);
+
+  // A duplicated in-title year ("Лука.2021.2021") leaves one copy inside the
+  // parsed title — strip the echo. Only when the year token appears at least
+  // twice: a single occurrence may BE the title ("Wonder Woman 1984").
+  if (year != null && title.endsWith(String(year))) {
+    const occurrences = movieName.split(String(year)).length - 1;
+    const stripped = title.replace(new RegExp(`[\\s._-]+${year}$`), "").trim();
+    if (occurrences >= 2 && stripped) title = stripped;
+  }
 
   const result: ParsedMediaPath = { title };
   if (year !== undefined && !Number.isNaN(year)) result.year = year;

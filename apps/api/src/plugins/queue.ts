@@ -55,7 +55,13 @@ export const scanDoneCache = new Map<string, Record<string, unknown>>();
 
 // ── listFiles walker ─────────────────────────────────────────────────────────
 
-const VIDEO_EXTS = new Set([".mkv", ".mp4", ".avi", ".mov", ".m4v", ".webm"]);
+// .ts/.m2ts are MPEG-TS broadcast/Blu-ray captures — common for documentary
+// HDTV rips; ffprobe/ffmpeg handle them natively. BDMV disc trees that contain
+// .m2ts fragments are skipped by the parser (DISC_STRUCTURE_RE).
+const VIDEO_EXTS = new Set([
+  ".mkv", ".mp4", ".avi", ".mov", ".m4v", ".webm",
+  ".ts", ".m2ts", ".mts", ".mpg", ".mpeg", ".wmv",
+]);
 
 async function listFiles(
   root: string,
@@ -1136,10 +1142,18 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
                 });
                 if (firstFile) {
                   const reparsed = parseMediaPath(firstFile.path);
-                  const extra = [reparsed.title, ...(reparsed.titleVariants ?? [])].filter(
-                    (t) => t && t.toLowerCase() !== item.title.toLowerCase(),
-                  );
-                  if (extra.length) titleVariants = [...new Set(extra)].slice(0, 3);
+                  // A single-path re-parse has no sibling context, so an
+                  // ordinal-run episode ("001 - Title.mkv") parses as a movie
+                  // carrying the EPISODE's title — never a faithful series
+                  // name. Only trust the re-parse when it independently
+                  // recognized the episode (explicit SxxExx / season folder),
+                  // which is exactly the umbrella-folder case variants target.
+                  if (reparsed.seasonNumber != null) {
+                    const extra = [reparsed.title, ...(reparsed.titleVariants ?? [])].filter(
+                      (t) => t && t.toLowerCase() !== item.title.toLowerCase(),
+                    );
+                    if (extra.length) titleVariants = [...new Set(extra)].slice(0, 3);
+                  }
                 }
               }
 

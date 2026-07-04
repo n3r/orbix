@@ -1,4 +1,4 @@
-import { buildQueryLadder, type SearchAttempt } from "./search-title";
+import { buildQueryLadder, queryKey, type SearchAttempt } from "./search-title";
 import {
   scoreCandidate,
   isAcceptable,
@@ -86,7 +86,9 @@ export function buildLadders(title: string, year: number | undefined, variants: 
   for (const t of [title, ...(variants ?? [])]) {
     if (!t.trim()) continue;
     for (const attempt of buildQueryLadder({ title: t, year })) {
-      const key = `${normalizeForMatch(attempt.query)}|${attempt.year ?? ""}|${attempt.language ?? ""}|${attempt.derived ? 1 : 0}`;
+      // queryKey, not normalizeForMatch: the homoglyph fold would collapse a
+      // repaired-spelling attempt into the polluted original.
+      const key = `${queryKey(attempt.query)}|${attempt.year ?? ""}|${attempt.language ?? ""}|${attempt.derived ? 1 : 0}`;
       if (seen.has(key)) continue;
       seen.add(key);
       out.push(attempt);

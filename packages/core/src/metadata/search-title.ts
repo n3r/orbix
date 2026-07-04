@@ -1,4 +1,4 @@
-import { normalizeForMatch } from "./match-score";
+import { normalizeForMatch, repairHomoglyphs } from "./match-score";
 import { dominantScript, tmdbLanguageForScript, scriptRuns } from "./script";
 import { looksRomanizedSlavic, reverseTransliterateRu } from "./translit";
 
@@ -36,21 +36,24 @@ export interface SearchAttempt {
 const NOISE_WORDS = new Set([
   // source / rip
   "REMUX", "BDREMUX", "BLURAY", "BDRIP", "BRRIP", "WEBRIP", "WEBDL", "HDTV",
-  "DVDRIP", "HDRIP", "DVDSCR", "ISO", "BDMV",
+  "DVDRIP", "HDRIP", "DVDSCR", "ISO", "BDMV", "DVD", "HDTVRIP",
+  "SATRIP", "IPTVRIP", "TVRIP", "DVBRIP", "VHSRIP", "DCPRIP",
   "TC", "TS", "TELECINE", "TELESYNC", "HDTC", "HDCAM", "CAMRIP", "SCREENER",
   // resolution / quality
-  "UHD", "HDR", "HDR10", "DV", "SDR", "4K", "2K",
+  "UHD", "HDR", "HDR10", "DV", "SDR", "4K", "2K", "HD",
   // codec
   "X264", "X265", "HEVC", "AVC", "MPEG4", "XVID", "DIVX", "VC1",
   // audio
   "DTS", "DTSHD", "AC3", "EAC3", "DDP", "DD", "AAC", "FLAC", "TRUEHD", "ATMOS", "MP3",
   // edition
   "UNRATED", "UNCUT", "REMASTERED", "REMASTER", "EXTENDED", "THEATRICAL", "IMAX",
-  "DIRECTORS", "PROPER", "REPACK", "RERIP", "LIMITED",
+  "DIRECTORS", "PROPER", "REPACK", "RERIP", "LIMITED", "UPSCALE", "UPSCALED",
 ]);
 
 const NOISE_RE: RegExp[] = [
   /^\d{3,4}P$/, // 720P 1080P 2160P
+  /^\d{3,4}I$/, // 1080I HDTV interlaced tags
+  /^(?:480|576|720|1080|2160|4320)$/, // bare resolutions ("Darkwing Duck 1080 Upscale")
   /^X26[45]$/,
   /^H26[45]$/,
   /^DD[P+]?\d?\d?$/, // DD DDP DD5 DD51
@@ -60,7 +63,9 @@ const NOISE_RE: RegExp[] = [
 
 // Bracket segments whose contents look like a tracker / release-site tag.
 const TRACKER_WORDS = /(?:rutracker|nnmclub|kinozal|rarbg|hdclub|rutor|torrent)/i;
-const DOMAIN_RE = /[\w-]+\.(?:org|com|net|to|se|me|tv|info)\b/i;
+// Piracy-tracker TLDs only — NOT generic new-gTLDs (.fun/.club/.io…) that
+// collide with fansub group names and real title words.
+const DOMAIN_RE = /[\w-]+\.(?:org|com|net|to|se|me|tv|info|ru|su|ua|by)\b/i;
 const BRACKET_SEGMENT_RE = /[[({][^[\]{}()]*[)\]}]/g;
 
 function noiseKey(token: string): string {
@@ -84,8 +89,15 @@ function stripNoise(raw: string): string {
   // TMDB's search index only matches the composed form.
   const composed = raw.normalize("NFC");
 
+  // 0.5. A LEADING bracket group is a release tag ("[Beatrice-Raws] Tonari no
+  // Totoro", "[DS27]Zootopia+") — but only when a LETTER-led title follows: a
+  // fully bracketed name ("[REC]") or a bracket-title sequel ("[REC] 2", where
+  // a bare number follows) is preserved, and the tag must be whitespace-free
+  // (a bracket-wrapped TITLE like "[Taxi 1998] [tags]" contains spaces).
+  const untagged = composed.replace(/^\s*\[[^\]\s]*\][\s._-]*(?=\p{L})/u, "");
+
   // 1. Drop bracket segments that are clearly tracker/site tags.
-  const debracketed = composed.replace(BRACKET_SEGMENT_RE, (seg) =>
+  const debracketed = untagged.replace(BRACKET_SEGMENT_RE, (seg) =>
     DOMAIN_RE.test(seg) || TRACKER_WORDS.test(seg) ? " " : seg,
   );
 
@@ -130,6 +142,22 @@ export function cleanSearchTitle(raw: string): string {
 }
 
 /**
+ * Ladder-dedup key: folds accents and fullwidth forms (so "Amélie"/"Amelie"
+ * and "Ｇｏｄｚｉｌｌａ"/"Godzilla" collapse into one search) but NOT homoglyphs —
+ * a homoglyph-repaired query must survive as its own attempt, since the
+ * provider's index needs that exact spelling. Strictly less aggressive than a
+ * homoglyph fold, so it can never drop a needed attempt.
+ */
+export function queryKey(q: string): string {
+  return q
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+/**
  * Alternative queries derived from parenthetical segments. A parenthesized part
  * is usually an original/alt title (`(eXistenZ)`, `(The Possession)`) or a
  * director/edition note (`(авторская версия)`) — so both the outside text and
@@ -151,6 +179,13 @@ function parentheticalVariants(title: string): string[] {
   }
   return variants;
 }
+
+// A leading broadcaster name with a separator and a real title after it.
+const CHANNEL_PREFIX_RE =
+  /^(?:bbc|discovery(?:[\s.]+(?:world|channel|science|civilization))?|national[\s.]+geographic|nat[\s.]?geo|ngc|history(?:[\s.]+channel)?|animal[\s.]+planet|pbs|nova|культура|первый[\s.]+канал|нтв|россия)[\s.:\-—_]+(?=\S)/i;
+
+// Quality tokens that ride along with a channel prefix ("BBC HD Supervolcano").
+const CHANNEL_QUALITY_RE = /^(?:(?:hd|uhd|sd|4k)[\s.:\-—_]+)+/i;
 
 function firstNTokens(s: string, n: number): string {
   return s.split(/\s+/).filter(Boolean).slice(0, n).join(" ");
@@ -247,11 +282,45 @@ export function buildQueryLadder(input: { title: string; year?: number }): Searc
   push(body, year, bodyLang);
   push(body, undefined, bodyLang);
 
+  // Mixed-script pollution: the repaired spelling is the FAITHFUL name.
+  const repaired = repairHomoglyphs(body);
+  if (repaired !== body) {
+    const lang = languageForQuery(repaired);
+    push(repaired, year, lang);
+    push(repaired, undefined, lang);
+  }
+
+  // A hyphenated single name often lives unhyphenated in provider indexes
+  // ("Exo-Squad" → "Exosquad"). The joined spelling is faithful, not derived —
+  // dedup already collapses the space-separated reading.
+  const joined = body.replace(/(?<=\p{L})-(?=\p{L})/gu, "");
+  if (joined !== body) {
+    push(joined, year, bodyLang);
+    push(joined, undefined, bodyLang);
+  }
+
   // Parenthetical alternatives (original titles, director/edition notes).
   for (const variant of parentheticalVariants(title)) {
     const lang = languageForQuery(variant);
     push(variant, year, lang);
     push(variant, undefined, lang);
+  }
+
+  // TV-channel prefix ("BBC. Космос…", "Discovery World-Return…",
+  // "Культура_Тайна Млечного Пути") — documentaries are habitually filed
+  // under their broadcaster. The prefix-free name is a separate attempt, not
+  // a replacement: a title legitimately starting with the word keeps rung 1.
+  // Runs against the RAW title: the noise cut may already have consumed
+  // everything after the channel word ("BBC HD Supervolcano" cleans to "BBC").
+  const rawSpaced = title.replace(/[._]+/g, " ");
+  const chan = CHANNEL_PREFIX_RE.exec(rawSpaced);
+  if (chan) {
+    const rest = stripNoise(rawSpaced.slice(chan[0].length).replace(CHANNEL_QUALITY_RE, ""));
+    if (rest) {
+      const lang = languageForQuery(rest);
+      push(rest, year, lang);
+      push(rest, undefined, lang);
+    }
   }
 
   // Bilingual names: each script run is its own query in its own language.
@@ -309,7 +378,7 @@ export function buildQueryLadder(input: { title: string; year?: number }): Searc
   const seen = new Set<string>();
   const ladder: SearchAttempt[] = [];
   for (const attempt of raw) {
-    const key = `${normalizeForMatch(attempt.query)}|${attempt.year ?? ""}|${attempt.language ?? ""}`;
+    const key = `${queryKey(attempt.query)}|${attempt.year ?? ""}|${attempt.language ?? ""}`;
     if (seen.has(key)) continue;
     seen.add(key);
     ladder.push(attempt);
