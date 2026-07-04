@@ -1142,10 +1142,18 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
                 });
                 if (firstFile) {
                   const reparsed = parseMediaPath(firstFile.path);
-                  const extra = [reparsed.title, ...(reparsed.titleVariants ?? [])].filter(
-                    (t) => t && t.toLowerCase() !== item.title.toLowerCase(),
-                  );
-                  if (extra.length) titleVariants = [...new Set(extra)].slice(0, 3);
+                  // A single-path re-parse has no sibling context, so an
+                  // ordinal-run episode ("001 - Title.mkv") parses as a movie
+                  // carrying the EPISODE's title — never a faithful series
+                  // name. Only trust the re-parse when it independently
+                  // recognized the episode (explicit SxxExx / season folder),
+                  // which is exactly the umbrella-folder case variants target.
+                  if (reparsed.seasonNumber != null) {
+                    const extra = [reparsed.title, ...(reparsed.titleVariants ?? [])].filter(
+                      (t) => t && t.toLowerCase() !== item.title.toLowerCase(),
+                    );
+                    if (extra.length) titleVariants = [...new Set(extra)].slice(0, 3);
+                  }
                 }
               }
 
