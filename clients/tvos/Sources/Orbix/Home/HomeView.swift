@@ -51,6 +51,7 @@ struct HomeView: View {
         case .loading:
             ProgressView("Loading…")
                 .font(.title3)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .error(let message):
             errorView(message: message, client: client)
         case .empty:
@@ -107,6 +108,7 @@ struct HomeView: View {
             systemImage: "film.stack",
             description: Text("Scan a library on the server to see titles here.")
         )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityIdentifier("homeEmptyState")
     }
 
@@ -121,6 +123,7 @@ struct HomeView: View {
             }
             .accessibilityIdentifier("homeRetryButton")
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityIdentifier("homeErrorState")
     }
 

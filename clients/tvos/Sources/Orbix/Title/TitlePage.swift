@@ -257,6 +257,7 @@ struct TitlePage: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .padding(.leading, 4)
+                    .accessibilityIdentifier("titlePageNoSeasonsState")
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 24) {

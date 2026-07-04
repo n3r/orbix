@@ -16,13 +16,16 @@ targets:
     platform: tvOS
     sources:
       - path: Sources/Orbix
+      - path: Resources/Assets.xcassets
     dependencies:
       - target: OrbixKit
     settings:
       base:
         INFOPLIST_FILE: Resources/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: dev.orbix.tvos
-        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+        # tvOS "Brand Assets" App Icon & Top Shelf Image — see
+        # Resources/Assets.xcassets/App Icon & Top Shelf Image.brandassets.
+        ASSETCATALOG_COMPILER_APPICON_NAME: "App Icon & Top Shelf Image"
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: ""
   OrbixKit:
     type: framework
