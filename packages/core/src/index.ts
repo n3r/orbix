@@ -39,3 +39,4 @@ export * from "./tv/numbering";
 export * from "./tv/pick-stream";
 export * from "./tv/proxy";
 export * from "./tv/xmltv";
+export * from "./tv/epg-match";
