@@ -22,9 +22,11 @@ final class ProfilePickerModel {
     init() {}
 
     /// Fetches the profile list. Safe to call again (e.g. retry after
-    /// `loadError`); each call replaces `profiles`/`loadError` with the
-    /// latest result.
+    /// `loadError`) once the previous call has finished; a call that
+    /// arrives while one is already in flight is a no-op rather than
+    /// racing a second fetch (mirrors the `selectingId` guard on `select`).
     func load(client: OrbixClient) async {
+        guard !isLoading else { return }
         isLoading = true
         loadError = nil
         do {
