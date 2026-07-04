@@ -27,6 +27,7 @@ struct TitlePage: View {
 
     @State private var titleModel = TitleModel()
     @State private var imageLoader = ImageLoader()
+    @State private var playbackTarget: PlaybackTarget?
 
     /// Fixed height of the hero backdrop; large enough to read as
     /// "full-bleed" on a 1080pt-tall tvOS screen while still leaving the
@@ -46,6 +47,15 @@ struct TitlePage: View {
                 ProgressView()
             }
         }
+        .fullScreenCover(item: $playbackTarget, onDismiss: refreshAfterPlayback) { target in
+            PlayerScreen(
+                itemId: itemId,
+                fileId: target.fileId,
+                title: target.title,
+                client: target.client,
+                baseURL: target.baseURL
+            )
+        }
     }
 
     @ViewBuilder
@@ -60,14 +70,14 @@ struct TitlePage: View {
         case .error(let message):
             errorView(message: message, client: client)
         case .loaded(let detail, let similar):
-            detailView(detail, similar: similar)
+            detailView(detail, similar: similar, client: client)
         }
     }
 
-    private func detailView(_ detail: ItemDetail, similar: [MediaCard]) -> some View {
+    private func detailView(_ detail: ItemDetail, similar: [MediaCard], client: OrbixClient) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 56) {
-                hero(detail)
+                hero(detail, client: client)
 
                 if isSeries(detail) {
                     seasonStrip(detail)
@@ -84,7 +94,7 @@ struct TitlePage: View {
 
     // MARK: - Hero
 
-    private func hero(_ detail: ItemDetail) -> some View {
+    private func hero(_ detail: ItemDetail, client: OrbixClient) -> some View {
         ZStack(alignment: .bottomLeading) {
             BackdropImage(url: imageURL(path: detail.backdropPath), imageLoader: imageLoader)
                 .frame(height: Self.heroHeight)
@@ -106,7 +116,7 @@ struct TitlePage: View {
                 metadataRow(detail)
                 overviewText(detail)
                 if !isSeries(detail) {
-                    playButton(detail)
+                    playButton(detail, client: client)
                         .padding(.top, 8)
                 }
             }
@@ -168,17 +178,20 @@ struct TitlePage: View {
         }
     }
 
-    /// Always rendered for a movie (never conditionally hidden) so the
-    /// tvOS focus engine has a stable target — `disabled` (dimmed, not
-    /// actionable) when there's no playable file rather than absent, which
-    /// would silently change what's focusable on the page.
+    /// Always rendered for a movie (never conditionally hidden): a dimmed,
+    /// `disabled` Play button when there's no playable file communicates
+    /// "this title has no file to play" rather than silently omitting the
+    /// button, which would look like the page just failed to load one.
+    /// (Not a focus-stability concern: tvOS's focus engine simply skips a
+    /// `disabled` control rather than parking focus on it, so this is a
+    /// visual-affordance choice, not one about what's focusable.)
     @ViewBuilder
-    private func playButton(_ detail: ItemDetail) -> some View {
+    private func playButton(_ detail: ItemDetail, client: OrbixClient) -> some View {
         let fileId = detail.files?.first?.id
         Button {
-            if let fileId { play(fileId: fileId) }
+            if let fileId { presentPlayer(fileId: fileId, title: detail.title, client: client) }
         } label: {
-            Label("Play", systemImage: "play.fill")
+            Label(titleModel.resumeAvailable ? "Resume" : "Play", systemImage: "play.fill")
                 .font(.title3.bold())
                 .padding(.horizontal, 8)
         }
@@ -188,15 +201,39 @@ struct TitlePage: View {
         .accessibilityIdentifier("titlePagePlayButton")
     }
 
-    /// TODO(M3 Task 3): present the production player — `getProgress` for a
-    /// resume position, `playbackInfo(fileId:)`, `AVPlayerViewController`.
-    /// The brief explicitly sanctions "Play" always (not "Play"/"Resume")
-    /// for this task, deferring resume-awareness to Task 3, which owns
-    /// progress/resume end-to-end — so this is a diagnostic no-op rather
-    /// than a dead end with no feedback at all, mirroring the pre-Task-2
-    /// placeholder `HomeView.select` used to be.
-    private func play(fileId: String) {
-        print("[TitlePage] Play tapped for fileId \(fileId) — production player lands in M3 Task 3")
+    /// Presents the production player (`PlayerScreen`) full-screen — see
+    /// `body`'s `.fullScreenCover(item: $playbackTarget)`. A defensive no-op
+    /// if `model.baseURL` is somehow nil here; in practice it's always set
+    /// alongside `client` (see `AppModel.configure`), which this method
+    /// already requires a caller to have obtained (same invariant as
+    /// `content(client:)`'s own guard).
+    private func presentPlayer(fileId: String, title: String, client: OrbixClient) {
+        guard let baseURL = model.baseURL else { return }
+        playbackTarget = PlaybackTarget(fileId: fileId, title: title, client: client, baseURL: baseURL)
+    }
+
+    /// `.fullScreenCover` covers `TitlePage` rather than pushing away from
+    /// it, so without an explicit refresh, the Play/Resume label and
+    /// "More Like This" rail would keep showing pre-playback state until
+    /// the user navigated away and back. Re-fetching after the player is
+    /// dismissed keeps them current.
+    private func refreshAfterPlayback() {
+        guard let client = model.client else { return }
+        Task { await titleModel.load(itemId: itemId, client: client) }
+    }
+
+    /// Identifies one presentation of the production player — see
+    /// `presentPlayer`/`body`'s `.fullScreenCover(item:)`. `id` is a fresh
+    /// `UUID` per instance (not e.g. `fileId`) so tapping Play again after
+    /// closing the player always starts a brand-new presentation (and thus
+    /// a brand-new `PlaybackController`/play session) rather than SwiftUI
+    /// treating it as the same identity.
+    private struct PlaybackTarget: Identifiable {
+        let id = UUID()
+        let fileId: String
+        let title: String
+        let client: OrbixClient
+        let baseURL: URL
     }
 
     // MARK: - Seasons (series)
@@ -354,6 +391,13 @@ final class TitleModel {
     private(set) var loadError: String?
     private(set) var notFound = false
 
+    /// Whether the Play button should read "Resume" — a movie only
+    /// (a series doesn't render this page's Play button at all; per-episode
+    /// resume lands in M3 Task 4), and only when there's a saved position
+    /// short of "finished". Best-effort: a `getProgress` failure just leaves
+    /// this `false` ("Play"), the same graceful-degradation `similar` gets.
+    private(set) var resumeAvailable = false
+
     /// Same "first attempt has resolved one way or another" latch
     /// `HomeModel.hasLoaded` uses, so the single frame before `.task`
     /// starts the first `load` reads as `.loading`, not some other state.
@@ -378,6 +422,7 @@ final class TitleModel {
         isLoading = true
         loadError = nil
         notFound = false
+        resumeAvailable = false
 
         do {
             detail = try await client.itemDetail(id: itemId)
@@ -393,6 +438,14 @@ final class TitleModel {
         }
 
         similar = (try? await client.similar(id: itemId)) ?? []
+
+        // Resume-awareness only matters for a movie's single Play button —
+        // a series doesn't render one here (Task 4 owns per-episode
+        // play/resume) — and only when there's actually a file to play.
+        if let detail, detail.kind != "series", detail.files?.first != nil,
+           let progress = try? await client.getProgress(itemId: itemId, episodeId: nil) {
+            resumeAvailable = progress.positionSec > 0 && !progress.finished
+        }
 
         isLoading = false
         hasLoaded = true

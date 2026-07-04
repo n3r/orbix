@@ -267,6 +267,39 @@ final class DTOTests: XCTestCase {
         XCTAssertNil(detail.files)
     }
 
+    // MARK: - Playback progress (M3 Task 3)
+
+    func testDecodeProgressState() throws {
+        let json = """
+        {"positionSec":120,"durationSec":6600,"finished":false}
+        """.data(using: .utf8)!
+        let progress = try JSONDecoder().decode(ProgressState.self, from: json)
+        XCTAssertEqual(progress.positionSec, 120)
+        XCTAssertEqual(progress.durationSec, 6600)
+        XCTAssertFalse(progress.finished)
+    }
+
+    func testDecodeProgressStateNoSavedRow() throws {
+        // GET /items/:id/progress's shape when no PlaybackState row exists
+        // yet (see apps/api/src/routes/playstate.ts): all zeros, not an
+        // error — must decode identically to a real saved-progress row.
+        let json = """
+        {"positionSec":0,"durationSec":0,"finished":false}
+        """.data(using: .utf8)!
+        let progress = try JSONDecoder().decode(ProgressState.self, from: json)
+        XCTAssertEqual(progress.positionSec, 0)
+        XCTAssertEqual(progress.durationSec, 0)
+        XCTAssertFalse(progress.finished)
+    }
+
+    func testDecodeProgressStateFinished() throws {
+        let json = """
+        {"positionSec":6500,"durationSec":6600,"finished":true}
+        """.data(using: .utf8)!
+        let progress = try JSONDecoder().decode(ProgressState.self, from: json)
+        XCTAssertTrue(progress.finished)
+    }
+
     func testDecodeSimilarResponse() throws {
         // GET /api/items/:id/similar's {items: [...]} envelope (see
         // apps/api/src/routes/similar.ts's `toCard`): a narrower shape than

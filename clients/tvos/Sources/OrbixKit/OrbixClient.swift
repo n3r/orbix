@@ -136,6 +136,58 @@ public actor OrbixClient {
         return try await send(method: "POST", url: baseURL.appending(path: "api/playback/info"), body: data)
     }
 
+    // MARK: - Playback progress
+
+    /// `GET /api/items/:id/progress` (+ `?episodeId=` for a series episode;
+    /// see `apps/api/src/routes/playstate.ts`). A movie passes
+    /// `episodeId: nil`, which omits the query param entirely — the
+    /// route's own default for a missing key (`req.query.episodeId ?? ""`)
+    /// is the same empty-string column value a movie's row uses.
+    public func getProgress(itemId: String, episodeId: String? = nil) async throws -> ProgressState {
+        var url = baseURL.appending(path: "api/items/\(itemId)/progress")
+        if let episodeId, !episodeId.isEmpty {
+            url = url.appending(queryItems: [URLQueryItem(name: "episodeId", value: episodeId)])
+        }
+        return try await send(method: "GET", url: url)
+    }
+
+    /// `PUT /api/items/:id/progress` (see `apps/api/src/routes/playstate.ts`):
+    /// upserts the active profile's playback position. `positionSec`/
+    /// `durationSec` are sent as-is — the route floors them for its `Int`
+    /// columns, since a player reports fractional seconds — and
+    /// `episodeId`/`playSessionId` are omitted from the wire entirely when
+    /// `nil` (Codable's synthesized `encode(to:)` uses `encodeIfPresent`
+    /// for `Optional` stored properties), which the route treats identically
+    /// to an absent key.
+    public func putProgress(
+        itemId: String,
+        positionSec: Double,
+        durationSec: Double,
+        episodeId: String? = nil,
+        playSessionId: String? = nil
+    ) async throws {
+        struct Body: Encodable {
+            let positionSec: Double
+            let durationSec: Double
+            let episodeId: String?
+            let playSessionId: String?
+        }
+        let data = try encodeBody(
+            Body(positionSec: positionSec, durationSec: durationSec, episodeId: episodeId, playSessionId: playSessionId)
+        )
+        _ = try await perform(method: "PUT", url: baseURL.appending(path: "api/items/\(itemId)/progress"), body: data)
+    }
+
+    /// `POST /api/playback/:playSessionId/stop` (see
+    /// `apps/api/src/routes/playback.ts`) — idempotent early teardown of a
+    /// play session. Best-effort by design (`async`, not `async throws`):
+    /// called from the player's teardown path, where there's no one left to
+    /// show a network error to (a `navigator.sendBeacon`-equivalent), so a
+    /// failure here is swallowed rather than thrown.
+    public func stopPlayback(playSessionId: String) async {
+        _ = try? await perform(method: "POST", url: baseURL.appending(path: "api/playback/\(playSessionId)/stop"))
+    }
+
     // MARK: - Request plumbing
 
     private func encodeBody<T: Encodable>(_ value: T) throws -> Data {

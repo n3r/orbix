@@ -334,6 +334,28 @@ public struct ItemDetail: Codable, Sendable, Equatable {
     }
 }
 
+// MARK: - Playback progress
+
+/// Response of `GET /api/items/:id/progress` (see
+/// `apps/api/src/routes/playstate.ts`) — the active profile's saved
+/// playback position for this item (or, with `?episodeId=`, one of its
+/// episodes) — or all-zero/`finished: false` when no `PlaybackState` row
+/// exists yet (the route sends that shape rather than 404ing, so "no saved
+/// progress" and "an actual zero-second save" are indistinguishable on the
+/// wire; nothing needs to tell them apart — both correctly mean "don't
+/// offer Resume").
+public struct ProgressState: Codable, Sendable, Equatable {
+    public var positionSec: Int
+    public var durationSec: Int
+    public var finished: Bool
+
+    public init(positionSec: Int, durationSec: Int, finished: Bool) {
+        self.positionSec = positionSec
+        self.durationSec = durationSec
+        self.finished = finished
+    }
+}
+
 /// Response of `GET /api/items/:id/similar` (see
 /// `apps/api/src/routes/similar.ts`): `{items: [...]}`, each entry a subset
 /// of `MediaCard`'s fields (`id,title,year,posterPath,matchState`) —
