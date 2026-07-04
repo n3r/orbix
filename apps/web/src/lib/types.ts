@@ -24,6 +24,29 @@ export interface Library {
   order: number;
   createdAt: string;
   sources: Source[];
+  summary?: {
+    totalItems: number;
+    enrichedItems: number;
+    missingMetadata: number;
+    missingArtwork: number;
+    files: number;
+    sourceCount: number;
+    enabledSourceCount: number;
+    sourceErrorCount: number;
+    lastScanAt: string | null;
+  };
+  activeScan?: {
+    jobId: string;
+    state: string;
+    phase: string;
+    processed?: number;
+    total?: number;
+    added?: number;
+    updated?: number;
+    skipped?: number;
+    matched?: number;
+    message?: string;
+  } | null;
 }
 
 export interface Profile {

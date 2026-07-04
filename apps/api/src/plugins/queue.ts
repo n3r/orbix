@@ -9,6 +9,7 @@ import type { FastifyInstance } from "fastify";
 import type { Env } from "@orbix/config";
 import { Prisma, type PrismaClient } from "@orbix/db";
 import { buildMountRuntime, type MountRuntime } from "../lib/mount-runtime";
+import type { ScanProgress } from "../lib/scan-status";
 import {
   scanSource,
   probeFile,
@@ -51,7 +52,7 @@ scanEvents.setMaxListeners(200);
  * Cache of "done" events keyed by jobId so late SSE subscribers can get the
  * result even if the scan finished before they connected.
  */
-export const scanDoneCache = new Map<string, Record<string, unknown>>();
+export const scanDoneCache = new Map<string, ScanProgress>();
 
 // ── listFiles walker ─────────────────────────────────────────────────────────
 
@@ -176,6 +177,10 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
     async function processor(job: Job<ScanJobData>): Promise<void> {
       const { jobId, libraryId, sources } = job.data;
       const { prisma } = app;
+      const publish = async (event: ScanProgress): Promise<void> => {
+        await job.updateProgress(event);
+        scanEvents.emit(jobId, event);
+      };
 
       try {
       // ── Real adapters ──────────────────────────────────────────────────
@@ -452,7 +457,7 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
       for (let i = 0; i < sources.length; i++) {
         const source = sources[i]!;
 
-        scanEvents.emit(jobId, { phase: "scanning", processed: i, total: sources.length });
+        await publish({ phase: "scanning", processed: i, total: sources.length });
 
         // Resolve each source to a local root (mounting SMB if needed). A
         // per-source failure is reported and skipped; remaining sources proceed.
@@ -462,7 +467,7 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
         } catch (err) {
           const message = err instanceof Error ? err.message : "source unavailable";
           await prisma.source.update({ where: { id: source.id }, data: { status: "error", statusMessage: message } });
-          scanEvents.emit(jobId, { phase: "scanning", processed: i, total: sources.length, message: `skipped source: ${message}` });
+          await publish({ phase: "scanning", processed: i, total: sources.length, message: `skipped source: ${message}` });
           continue;
         }
         await prisma.source.update({ where: { id: source.id }, data: { status: "ok", statusMessage: null } });
@@ -1077,7 +1082,7 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
 
         const enrichIdsArr = [...enrichIds];
 
-        scanEvents.emit(jobId, {
+        await publish({
           phase: "enriching",
           processed: 0,
           total: enrichIds.size,
@@ -1246,7 +1251,7 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
             app.log.warn({ err, itemId }, "enrich failed — continuing with remaining items");
           }
 
-          scanEvents.emit(jobId, {
+          await publish({
             phase: "enriching",
             processed: i + 1,
             total: enrichIds.size,
@@ -1354,7 +1359,7 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
 
       // ── Done ──────────────────────────────────────────────────────────
 
-      const doneEvent: Record<string, unknown> = {
+      const doneEvent: ScanProgress = {
         phase: "done",
         added: totalAdded,
         updated: totalUpdated,
@@ -1366,17 +1371,17 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
       scanDoneCache.set(jobId, doneEvent);
       const doneTimer = setTimeout(() => scanDoneCache.delete(jobId), 5 * 60 * 1000);
       doneTimer.unref?.();
-      scanEvents.emit(jobId, doneEvent);
+      await publish(doneEvent);
       } catch (err) {
         // Emit a terminal error event so SSE clients don't hang forever.
-        const errEvt: Record<string, unknown> = {
+        const errEvt: ScanProgress = {
           phase: "error",
           message: err instanceof Error ? err.message : String(err),
         };
         scanDoneCache.set(jobId, errEvt);
         const errTimer = setTimeout(() => scanDoneCache.delete(jobId), 5 * 60 * 1000);
         errTimer.unref?.();
-        scanEvents.emit(jobId, errEvt);
+        await publish(errEvt);
         throw err;
       }
     }

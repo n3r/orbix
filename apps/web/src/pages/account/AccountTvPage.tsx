@@ -370,7 +370,7 @@ export default function AccountTvPage() {
 
   if (loading) {
     return (
-      <main className="p-8">
+      <main>
         <p className="text-[var(--text-dim)]">{t("common:status.loading")}</p>
       </main>
     );

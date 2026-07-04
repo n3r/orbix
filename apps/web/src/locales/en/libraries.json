@@ -1,17 +1,40 @@
 {
   "title": "Libraries",
+  "overview": "{{libraries}} libraries · {{items}} items · {{missing}} missing metadata",
   "settingsLink": "Settings",
   "adding": "Adding…",
+  "empty": "No libraries configured yet.",
   "deleteLibrary": "Delete Library",
   "add": {
     "heading": "Add Library",
     "namePlaceholder": "Library name"
+  },
+  "rename": {
+    "button": "Rename",
+    "nameLabel": "Library name"
+  },
+  "actions": {
+    "manageSources": "Sources",
+    "hideSources": "Hide Sources"
+  },
+  "stats": {
+    "items": "Items",
+    "enriched": "Enriched",
+    "missingMetadata": "Missing metadata",
+    "missingArtwork": "Missing art",
+    "files": "Files",
+    "sourceErrors": "Source errors",
+    "sources": "{{count}}/{{total}} sources enabled",
+    "lastScan": "Last scan: {{value}}",
+    "neverScanned": "Never"
   },
   "section": {
     "addButton": "Add Section",
     "namePlaceholder": "Section name (e.g. Movies)"
   },
   "source": {
+    "heading": "Sources",
+    "empty": "No sources configured.",
     "addButton": "Add Source",
     "pathPlaceholder": "/path/to/media/folder",
     "kindLocal": "Local",
@@ -38,6 +61,7 @@
   "errors": {
     "loadFailed": "Failed to load libraries",
     "createFailed": "Failed to create library",
+    "renameFailed": "Failed to rename library",
     "addSourceFailed": "Failed to add source"
   }
 }

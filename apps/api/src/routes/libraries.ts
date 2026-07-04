@@ -12,6 +12,7 @@ import { requireAuth, requireAdmin } from "../lib/auth";
 import { requireNonKids } from "../lib/catalog-filter";
 import { encryptSecret } from "../lib/secrets";
 import { buildMountRuntime, type MountRuntime } from "../lib/mount-runtime";
+import { activeScansByLibrary } from "../lib/scan-status";
 
 // Public source projection — NEVER selects smbPassword.
 const SOURCE_PUBLIC = {
@@ -37,12 +38,47 @@ export function librariesRoute(env: Env, deps?: { runtime?: MountRuntime }) {
     const manage = { preHandler: [requireAuth(app), requireAdmin(app), requireNonKids(app)] };
 
     // GET /libraries — libraries + sanitized sources
-    app.get("/libraries", { preHandler: requireAuth(app) }, async () =>
-      app.prisma.library.findMany({
+    app.get("/libraries", { preHandler: requireAuth(app) }, async () => {
+      const libraries = await app.prisma.library.findMany({
         orderBy: { order: "asc" },
         include: { sources: { select: SOURCE_PUBLIC } },
-      }),
-    );
+      });
+      const activeScans = await activeScansByLibrary(app.scanQueue, libraries.map((l) => l.id));
+      return Promise.all(
+        libraries.map(async (library) => {
+          const [totalItems, enrichedItems, missingMetadata, missingArtwork, files] = await Promise.all([
+            app.prisma.mediaItem.count({ where: { libraryId: library.id } }),
+            app.prisma.mediaItem.count({ where: { libraryId: library.id, matchState: { in: ["matched", "manual"] } } }),
+            app.prisma.mediaItem.count({ where: { libraryId: library.id, matchState: "unmatched" } }),
+            app.prisma.mediaItem.count({ where: { libraryId: library.id, posterPath: null } }),
+            app.prisma.mediaFile.count({ where: { mediaItem: { libraryId: library.id } } }),
+          ]);
+          const sourceCount = library.sources.length;
+          const enabledSourceCount = library.sources.filter((s) => s.enabled).length;
+          const sourceErrorCount = library.sources.filter((s) => s.status === "error").length;
+          const lastScanAt = library.sources
+            .map((s) => s.lastScanAt)
+            .filter((d): d is Date => d instanceof Date)
+            .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+
+          return {
+            ...library,
+            summary: {
+              totalItems,
+              enrichedItems,
+              missingMetadata,
+              missingArtwork,
+              files,
+              sourceCount,
+              enabledSourceCount,
+              sourceErrorCount,
+              lastScanAt,
+            },
+            activeScan: activeScans.get(library.id) ?? null,
+          };
+        }),
+      );
+    });
 
     // POST /libraries
     app.post<{ Body: unknown }>("/libraries", manage, async (req, reply) => {

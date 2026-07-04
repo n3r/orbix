@@ -165,15 +165,14 @@ export default function AdminSettingsPage() {
 
   if (loading) {
     return (
-      <main className="p-8">
+      <main>
         <p className="text-[var(--text-dim)]">{t("common:status.loading")}</p>
       </main>
     );
   }
 
   return (
-    <main className="px-6 md:px-8 lg:px-10 py-8">
-     <div className="mx-auto flex max-w-2xl flex-col gap-8">
+    <main className="flex flex-col gap-8">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-[var(--text)]">{t("settings:title")}</h2>
         <Link
@@ -368,7 +367,6 @@ export default function AdminSettingsPage() {
         {rebuildMsg && <p className="mt-3 text-sm text-[var(--text-dim)]">{rebuildMsg}</p>}
       </Card>
 
-     </div>
     </main>
   );
 }
