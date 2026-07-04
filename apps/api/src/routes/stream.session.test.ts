@@ -65,10 +65,10 @@ function stubRRatedFile(app: unknown) {
   };
 }
 
-async function negotiate(app: any): Promise<string> {
+async function negotiate(app: any, capabilities: Record<string, unknown> = WEB_CAPS): Promise<string> {
   const res = await app.inject({
     method: "POST", url: "/api/playback/info", cookies,
-    payload: { fileId: "f1", capabilities: WEB_CAPS },
+    payload: { fileId: "f1", capabilities },
   });
   return res.json().playSessionId as string;
 }
@@ -209,6 +209,17 @@ describe("Apple-grade playlists", () => {
     expect(body).toContain('#EXT-X-MEDIA:TYPE=SUBTITLES');
     expect(body).toContain(`subs/2/index.m3u8?playSessionId=${sid}`);
     expect(body).not.toContain("subs/3/"); // PGS track excluded
+    await app.close();
+  });
+
+  it("sidecar subtitleDelivery omits subtitle renditions from the master (web player avoids double subtitles)", async () => {
+    const app = await buildApp(env);
+    stubAll(app);
+    const sid = await negotiate(app, { ...WEB_CAPS, subtitleDelivery: "sidecar" });
+    const res = await app.inject({ method: "GET", url: `/api/play/f1/master.m3u8?playSessionId=${sid}`, cookies });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).not.toContain("#EXT-X-MEDIA");
+    expect(res.body).not.toContain('SUBTITLES="subs"');
     await app.close();
   });
 

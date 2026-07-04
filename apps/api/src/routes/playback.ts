@@ -30,6 +30,7 @@ function parseCapabilities(v: unknown): ClientCapabilities | null {
     audioCodecs: o.audioCodecs,
     maxAudioChannels: o.maxAudioChannels,
     hlsMultichannelAacBroken: o.hlsMultichannelAacBroken === true,
+    subtitleDelivery: o.subtitleDelivery === "sidecar" ? "sidecar" : "hls",
   };
 }
 
@@ -124,6 +125,10 @@ export default function playbackRoute(deps: { registry: PlaySessionRegistry; man
           plan,
           boundaries,
           forceKeyframes,
+          // The master playlist emits subtitle renditions unless the client
+          // opted into sidecar delivery (the web player, which adds its own
+          // <Track>s and would otherwise show duplicate subtitle menus).
+          subtitleRenditions: caps.subtitleDelivery !== "sidecar",
           media: {
             width: file.width,
             height: file.height,

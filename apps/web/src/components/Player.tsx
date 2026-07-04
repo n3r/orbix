@@ -30,6 +30,10 @@ const WEB_CAPABILITIES = {
   audioCodecs: ["aac"],
   maxAudioChannels: 2,
   hlsMultichannelAacBroken: true,
+  // The player renders its own sidecar <Track> elements below (from
+  // playbackInfo.subtitleTracks), so the master playlist must NOT also emit
+  // EXT-X-MEDIA subtitle renditions — that would duplicate the subtitle menu.
+  subtitleDelivery: "sidecar" as const,
 };
 
 interface Progress {

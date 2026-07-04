@@ -4,7 +4,7 @@ import { PlaySessionRegistry } from "./registry";
 const plan = { mode: "remux", audioAction: "copy" } as const;
 const input = {
   fileId: "f1", inputPath: "/m.mkv", durationSec: 100, plan,
-  boundaries: null, forceKeyframes: false, media: null,
+  boundaries: null, forceKeyframes: false, subtitleRenditions: true, media: null,
 };
 
 function makeReg(opts: { ttlMs?: number; max?: number } = {}) {

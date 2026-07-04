@@ -32,6 +32,15 @@ export interface ClientCapabilities {
   audioCodecs: string[];
   maxAudioChannels: number;
   hlsMultichannelAacBroken?: boolean;
+  /**
+   * How the client wants subtitles delivered: in-manifest HLS renditions
+   * (native players — default, "hls") or sidecar text tracks the client adds
+   * itself ("sidecar" — the web player, whose <Track> elements would
+   * otherwise duplicate the master's EXT-X-MEDIA subtitle renditions).
+   * Descriptive only: decidePlayback doesn't read this; the playback route
+   * uses it to decide whether the master playlist emits subtitle renditions.
+   */
+  subtitleDelivery?: "hls" | "sidecar";
 }
 
 function containerMatches(container: string | undefined, caps: string[]): boolean {

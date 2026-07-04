@@ -34,6 +34,13 @@ export interface PlaySessionEntry {
   boundaries: SegmentBoundary[] | null;
   /** Transcode plans force keyframes at the segment cadence so fixed EXTINFs stay exact. */
   forceKeyframes: boolean;
+  /**
+   * Whether the master playlist should emit EXT-X-MEDIA subtitle renditions
+   * for this session. False for clients that declared sidecar subtitle
+   * delivery (see ClientCapabilities.subtitleDelivery) — their own <Track>
+   * elements would otherwise duplicate the in-manifest renditions.
+   */
+  subtitleRenditions: boolean;
   media: PlaySessionMedia | null;
   createdAtMs: number;
   lastAccessMs: number;
@@ -74,6 +81,7 @@ export class PlaySessionRegistry {
     plan: PlaybackPlan;
     boundaries: SegmentBoundary[] | null;
     forceKeyframes: boolean;
+    subtitleRenditions: boolean;
     media: PlaySessionMedia | null;
   }): PlaySessionEntry {
     this.sweep();

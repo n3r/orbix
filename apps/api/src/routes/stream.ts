@@ -207,13 +207,20 @@ export default function streamRoute(
           media?.width && media?.height ? { width: media.width, height: media.height } : undefined;
 
         // Subtitle renditions: only text-based tracks (image subs need burn-in, not HLS renditions).
-        const subtitles = (media?.subtitleTracks ?? [])
-          .filter((t) => !IMAGE_CODECS.has(t.codec ?? ""))
-          .map((t) => ({
-            name: t.language ?? `Track ${t.index}`,
-            language: t.language,
-            uri: `subs/${t.index}/index.m3u8?playSessionId=${playSessionId}${tokenSuffix(req)}`,
-          }));
+        // Gated on the negotiated delivery preference (entry.subtitleRenditions,
+        // set from ClientCapabilities.subtitleDelivery at negotiation time): a
+        // client that declared "sidecar" (the web player) adds its own
+        // <Track>s, so in-manifest renditions here would duplicate them —
+        // omit the whole list for that client.
+        const subtitles = entry.subtitleRenditions
+          ? (media?.subtitleTracks ?? [])
+              .filter((t) => !IMAGE_CODECS.has(t.codec ?? ""))
+              .map((t) => ({
+                name: t.language ?? `Track ${t.index}`,
+                language: t.language,
+                uri: `subs/${t.index}/index.m3u8?playSessionId=${playSessionId}${tokenSuffix(req)}`,
+              }))
+          : [];
 
         const master = buildMultivariantPlaylist({
           mediaUri: `index.m3u8?playSessionId=${playSessionId}${tokenSuffix(req)}`,
