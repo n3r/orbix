@@ -53,6 +53,22 @@ Orbix is a self-hosted, offline-capable media server that clients reach over the
 
 This mirrors the "offline guarantee" / LAN-first architecture of the rest of Orbix (see the root `CLAUDE.md`): the app talks to a server on the same network, not the public internet, so ATS is relaxed rather than requiring per-host exceptions.
 
+## Onboarding flow
+
+On first launch (and on any launch without a usable device token), the app walks through a short setup flow before it reaches the home screen:
+
+1. **Server URL** — enter (or confirm) the Orbix server's address, e.g. `http://192.168.1.10:1061`; the app checks `GET /health` and won't proceed until it gets a response.
+2. **Pairing code** — once the server is reachable, the TV requests a pairing code and displays it full-screen: a 6-character code.
+3. **Approve from another device** — on a phone, tablet, or computer already signed in to the same Orbix server, open **Orbix → Account → Devices**, enter the code, and approve it. The TV is polling in the background and picks up the approval automatically.
+4. **Pick a profile** — once paired, the TV shows the household's profiles; select one to make it this device's active profile.
+5. **Home** — the app opens to the home list for the selected profile.
+
+The device token issued by pairing is persisted to the Keychain, so subsequent launches skip straight past steps 1–4 (reachability permitting) — the app calls `GET /api/me/profile` to confirm the token is still valid and a profile is already selected, and falls back to the pairing screen if not (e.g. the device was revoked from **Account → Devices**).
+
+**Dev shortcut:** the `-orbixBaseURL <url>` and `-orbixToken <token>` launch arguments (Xcode scheme "Arguments Passed On Launch", or the `ORBIX_BASE_URL`/`ORBIX_TOKEN` environment variables) bypass steps 1–3 for local development — the app uses the given URL/token directly instead of showing the reachability or pairing screens. Never commit real values for these; they're only ever read at runtime.
+
+**Simulator Keychain caveat:** the tvOS Simulator has no Keychain access-group entitlement (`errSecMissingEntitlement`), so a token saved during pairing (or via `-orbixToken`) does **not** persist across relaunches in the simulator — the pairing screen reappears every launch there. On a real Apple TV, the token persists normally across relaunches.
+
 ## Project layout
 
 ```
