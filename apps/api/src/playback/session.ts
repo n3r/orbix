@@ -9,6 +9,27 @@ export type { PlaybackPlan };
 
 /** How many segments ahead of currentStart ffmpeg may run before we restart. */
 const AHEAD_WINDOW = 100;
+/**
+ * Forward epsilon (seconds) nudged onto an exact keyframe pts before it is
+ * passed to ffmpeg as an input-side `-ss`. Container demuxers (MKV in
+ * particular) resolve a seek request to the seek point AT OR BEFORE the
+ * requested pts — so asking for the exact pts of the keyframe we want can
+ * instead land ffmpeg on the PREVIOUS keyframe (one GOP early), shifting
+ * every regenerated segment's content/duration versus the declared playlist.
+ * Nudging the target forward by a hair keeps it resolving to the intended
+ * keyframe without meaningfully perturbing the seek position.
+ *
+ * 0.25s, NOT ~0.01s: live-verified against a real ffmpeg/MKV remux (see
+ * task-9-report.md "Session fix pass") — libavformat's matroska demuxer backs
+ * an input-side seek up by the audio track's seek-preroll/encoder-delay
+ * metadata (e.g. AAC-LC's ~1024-sample priming ≈ 21ms @48kHz; Opus pre-skip
+ * commonly ~80ms) BEFORE resolving against the Cues, regardless of which
+ * streams end up mapped to the output. A margin of a few ms (matching plain
+ * seek-point rounding) measurably still landed one GOP early in that test;
+ * 0.25s clears realistic encoder-delay values with a comfortable safety
+ * margin while staying negligible against any realistic segment/GOP cadence.
+ */
+const SEEK_EPSILON_SEC = 0.25;
 const POLL_INTERVAL_MS = 100;
 const DEFAULT_TIMEOUT_MS = 30_000;
 const REAP_INTERVAL_MS = 60_000;
@@ -209,6 +230,11 @@ export class SessionManager {
       if (!encoder) encoder = "software";
     }
 
+    // Exact keyframe-derived boundary start (undefined → legacy
+    // startSegment*segSec arithmetic inside buildHlsArgs, which is left
+    // untouched by the epsilon below).
+    const start = startSegment > 0 ? session.boundaries?.[startSegment]?.start : undefined;
+
     const args = buildHlsArgs({
       input: session.inputPath,
       startSegment,
@@ -220,7 +246,9 @@ export class SessionManager {
       audioChannels,
       encoder: encoder as "software" | "vaapi" | "qsv" | "nvenc" | undefined,
       vaapiDevice: process.env.VAAPI_DEVICE || "/dev/dri/renderD128",
-      startTimeSec: startSegment > 0 ? session.boundaries?.[startSegment]?.start : undefined,
+      // See SEEK_EPSILON_SEC above: only applied when we have an exact
+      // boundary start, never to the legacy per-segment arithmetic path.
+      startTimeSec: start !== undefined ? start + SEEK_EPSILON_SEC : undefined,
       forceKeyframes: session.forceKeyframes,
     });
 
@@ -253,10 +281,20 @@ export class SessionManager {
   /**
    * Guarantees seg<n>.m4s exists and returns its absolute path.
    *
-   * Restart rule: kill ffmpeg and restart at n when:
+   * Restart rule: an already-present, non-empty seg<n>.m4s ALWAYS wins — file
+   * existence is checked FIRST, and if it's there we return it as-is without
+   * ever (re)spawning ffmpeg, regardless of the tracked process's state. This
+   * matters because a fast (stream-copy) remux can finish writing every
+   * segment and exit long before the last few segments are ever requested;
+   * without this present-file short-circuit, that dead-but-complete proc
+   * would be pointlessly respawned (clobbering the shared init.mp4 and
+   * downstream segments) by the very next request.
+   *
+   * Only when the file is NOT already present do we kill ffmpeg and restart
+   * at n:
    *   - proc is dead/null, OR
    *   - n < currentStart (backward seek), OR
-   *   - n > currentStart + AHEAD_WINDOW and the file is not already present (far-forward seek).
+   *   - n > currentStart + AHEAD_WINDOW (far-forward seek).
    *
    * lastAccess is only updated on a SUCCESSFUL segment return so that a stuck
    * session (ffmpeg hung) is still eligible for reaping by the idle reaper.
@@ -277,9 +315,10 @@ export class SessionManager {
       }
 
       const needsRestart =
-        !this.isProcAlive(session) ||
-        n < session.currentStart ||
-        (n > session.currentStart + AHEAD_WINDOW && !alreadyPresent);
+        !alreadyPresent &&
+        (!this.isProcAlive(session) ||
+          n < session.currentStart ||
+          n > session.currentStart + AHEAD_WINDOW);
 
       if (needsRestart) {
         await this.spawnFfmpeg(session, n);
