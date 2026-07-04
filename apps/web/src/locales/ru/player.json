@@ -8,6 +8,20 @@
   "track": {
     "label": "Дорожка {{index}}"
   },
+  "controls": {
+    "quality": "Качество",
+    "subtitles": "Субтитры"
+  },
+  "quality": {
+    "auto": "Авто"
+  },
+  "subtitles": {
+    "off": "Выкл."
+  },
+  "audio": {
+    "standard": "Стандарт",
+    "leveling": "Выравнивание звука"
+  },
   "error": {
     "decision": "Не удалось получить решение о воспроизведении",
     "network": "Ошибка сети при загрузке плеера",

@@ -149,6 +149,20 @@ describe("buildHlsArgs", () => {
     expect(args[idx + 1]).toBe("libx264");
   });
 
+  it("transcode: downscaled quality adds a scale filter and target bitrate", () => {
+    const args = buildHlsArgs({
+      ...BASE_TRANSCODE,
+      targetHeight: 720,
+      targetVideoBitrate: 2_600_000,
+    });
+
+    expect(args).toContain("-vf");
+    expect(args[args.indexOf("-vf") + 1]).toBe("scale=-2:720");
+    expect(args).toContain("-b:v");
+    expect(args[args.indexOf("-b:v") + 1]).toBe("2600k");
+    expect(args[args.indexOf("-bufsize") + 1]).toBe("5200k");
+  });
+
   // --- audio ---
   it("audioAction=copy: -c:a copy", () => {
     const args = buildHlsArgs(BASE_REMUX);
@@ -167,6 +181,16 @@ describe("buildHlsArgs", () => {
     // Multichannel AAC breaks hls.js/MSE playback → force stereo.
     expect(args).toContain("-ac");
     expect(args[args.indexOf("-ac") + 1]).toBe("2");
+  });
+
+  it("audioMode=leveled: forces AAC and adds loudnorm even when audio would copy", () => {
+    const args = buildHlsArgs({ ...BASE_REMUX, audioMode: "leveled" });
+
+    const idx = args.indexOf("-c:a");
+    expect(idx).toBeGreaterThan(-1);
+    expect(args[idx + 1]).toBe("aac");
+    expect(args).toContain("-af");
+    expect(args[args.indexOf("-af") + 1]).toBe("loudnorm=I=-16:TP=-1.5:LRA=11");
   });
 
   // --- HLS muxer flags ---

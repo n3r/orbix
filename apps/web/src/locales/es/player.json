@@ -8,6 +8,20 @@
   "track": {
     "label": "Pista {{index}}"
   },
+  "controls": {
+    "quality": "Calidad",
+    "subtitles": "Subtítulos"
+  },
+  "quality": {
+    "auto": "Auto"
+  },
+  "subtitles": {
+    "off": "Desactivados"
+  },
+  "audio": {
+    "standard": "Estándar",
+    "leveling": "Nivelación de audio"
+  },
   "error": {
     "decision": "No se pudo obtener la decisión de reproducción",
     "network": "Error de red al cargar el reproductor",

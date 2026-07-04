@@ -1,5 +1,6 @@
 /** Named encoder setting values (as stored in the DB). */
 export type EncoderSetting = "software" | "vaapi" | "qsv" | "nvenc";
+export type PlaybackAudioMode = "standard" | "leveled";
 
 /** Mapping from encoder setting value to ffmpeg codec name. */
 export const ENCODER_MAP: Record<string, string> = {
@@ -24,12 +25,29 @@ export interface HlsArgsOpts {
   encoder?: EncoderSetting | "libx264";
   /** VAAPI render node (defaults to /dev/dri/renderD128). */
   vaapiDevice?: string;
+  /** Optional downscale target for manually selected quality renditions. */
+  targetHeight?: number | null;
+  /** Optional target bitrate for manually selected quality renditions. */
+  targetVideoBitrate?: number | null;
+  /** Advanced audio processing mode. `leveled` normalizes perceived loudness. */
+  audioMode?: PlaybackAudioMode;
 }
 
 export function buildHlsArgs(opts: HlsArgsOpts): string[] {
   const { input, startSegment, segSec, outDir, mode, audioAction, encoder } = opts;
   const rawEncoder = encoder ?? "software";
   const vaapiDevice = opts.vaapiDevice ?? "/dev/dri/renderD128";
+  const targetHeight =
+    Number.isFinite(opts.targetHeight) && opts.targetHeight != null && opts.targetHeight > 0
+      ? Math.floor(opts.targetHeight)
+      : null;
+  const targetVideoBitrate =
+    Number.isFinite(opts.targetVideoBitrate) &&
+    opts.targetVideoBitrate != null &&
+    opts.targetVideoBitrate > 0
+      ? Math.floor(opts.targetVideoBitrate)
+      : null;
+  const audioMode = opts.audioMode ?? "standard";
 
   const args: string[] = [];
 
@@ -57,22 +75,57 @@ export function buildHlsArgs(opts: HlsArgsOpts): string[] {
   if (mode === "remux") {
     args.push("-c:v", "copy");
   } else {
+    const softwareFilters = targetHeight ? [`scale=-2:${targetHeight}`] : [];
+    const pushTargetBitrate = () => {
+      if (!targetVideoBitrate) return;
+      const kbps = Math.max(1, Math.round(targetVideoBitrate / 1000));
+      args.push("-b:v", `${kbps}k`, "-maxrate", `${kbps}k`, "-bufsize", `${kbps * 2}k`);
+    };
+
     switch (rawEncoder) {
       case "vaapi":
-        args.push("-vf", "format=nv12,hwupload", "-c:v", "h264_vaapi", "-qp", "24");
+        args.push(
+          "-vf",
+          [
+            "format=nv12",
+            "hwupload",
+            ...(targetHeight ? [`scale_vaapi=w=-2:h=${targetHeight}`] : []),
+          ].join(","),
+          "-c:v",
+          "h264_vaapi",
+          "-qp",
+          "24",
+        );
+        pushTargetBitrate();
         break;
       case "qsv":
-        args.push("-vf", "hwupload=extra_hw_frames=64,format=qsv", "-c:v", "h264_qsv", "-global_quality", "24");
+        args.push(
+          "-vf",
+          [
+            "hwupload=extra_hw_frames=64",
+            "format=qsv",
+            ...(targetHeight ? [`scale_qsv=w=-2:h=${targetHeight}`] : []),
+          ].join(","),
+          "-c:v",
+          "h264_qsv",
+          "-global_quality",
+          "24",
+        );
+        pushTargetBitrate();
         break;
       case "nvenc":
         // NVENC ingests system-memory frames directly; it only needs its own
         // quality flags (libx264's -preset/-crf are invalid here).
+        if (softwareFilters.length > 0) args.push("-vf", softwareFilters.join(","));
         args.push("-c:v", "h264_nvenc", "-preset", "p5", "-cq", "23");
+        pushTargetBitrate();
         break;
       default: {
         // software / libx264 / raw codec name passthrough.
         const videoEncoder = ENCODER_MAP[rawEncoder] ?? rawEncoder;
+        if (softwareFilters.length > 0) args.push("-vf", softwareFilters.join(","));
         args.push("-c:v", videoEncoder, "-preset", "veryfast", "-crf", "21");
+        pushTargetBitrate();
       }
     }
   }
@@ -81,7 +134,18 @@ export function buildHlsArgs(opts: HlsArgsOpts): string[] {
   //    over hls.js/MSE fails to append in the browser — segments load but never
   //    decode (the <video> stays at readyState 0 / buffered empty, with no error).
   //    Stereo AAC is universally compatible.
-  if (audioAction === "copy") {
+  if (audioMode === "leveled") {
+    args.push(
+      "-c:a",
+      "aac",
+      "-b:a",
+      "192k",
+      "-ac",
+      "2",
+      "-af",
+      "loudnorm=I=-16:TP=-1.5:LRA=11",
+    );
+  } else if (audioAction === "copy") {
     args.push("-c:a", "copy");
   } else {
     args.push("-c:a", "aac", "-b:a", "192k", "-ac", "2");
