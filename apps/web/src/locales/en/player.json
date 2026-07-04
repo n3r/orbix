@@ -8,6 +8,20 @@
   "track": {
     "label": "Track {{index}}"
   },
+  "controls": {
+    "quality": "Quality",
+    "subtitles": "Subtitles"
+  },
+  "quality": {
+    "auto": "Auto"
+  },
+  "subtitles": {
+    "off": "Off"
+  },
+  "audio": {
+    "standard": "Standard",
+    "leveling": "Audio leveling"
+  },
   "error": {
     "decision": "Could not get playback decision",
     "network": "Network error loading player",

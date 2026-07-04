@@ -15,7 +15,7 @@ export default function AppShell({
       {/* Content flows under the fixed top bar; pt clears it on non-hero pages.
           pb-24 on mobile clears the fixed BottomNav. */}
       <div className="pt-14 pb-24 md:pb-0">{children}</div>
-      <BottomNav />
+      <BottomNav profile={profile} />
     </div>
   );
 }

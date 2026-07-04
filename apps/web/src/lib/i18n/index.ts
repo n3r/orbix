@@ -19,8 +19,10 @@ export const NAMESPACES = [
   "catalog",
   "search",
   "title",
+  "wishlist",
   "player",
   "errors",
+  "tv",
 ] as const;
 
 // Statically glob every locale JSON so Vite bundles them into the build

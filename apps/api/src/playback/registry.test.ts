@@ -1,9 +1,12 @@
 import { describe, it, expect } from "vitest";
+import { buildPlaybackQualities } from "@orbix/core";
 import { PlaySessionRegistry } from "./registry";
 
 const plan = { mode: "remux", audioAction: "copy" } as const;
 const input = {
   fileId: "f1", inputPath: "/m.mkv", durationSec: 100, plan,
+  quality: buildPlaybackQualities({ width: 1920, height: 1080 })[0],
+  audioMode: "standard" as const,
   boundaries: null, forceKeyframes: false, subtitleRenditions: true, media: null,
 };
 

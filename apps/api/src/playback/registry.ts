@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { PlaybackPlan, SegmentBoundary } from "@orbix/core";
+import type { PlaybackAudioMode, PlaybackPlan, PlaybackQuality, SegmentBoundary } from "@orbix/core";
 
 /**
  * Snapshot of a file's technical metadata + selected-track info, captured at
@@ -27,6 +27,14 @@ export interface PlaySessionEntry {
   inputPath: string;
   durationSec: number;
   plan: PlaybackPlan;
+  /**
+   * The chosen output quality (source or a manual downscale rendition) and
+   * audio-processing mode, negotiated at /playback/info time. Both flow into
+   * the SessionManager session so the HLS routes serve the right variant; the
+   * client changes them by re-negotiating (which mints a fresh session).
+   */
+  quality: PlaybackQuality;
+  audioMode: PlaybackAudioMode;
   /**
    * Keyframe-derived segment boundaries for a remux plan (null when the plan
    * isn't remux, or when computeSegmentBoundaries had nothing to compute).
@@ -79,6 +87,8 @@ export class PlaySessionRegistry {
     inputPath: string;
     durationSec: number;
     plan: PlaybackPlan;
+    quality: PlaybackQuality;
+    audioMode: PlaybackAudioMode;
     boundaries: SegmentBoundary[] | null;
     forceKeyframes: boolean;
     subtitleRenditions: boolean;

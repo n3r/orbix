@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import path from "node:path";
-import { cacheImage } from "./images";
+import { cacheImage, cacheImageFromUrl } from "./images";
 
 // ---------------------------------------------------------------------------
 // Fake helpers — NO real network, NO real disk.
@@ -143,5 +143,85 @@ describe("cacheImage", () => {
     expect(result).toBe("poster/img.jpg");
     expect(writeCalls[0].absPath).toBe(path.join("/meta", "poster/img.jpg"));
     expect(fetchCalls[0]).toContain("/deep/path/img.jpg");
+  });
+});
+
+describe("cacheImageFromUrl (channel logos)", () => {
+  it("caches a channel logo from an absolute URL under channel/", async () => {
+    const { fetchImpl, calls: fetchCalls } = makeFetchSpy();
+    const { writeFile, calls: writeCalls } = makeWriteSpy();
+
+    const rel = await cacheImageFromUrl("https://logos.example/ru/1tv.png", "channel", {
+      fetchImpl,
+      writeFile,
+      exists: async () => false,
+      baseDir: "/meta",
+    });
+
+    expect(rel).toBe("channel/1tv.png");
+    expect(writeCalls[0].absPath).toBe(path.join("/meta", "channel/1tv.png"));
+    expect(fetchCalls[0]).toBe("https://logos.example/ru/1tv.png");
+  });
+
+  it("decodes a percent-encoded non-ASCII basename so the cached file matches the (Fastify-decoded) served path", async () => {
+    const { fetchImpl } = makeFetchSpy();
+    const { writeFile, calls: writeCalls } = makeWriteSpy();
+
+    const rel = await cacheImageFromUrl(
+      "https://x/960px-Allg%C3%A4u_TV_Logo_%282021%29.svg.png",
+      "channel",
+      {
+        fetchImpl,
+        writeFile,
+        exists: async () => false,
+        baseDir: "/meta",
+      },
+    );
+
+    expect(rel).toBe("channel/960px-Allgäu_TV_Logo_(2021).svg.png");
+    expect(writeCalls[0].absPath).toBe(
+      path.join("/meta", "channel/960px-Allgäu_TV_Logo_(2021).svg.png"),
+    );
+    expect(writeCalls[0].absPath.endsWith("960px-Allgäu_TV_Logo_(2021).svg.png")).toBe(true);
+    expect(writeCalls[0].absPath).not.toContain("%");
+  });
+
+  it("collapses a percent-encoded traversal attempt to a single safe path segment", async () => {
+    const { fetchImpl } = makeFetchSpy();
+    const { writeFile, calls: writeCalls } = makeWriteSpy();
+
+    const rel = await cacheImageFromUrl(
+      "https://x/a%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd",
+      "channel",
+      {
+        fetchImpl,
+        writeFile,
+        exists: async () => false,
+        baseDir: "/meta",
+      },
+    );
+
+    // Decoding must not resurrect ".." or "/" — stays a single segment under channel/.
+    const segments = rel.split("/");
+    expect(segments).toHaveLength(2);
+    expect(segments[0]).toBe("channel");
+    expect(segments[1]).not.toContain("/");
+    expect(segments[1]).not.toContain("..");
+    expect(writeCalls[0].absPath.startsWith(path.join("/meta", "channel") + path.sep)).toBe(true);
+  });
+
+  it("leaves a normal ASCII URL unchanged", async () => {
+    const { fetchImpl } = makeFetchSpy();
+    const { writeFile, calls: writeCalls } = makeWriteSpy();
+
+    const rel = await cacheImageFromUrl("https://x/abc123.png", "channel", {
+      fetchImpl,
+      writeFile,
+      exists: async () => false,
+      baseDir: "/meta",
+    });
+
+    expect(rel).toBe("channel/abc123.png");
+    expect(writeCalls[0].absPath).toBe(path.join("/meta", "channel/abc123.png"));
   });
 });

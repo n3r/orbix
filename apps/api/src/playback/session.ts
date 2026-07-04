@@ -3,7 +3,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { spawn as nodeSpawn, type ChildProcess } from "node:child_process";
 import { buildVodPlaylist, buildHlsArgs } from "@orbix/core";
-import type { PlaybackPlan, SegmentBoundary } from "@orbix/core";
+import type { PlaybackAudioMode, PlaybackPlan, PlaybackQuality, SegmentBoundary } from "@orbix/core";
 
 export type { PlaybackPlan };
 
@@ -51,6 +51,8 @@ export interface Session {
   segSec: number;
   durationSec: number;
   plan: PlaybackPlan;
+  quality: PlaybackQuality;
+  audioMode: PlaybackAudioMode;
   inputPath: string;
   lastAccess: number;
   /** Keyframe-derived segment boundaries (index-aligned to segment number); undefined/null → legacy arithmetic seek. */
@@ -138,6 +140,8 @@ export class SessionManager {
     opts: {
       inputPath: string;
       plan: PlaybackPlan;
+      quality: PlaybackQuality;
+      audioMode?: PlaybackAudioMode;
       durationSec: number;
       segSec: number;
       boundaries?: SegmentBoundary[] | null;
@@ -174,6 +178,8 @@ export class SessionManager {
       segSec: opts.segSec,
       durationSec: opts.durationSec,
       plan: opts.plan,
+      quality: opts.quality,
+      audioMode: opts.audioMode ?? "standard",
       inputPath: opts.inputPath,
       lastAccess: Date.now(),
       boundaries: opts.boundaries,
@@ -210,10 +216,19 @@ export class SessionManager {
   private async spawnFfmpeg(session: Session, startSegment: number): Promise<void> {
     this.killProc(session);
 
+    const downscaled = session.quality.id !== "source";
     const mode: "remux" | "transcode" =
-      session.plan.mode === "transcode" ? "transcode" : "remux";
+      downscaled || session.plan.mode === "transcode" ? "transcode" : "remux";
+    // `leveled` mode re-encodes audio (loudnorm is a filter), so it always
+    // needs the AAC branch even if the plan would otherwise copy. buildHlsArgs
+    // enforces the same rule, but computing it here keeps the passed
+    // audioAction honest for readers.
     const audioAction: "copy" | "aac" =
-      "audioAction" in session.plan ? session.plan.audioAction : "aac";
+      session.audioMode === "leveled"
+        ? "aac"
+        : "audioAction" in session.plan
+          ? session.plan.audioAction
+          : "aac";
     const audioTrackIndex = "audioTrackIndex" in session.plan ? session.plan.audioTrackIndex : undefined;
     const audioChannels = "audioChannels" in session.plan ? session.plan.audioChannels : undefined;
 
@@ -250,6 +265,11 @@ export class SessionManager {
       // boundary start, never to the legacy per-segment arithmetic path.
       startTimeSec: start !== undefined ? start + SEEK_EPSILON_SEC : undefined,
       forceKeyframes: session.forceKeyframes,
+      // Manual quality downscale: scale + rate-cap only when a non-source
+      // quality was chosen (mode is already "transcode" above in that case).
+      targetHeight: downscaled ? session.quality.height : null,
+      targetVideoBitrate: downscaled ? session.quality.targetVideoBitrate : null,
+      audioMode: session.audioMode,
     });
 
     const proc = this.spawnFn("ffmpeg", args, { stdio: "ignore" });

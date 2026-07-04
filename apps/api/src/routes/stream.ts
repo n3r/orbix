@@ -71,6 +71,8 @@ async function resolveByPlaySession(
   return deps.manager.getOrCreate(playSessionId, {
     inputPath: entry.inputPath,
     plan: entry.plan,
+    quality: entry.quality,
+    audioMode: entry.audioMode,
     durationSec: entry.durationSec,
     segSec: DEFAULT_SEG_SEC,
     boundaries: entry.boundaries,
@@ -191,7 +193,20 @@ export default function streamRoute(
         // isPlayableEntry guarantees plan.mode !== "direct" (remux | transcode);
         // narrow audioAction via the "in" check since PlaybackPlan is a union.
         const media = entry.media;
-        const audioAction: "copy" | "aac" = "audioAction" in entry.plan ? entry.plan.audioAction : "aac";
+        // `leveled` re-encodes audio to AAC even on a copy plan (loudnorm filter).
+        const audioAction: "copy" | "aac" =
+          entry.audioMode === "leveled"
+            ? "aac"
+            : "audioAction" in entry.plan
+              ? entry.plan.audioAction
+              : "aac";
+
+        // A non-source quality is a downscale rendition (single variant per
+        // session): the video is re-encoded to the target height/bitrate, so
+        // the STREAM-INF advertises the target resolution + bandwidth. The
+        // client switches quality by re-negotiating /playback/info, which mints
+        // a new session (and thus a new master reflecting that choice).
+        const downscale = entry.quality.id !== "source" && entry.quality.targetVideoBitrate != null;
 
         // Video codec string: remux reports the SOURCE codec/profile/level;
         // transcode always emits libx264 High@4.1 today, so hardcode that.
@@ -203,8 +218,13 @@ export default function streamRoute(
           audioAction === "copy" ? audioCodecString(media?.audioCodec ?? undefined) : audioCodecString("aac");
         const codecs = [videoCodec, audioCodec].filter((c): c is string => c !== null);
 
-        const resolution =
-          media?.width && media?.height ? { width: media.width, height: media.height } : undefined;
+        const resolution = downscale
+          ? entry.quality.width && entry.quality.height
+            ? { width: entry.quality.width, height: entry.quality.height }
+            : undefined
+          : media?.width && media?.height
+            ? { width: media.width, height: media.height }
+            : undefined;
 
         // Subtitle renditions: only text-based tracks (image subs need burn-in, not HLS renditions).
         // Gated on the negotiated delivery preference (entry.subtitleRenditions,
@@ -224,7 +244,7 @@ export default function streamRoute(
 
         const master = buildMultivariantPlaylist({
           mediaUri: `index.m3u8?playSessionId=${playSessionId}${tokenSuffix(req)}`,
-          bandwidth: media?.bitrate ?? 8_000_000,
+          bandwidth: downscale ? entry.quality.bandwidth : media?.bitrate ?? 8_000_000,
           codecs,
           resolution,
           frameRate: media?.frameRate ?? undefined,

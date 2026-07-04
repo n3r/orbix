@@ -83,8 +83,8 @@ describe("POST /api/playback/info", () => {
       { index: 0, codec: "ac3", channels: 6, language: "ru", selected: true },
     ]);
     expect(body.subtitleTracks).toEqual([
-      { index: 2, codec: "subrip", language: "en", available: true },
-      { index: 3, codec: "hdmv_pgs_subtitle", language: "ru", available: false, reason: "image_based" },
+      { index: 2, codec: "subrip", language: "en", label: "EN", available: true },
+      { index: 3, codec: "hdmv_pgs_subtitle", language: "ru", label: "RU", available: false, reason: "image_based" },
     ]);
     await app.close();
   });

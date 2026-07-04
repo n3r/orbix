@@ -8,6 +8,20 @@
   "track": {
     "label": "Faixa {{index}}"
   },
+  "controls": {
+    "quality": "Qualidade",
+    "subtitles": "Legendas"
+  },
+  "quality": {
+    "auto": "Auto"
+  },
+  "subtitles": {
+    "off": "Desativadas"
+  },
+  "audio": {
+    "standard": "Padrão",
+    "leveling": "Nivelamento de áudio"
+  },
   "error": {
     "decision": "Não foi possível obter a decisão de reprodução",
     "network": "Erro de rede ao carregar o player",

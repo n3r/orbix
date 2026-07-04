@@ -80,6 +80,40 @@ describe("TvdbClient auth + searchSeries", () => {
   });
 });
 
+describe("TvdbClient.searchSeriesCandidates", () => {
+  it("returns candidates with every known name (display + aliases + translations)", async () => {
+    const fetchImpl = fakeFetch([
+      { match: "/login", body: { status: "success", data: { token: "t" } } },
+      {
+        match: "/search",
+        body: {
+          status: "success",
+          data: [
+            {
+              tvdb_id: "290434",
+              name: "Attack on Titan",
+              year: "2013",
+              aliases: ["Shingeki no Kyojin", "AoT"],
+              translations: { jpn: "進撃の巨人", rus: "Атака титанов", eng: "Attack on Titan" },
+            },
+            { tvdb_id: "999", name: "Attack on Titan: Junior High", year: "2015" }, // no aliases/translations
+          ],
+        },
+      },
+    ]);
+    const client = new TvdbClient("k", fetchImpl);
+    const [aot, junior] = await client.searchSeriesCandidates("Attack on Titan");
+
+    expect(aot).toMatchObject({ tvdbId: 290434, title: "Attack on Titan", year: 2013 });
+    expect(aot!.names).toEqual(
+      expect.arrayContaining(["Attack on Titan", "Shingeki no Kyojin", "AoT", "進撃の巨人", "Атака титанов"]),
+    );
+    // deduped (display name appears once even though also in translations)
+    expect(aot!.names.filter((n) => n === "Attack on Titan")).toHaveLength(1);
+    expect(junior).toMatchObject({ tvdbId: 999, names: ["Attack on Titan: Junior High"] });
+  });
+});
+
 describe("pickArtwork", () => {
   const art = [
     { image: "https://a/logo-eng.png", type: 23, language: "eng", score: 10 },

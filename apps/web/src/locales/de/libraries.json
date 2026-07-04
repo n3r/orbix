@@ -1,17 +1,40 @@
 {
   "title": "Bibliotheken",
+  "overview": "{{libraries}} Bibliotheken · {{items}} Titel · {{missing}} ohne Metadaten",
   "settingsLink": "Einstellungen",
   "adding": "Wird hinzugefügt…",
+  "empty": "Noch keine Bibliotheken konfiguriert.",
   "deleteLibrary": "Bibliothek löschen",
   "add": {
     "heading": "Bibliothek hinzufügen",
     "namePlaceholder": "Bibliotheksname"
+  },
+  "rename": {
+    "button": "Umbenennen",
+    "nameLabel": "Bibliotheksname"
+  },
+  "actions": {
+    "manageSources": "Quellen",
+    "hideSources": "Quellen ausblenden"
+  },
+  "stats": {
+    "items": "Titel",
+    "enriched": "Angereichert",
+    "missingMetadata": "Fehlende Metadaten",
+    "missingArtwork": "Fehlende Bilder",
+    "files": "Dateien",
+    "sourceErrors": "Quellfehler",
+    "sources": "{{count}}/{{total}} Quellen aktiv",
+    "lastScan": "Letzter Scan: {{value}}",
+    "neverScanned": "Nie"
   },
   "section": {
     "addButton": "Bereich hinzufügen",
     "namePlaceholder": "Bereichsname (z. B. Filme)"
   },
   "source": {
+    "heading": "Quellen",
+    "empty": "Keine Quellen konfiguriert.",
     "addButton": "Quelle hinzufügen",
     "pathPlaceholder": "/pfad/zum/medien/ordner",
     "kindLocal": "Local",
@@ -38,6 +61,7 @@
   "errors": {
     "loadFailed": "Bibliotheken konnten nicht geladen werden",
     "createFailed": "Bibliothek konnte nicht erstellt werden",
+    "renameFailed": "Bibliothek konnte nicht umbenannt werden",
     "addSourceFailed": "Quelle konnte nicht hinzugefügt werden"
   }
 }

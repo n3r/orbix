@@ -15,8 +15,8 @@ export interface MediaFileTechnical {
   videoLevel?: number;
   colorTransfer?: string;
   frameRate?: number;
-  subtitleTracks: { index: number; codec?: string; language?: string }[];
-  audioTracks: { index: number; codec?: string; channels?: number; language?: string }[];
+  subtitleTracks: { index: number; codec?: string; language?: string; title?: string }[];
+  audioTracks: { index: number; codec?: string; channels?: number; language?: string; title?: string }[];
   /** Whether ffprobe succeeded. false = empty tech from a probe failure / missing ffprobe. */
   probedOk?: boolean;
 }
@@ -28,7 +28,7 @@ interface FfprobeStream {
   width?: number;
   height?: number;
   channels?: number;
-  tags?: { language?: string };
+  tags?: { language?: string; title?: string };
   profile?: string;
   level?: number;
   color_transfer?: string;
@@ -94,12 +94,14 @@ export async function probeFile(
         codec: stream.codec_name,
         channels: channels !== undefined && !Number.isNaN(channels) ? channels : undefined,
         language: stream.tags?.language,
+        title: stream.tags?.title,
       });
     } else if (stream.codec_type === "subtitle") {
       subtitleTracks.push({
         index: stream.index,
         codec: stream.codec_name,
         language: stream.tags?.language,
+        title: stream.tags?.title,
       });
     }
   }

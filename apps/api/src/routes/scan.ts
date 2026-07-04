@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { scanEvents, scanDoneCache } from "../plugins/queue";
 import { requireAuth, requireAdmin } from "../lib/auth";
 import { requireNonKids } from "../lib/catalog-filter";
+import { findActiveScanForLibrary } from "../lib/scan-status";
 
 export default async function scanRoute(app: FastifyInstance) {
   // POST /libraries/:id/scan — enqueue a scan job, return { jobId }
@@ -11,6 +12,11 @@ export default async function scanRoute(app: FastifyInstance) {
     { preHandler: [requireAuth(app), requireAdmin(app), requireNonKids(app)] },
     async (req, reply) => {
       const libraryId = req.params.id;
+
+      const activeScan = await findActiveScanForLibrary(app.scanQueue, libraryId);
+      if (activeScan) {
+        return reply.code(202).send({ jobId: activeScan.jobId, active: true, scan: activeScan });
+      }
 
       const sources = await app.prisma.source.findMany({
         where: { libraryId, enabled: true },
@@ -32,9 +38,13 @@ export default async function scanRoute(app: FastifyInstance) {
       }
 
       const jobId = randomUUID();
-      await app.scanQueue.add("scan", { jobId, libraryId, sources });
+      const job = await app.scanQueue.add(
+        "scan",
+        { jobId, libraryId, sources },
+        { jobId: `library-${libraryId}`, removeOnComplete: true, removeOnFail: true },
+      );
 
-      return { jobId };
+      return { jobId: job?.data?.jobId ?? jobId, active: false };
     },
   );
 

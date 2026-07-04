@@ -1,18 +1,17 @@
-import type { TmdbSearchResult, TmdbSearchCandidate, TmdbMovie, TmdbCredits, TmdbKeyword } from "./tmdb";
+import type { TmdbSearchCandidate, TmdbMovie, TmdbCredits, TmdbKeyword } from "./tmdb";
 import type { ImageKind } from "./images";
 import type { ExternalRatings } from "./omdb";
 import { isRealTranslation } from "./localize";
-import { buildQueryLadder } from "./search-title";
-import { scoreCandidate, isAcceptable, TITLE_STRONG } from "./match-score";
+import { resolveTitle } from "./resolve";
 
 // ---------------------------------------------------------------------------
 // Structural interface — real TmdbClient satisfies this.
 // ---------------------------------------------------------------------------
 
 export interface TmdbLike {
-  /** Retained for compatibility; enrichItem now resolves via searchMovies. */
-  searchMovie(title: string, year?: number): Promise<TmdbSearchResult | null>;
-  searchMovies(query: string, year?: number): Promise<TmdbSearchCandidate[]>;
+  searchMovies(query: string, year?: number, language?: string): Promise<TmdbSearchCandidate[]>;
+  /** Every known title for a movie (display/original/alternative/translated). */
+  allTitles(id: number): Promise<string[]>;
   movie(id: number): Promise<TmdbMovie>;
   credits(id: number): Promise<TmdbCredits>;
   keywords(id: number): Promise<TmdbKeyword[]>;
@@ -69,36 +68,19 @@ export interface EnrichResult {
 // ---------------------------------------------------------------------------
 
 /**
- * Resolve a movie's TMDB id from a raw parsed title + optional year.
- *
- * Runs the query ladder (cleaned title → drop year → raw → first-3-tokens),
- * scores every candidate against the query, and returns the best one that
- * clears the acceptance gate. Short-circuits as soon as a confident (rule-A)
- * match appears, keeping the common clean-title case at a single API call.
+ * Resolve a movie's TMDB id from a raw parsed title + optional year — the
+ * generic ladder/deep-check resolver (see resolve.ts) with TMDB movie adapters.
  */
-async function resolveTmdbId(
+export async function resolveTmdbId(
   title: string,
   year: number | undefined,
-  client: Pick<TmdbLike, "searchMovies">,
+  client: Pick<TmdbLike, "searchMovies" | "allTitles">,
 ): Promise<number | undefined> {
-  const ladder = buildQueryLadder({ title, year });
-  let best: { tmdbId: number; rank: number } | undefined;
-
-  for (const attempt of ladder) {
-    const candidates = await client.searchMovies(attempt.query, attempt.year);
-    for (let i = 0; i < candidates.length; i++) {
-      const candidate = candidates[i]!;
-      if (!isAcceptable(attempt.query, candidate, attempt.year, i === 0)) {
-        continue;
-      }
-      const rank = scoreCandidate(attempt.query, candidate, attempt.year);
-      if (!best || rank > best.rank) best = { tmdbId: candidate.tmdbId, rank };
-    }
-    // A confident string match is as good as it gets — stop searching.
-    if (best && best.rank >= TITLE_STRONG) break;
-  }
-
-  return best?.tmdbId;
+  return resolveTitle(title, year, {
+    search: async (query, yr, language) =>
+      (await client.searchMovies(query, yr, language)).map((c) => ({ ...c, id: c.tmdbId })),
+    allTitles: (id) => client.allTitles(id),
+  });
 }
 
 export async function enrichItem(

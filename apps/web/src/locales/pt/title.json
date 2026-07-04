@@ -4,6 +4,8 @@
   "unmatchedNotice": "Metadados ainda não correspondidos — escaneie com um token do TMDB para enriquecer.",
   "fixMatch": "Corrigir correspondência / pôster (admin)",
   "play": "Reproduzir",
+  "addToWishlist": "Adicionar à minha lista",
+  "inWishlist": "Na minha lista",
   "playNoMedia": "Reproduzir (sem mídia)",
   "section": {
     "overview": "Sinopse",

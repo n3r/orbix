@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { enrichSeriesTvdb } from "./enrich-series-tvdb";
-import type { TvdbSeries, TvdbEpisode, TvdbSearchResult, TvdbTranslation } from "./tvdb";
+import { enrichSeriesTvdb, resolveTvdbId } from "./enrich-series-tvdb";
+import type { TvdbSeries, TvdbEpisode, TvdbSearchCandidate, TvdbTranslation } from "./tvdb";
 import type { SaveSeriesInput } from "./enrich-series";
 
 const series: TvdbSeries = {
@@ -25,7 +25,11 @@ const episodes: TvdbEpisode[] = [
 function makeDeps(overrides: Partial<Parameters<typeof enrichSeriesTvdb>[1]> = {}) {
   const saved: SaveSeriesInput[] = [];
   const client = {
-    searchSeries: vi.fn(async (): Promise<TvdbSearchResult | null> => ({ tvdbId: 9, title: "Game of Thrones", year: 2011 })),
+    searchSeriesCandidates: vi.fn(
+      async (): Promise<TvdbSearchCandidate[]> => [
+        { tvdbId: 9, title: "Game of Thrones", year: 2011, names: ["Game of Thrones", "Игра престолов", "GoT"] },
+      ],
+    ),
     series: vi.fn(async () => series),
     seasonEpisodes: vi.fn(async () => episodes),
   };
@@ -42,10 +46,39 @@ function makeDeps(overrides: Partial<Parameters<typeof enrichSeriesTvdb>[1]> = {
 describe("enrichSeriesTvdb", () => {
   it("returns matched:false when TVDB has no match (fallback signal)", async () => {
     const { deps, client } = makeDeps();
-    client.searchSeries.mockResolvedValueOnce(null);
+    client.searchSeriesCandidates.mockResolvedValue([]);
     const res = await enrichSeriesTvdb({ id: "it1", title: "Nope" }, deps);
     expect(res).toEqual({ matched: false });
     expect(deps.saveSeries).not.toHaveBeenCalled();
+  });
+
+  it("returns matched:false when no candidate name is similar enough (no blind first-result)", async () => {
+    const { deps, client } = makeDeps();
+    // TVDB returns SOMETHING, but nothing resembling the query — the old code
+    // would have blindly taken it; the gate must reject and fall back to TMDB.
+    client.searchSeriesCandidates.mockResolvedValue([
+      { tvdbId: 777, title: "Completely Unrelated Show", names: ["Completely Unrelated Show"] },
+    ]);
+    const res = await enrichSeriesTvdb({ id: "it-junk", title: "Дежурная аптека" }, deps);
+    expect(res).toEqual({ matched: false });
+    expect(deps.saveSeries).not.toHaveBeenCalled();
+  });
+
+  it("matches a foreign query against a candidate's translated names", async () => {
+    const { deps } = makeDeps();
+    // Query is Russian; the candidate's names include the RU translation.
+    const res = await enrichSeriesTvdb({ id: "it-ru", title: "Игра престолов", year: 2011 }, deps);
+    expect(res).toEqual({ matched: true, tvdbId: 9 });
+  });
+
+  it("prefers the exact-year candidate among similar names (remakes)", async () => {
+    const { deps, client } = makeDeps();
+    client.searchSeriesCandidates.mockResolvedValue([
+      { tvdbId: 100, title: "Shōgun", year: 2024, names: ["Shōgun", "Сёгун"] },
+      { tvdbId: 200, title: "Shōgun", year: 1980, names: ["Shōgun", "Сёгун"] },
+    ]);
+    const res = await enrichSeriesTvdb({ id: "it-year", title: "Shogun", year: 1980 }, deps);
+    expect(res).toEqual({ matched: true, tvdbId: 200 });
   });
 
   it("enriches a matched series with tvdb source, ids, images and ratings", async () => {
@@ -106,5 +139,59 @@ describe("enrichSeriesTvdb", () => {
     expect(s.seasons[0]!.episodes[0]!.translations).toEqual([
       { language: "es", title: "Se acerca el invierno", overview: "o-es" },
     ]);
+  });
+});
+
+describe("resolveTvdbId — variants and season shape", () => {
+  const shogun1980: TvdbSearchCandidate = { tvdbId: 80284, title: "Shogun", year: 1980, names: ["Shogun", "Сёгун"] };
+  const shogun2024: TvdbSearchCandidate = { tvdbId: 392256, title: "Shōgun (2024)", year: 2024, names: ["Shōgun (2024)", "Shogun", "Сёгун"] };
+  const episodesFor: Record<number, TvdbEpisode[]> = {
+    80284: [1, 2, 3, 4, 5].map((n) => ({ seasonNumber: 1, episodeNumber: n, tvdbEpisodeId: 800 + n })),
+    392256: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => ({ seasonNumber: 1, episodeNumber: n, tvdbEpisodeId: 900 + n })),
+  };
+
+  it("shape-disambiguates namesakes when the item has no year (Shōgun trap)", async () => {
+    const client = {
+      searchSeriesCandidates: vi.fn(async () => [shogun1980, shogun2024]),
+      seasonEpisodes: vi.fn(async (id: number) => episodesFor[id] ?? []),
+    };
+    const id = await resolveTvdbId("Shogun", undefined, client, {
+      localShape: [{ seasonNumber: 1, episodeCount: 10, maxEpisode: 10 }],
+    });
+    expect(id).toBe(392256);
+  });
+
+  it("keeps first-hit order when no local shape is available", async () => {
+    const client = {
+      searchSeriesCandidates: vi.fn(async () => [shogun1980, shogun2024]),
+      seasonEpisodes: vi.fn(async (id: number) => episodesFor[id] ?? []),
+    };
+    const id = await resolveTvdbId("Shogun", undefined, client, {});
+    expect(id).toBe(80284);
+    expect(client.seasonEpisodes).not.toHaveBeenCalled();
+  });
+
+  it("matches through a title variant when the primary fails the gate", async () => {
+    const hotd: TvdbSearchCandidate = { tvdbId: 371572, title: "House of the Dragon", year: 2022, names: ["House of the Dragon"] };
+    const client = {
+      searchSeriesCandidates: vi.fn(async (q: string) => (/house of the dragon/i.test(q) ? [hotd] : [])),
+      seasonEpisodes: vi.fn(async () => []),
+    };
+    const id = await resolveTvdbId("House of Dragons", undefined, client, {
+      variants: ["House of the Dragon"],
+    });
+    expect(id).toBe(371572);
+  });
+
+  it("lets an exact year keep dominating without shape calls", async () => {
+    const client = {
+      searchSeriesCandidates: vi.fn(async () => [shogun1980, shogun2024]),
+      seasonEpisodes: vi.fn(async (id: number) => episodesFor[id] ?? []),
+    };
+    const id = await resolveTvdbId("Shogun", 2024, client, {
+      localShape: [{ seasonNumber: 1, episodeCount: 10, maxEpisode: 10 }],
+    });
+    expect(id).toBe(392256);
+    expect(client.seasonEpisodes).not.toHaveBeenCalled();
   });
 });

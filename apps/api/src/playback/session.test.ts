@@ -4,6 +4,7 @@ import path from "node:path";
 import os from "node:os";
 import type { ChildProcess } from "node:child_process";
 import { SessionManager, SegmentTimeoutError } from "./session";
+import { buildPlaybackQualities } from "@orbix/core";
 import type { PlaybackPlan } from "@orbix/core";
 import type { SpawnFn } from "./session";
 
@@ -118,6 +119,7 @@ describe("SessionManager", () => {
     const session = await manager.getOrCreate("file1:default", {
       inputPath: "/fake/video.mkv",
       plan,
+      quality: buildPlaybackQualities({ width: 1920, height: 1080 })[0],
       durationSec: 120,
       segSec: 6,
     });
@@ -140,6 +142,7 @@ describe("SessionManager", () => {
     const session = await manager.getOrCreate("file2:default", {
       inputPath: "/fake/video.mkv",
       plan,
+      quality: buildPlaybackQualities({ width: 1920, height: 1080 })[0],
       durationSec: 120,
       segSec: 6,
     });
@@ -165,6 +168,7 @@ describe("SessionManager", () => {
     const session = await manager.getOrCreate("file-audio:default", {
       inputPath: "/fake/video.mkv",
       plan: { mode: "remux", audioAction: "aac", audioTrackIndex: 2, audioChannels: 6 },
+      quality: buildPlaybackQualities({ width: 1920, height: 1080 })[0],
       durationSec: 120,
       segSec: 6,
     });
@@ -189,6 +193,7 @@ describe("SessionManager", () => {
     const session = await manager.getOrCreate("file3:default", {
       inputPath: "/fake/video.mkv",
       plan,
+      quality: buildPlaybackQualities({ width: 1920, height: 1080 })[0],
       durationSec: 7200, // long enough to have seg 200
       segSec: 6,
     });
@@ -220,6 +225,7 @@ describe("SessionManager", () => {
     const session = await manager.getOrCreate("file4:default", {
       inputPath: "/fake/video.mkv",
       plan,
+      quality: buildPlaybackQualities({ width: 1920, height: 1080 })[0],
       durationSec: 7200,
       segSec: 6,
     });
@@ -263,6 +269,7 @@ describe("SessionManager", () => {
     const session = await manager.getOrCreate("file-race:default", {
       inputPath: "/fake/video.mkv",
       plan,
+      quality: buildPlaybackQualities({ width: 1920, height: 1080 })[0],
       durationSec: 120,
       segSec: 6,
     });
@@ -288,6 +295,7 @@ describe("SessionManager", () => {
     const session = await manager.getOrCreate("file-exit:default", {
       inputPath: "/fake/video.mkv",
       plan,
+      quality: buildPlaybackQualities({ width: 1920, height: 1080 })[0],
       durationSec: 120,
       segSec: 6,
     });
@@ -317,6 +325,7 @@ describe("SessionManager", () => {
     const session = await manager.getOrCreate("file-present:default", {
       inputPath: "/fake/video.mkv",
       plan,
+      quality: buildPlaybackQualities({ width: 1920, height: 1080 })[0],
       durationSec: 120,
       segSec: 6,
     });
@@ -348,6 +357,7 @@ describe("SessionManager", () => {
     const session = await manager.getOrCreate("file-seek-epsilon:default", {
       inputPath: "/fake/video.mkv",
       plan,
+      quality: buildPlaybackQualities({ width: 1920, height: 1080 })[0],
       durationSec: 12,
       segSec: 6,
       boundaries: [
@@ -379,7 +389,13 @@ describe("SessionManager", () => {
     const manager = new SessionManager({ transcodeDir: testDir, spawn, maxSessions: 2 });
 
     const plan = HEVC_TRANSCODE_PLAN;
-    const opts = { inputPath: "/fake/video.mkv", plan, durationSec: 120, segSec: 6 };
+    const opts = {
+      inputPath: "/fake/video.mkv",
+      plan,
+      quality: buildPlaybackQualities({ width: 1920, height: 1080 })[0],
+      durationSec: 120,
+      segSec: 6,
+    };
 
     const s1 = await manager.getOrCreate("k1", opts);
     const s2 = await manager.getOrCreate("k2", opts);
@@ -418,6 +434,7 @@ describe("SessionManager", () => {
     const session = await manager.getOrCreate("file-timeout:default", {
       inputPath: "/fake/video.mkv",
       plan,
+      quality: buildPlaybackQualities({ width: 1920, height: 1080 })[0],
       durationSec: 120,
       segSec: 6,
     });
@@ -432,6 +449,36 @@ describe("SessionManager", () => {
 
     // lastAccess must NOT have been updated on failure — stuck session stays reapable.
     expect(session.lastAccess).toBe(capturedLastAccess);
+
+    await manager.closeAll();
+  });
+
+  it("passes selected quality and audio leveling into ffmpeg args", async () => {
+    const { spawn, calls } = makeFakeSpawn();
+    const manager = new SessionManager({ transcodeDir: testDir, spawn });
+
+    // A downscale forces transcode regardless of the base plan (see
+    // spawnFfmpeg); a remux literal keeps this a SessionManager-plumbing test.
+    const plan: PlaybackPlan = { mode: "remux", audioAction: "copy" };
+    const quality = buildPlaybackQualities({ width: 1920, height: 1080 })[1];
+    expect(quality.id).toBe("720p");
+    const session = await manager.getOrCreate("file-quality:720p:leveled", {
+      inputPath: "/fake/video.mp4",
+      plan,
+      quality,
+      audioMode: "leveled",
+      durationSec: 120,
+      segSec: 6,
+    });
+
+    await manager.ensureSegment(session, 0);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].args).toContain("-vf");
+    expect(calls[0].args[calls[0].args.indexOf("-vf") + 1]).toBe("scale=-2:720");
+    expect(calls[0].args).toContain("-af");
+    expect(calls[0].args[calls[0].args.indexOf("-af") + 1]).toBe("loudnorm=I=-16:TP=-1.5:LRA=11");
+    expect(calls[0].args[calls[0].args.indexOf("-c:a") + 1]).toBe("aac");
 
     await manager.closeAll();
   });

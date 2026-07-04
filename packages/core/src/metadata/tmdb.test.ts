@@ -111,6 +111,150 @@ describe("TmdbClient.searchMovies", () => {
       voteCount: 15000,
     });
   });
+
+  it("appends a per-call language override", async () => {
+    const { fake, calls } = makeFetch({ results: [] });
+    const client = new TmdbClient("tok", fake);
+    await client.searchMovies("Побег из Шоушенка", 1994, "ru-RU");
+    expect(calls[0]!.url).toContain("language=ru-RU");
+  });
+
+  it("per-call language wins over the client-level language", async () => {
+    const { fake, calls } = makeFetch({ results: [] });
+    const client = new TmdbClient("tok", fake, "de-DE");
+    await client.searchMovies("Foo", undefined, "ja-JP");
+    expect(calls[0]!.url).toContain("language=ja-JP");
+    expect(calls[0]!.url).not.toContain("language=de-DE");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// allTitles
+// ---------------------------------------------------------------------------
+
+describe("TmdbClient.allTitles", () => {
+  it("collects title, original title, alternative titles and translations, deduped", async () => {
+    const { fake, calls } = makeFetch({
+      id: 278,
+      title: "The Shawshank Redemption",
+      original_title: "The Shawshank Redemption",
+      alternative_titles: {
+        titles: [
+          { iso_3166_1: "RU", title: "Побег из Шоушенка" },
+          { iso_3166_1: "BR", title: "Um Sonho de Liberdade" },
+          { iso_3166_1: "US", title: "The Shawshank Redemption" }, // duplicate
+        ],
+      },
+      translations: {
+        translations: [
+          { iso_639_1: "ru", data: { title: "Побег из Шоушенка" } }, // duplicate of alt
+          { iso_639_1: "ja", data: { title: "ショーシャンクの空に" } },
+          { iso_639_1: "de", data: { title: "" } }, // empty — dropped
+        ],
+      },
+    });
+    const client = new TmdbClient("tok", fake);
+    const titles = await client.allTitles(278);
+
+    expect(calls[0]!.url).toContain("/movie/278");
+    expect(calls[0]!.url).toContain("append_to_response=alternative_titles,translations");
+    expect(titles).toContain("The Shawshank Redemption");
+    expect(titles).toContain("Побег из Шоушенка");
+    expect(titles).toContain("Um Sonho de Liberdade");
+    expect(titles).toContain("ショーシャンクの空に");
+    expect(titles).not.toContain("");
+    // deduped
+    expect(titles.filter((t) => t === "Побег из Шоушенка")).toHaveLength(1);
+    expect(titles.filter((t) => t === "The Shawshank Redemption")).toHaveLength(1);
+  });
+
+  it("tolerates missing alternative_titles / translations blocks", async () => {
+    const { fake } = makeFetch({ id: 1, title: "Solo", original_title: "Solo" });
+    const client = new TmdbClient("tok", fake);
+    const titles = await client.allTitles(1);
+    expect(titles).toEqual(["Solo"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TV: searchTvs + allTvTitles
+// ---------------------------------------------------------------------------
+
+describe("TmdbClient.searchTvs", () => {
+  it("maps TV candidates (name/original_name/first_air_date) with a per-call language", async () => {
+    const { fake, calls } = makeFetch({
+      results: [
+        {
+          id: 1396,
+          name: "Во все тяжкие",
+          original_name: "Breaking Bad",
+          original_language: "en",
+          first_air_date: "2008-01-20",
+          poster_path: "/bb.jpg",
+          popularity: 300.5,
+          vote_count: 12000,
+        },
+      ],
+    });
+    const client = new TmdbClient("tok", fake);
+    const [c] = await client.searchTvs("Во все тяжкие", 2008, "ru-RU");
+
+    expect(calls[0]!.url).toContain("/search/tv");
+    expect(calls[0]!.url).toContain("first_air_date_year=2008");
+    expect(calls[0]!.url).toContain("language=ru-RU");
+    expect(c).toEqual({
+      tmdbId: 1396,
+      title: "Во все тяжкие",
+      originalTitle: "Breaking Bad",
+      originalLanguage: "en",
+      year: 2008,
+      posterPath: "/bb.jpg",
+      popularity: 300.5,
+      voteCount: 12000,
+    });
+  });
+
+  it("falls back to an unfiltered search when the year filter yields nothing", async () => {
+    let call = 0;
+    const fake = (async (url: string | URL) => {
+      call++;
+      const payload =
+        call === 1 ? { results: [] } : { results: [{ id: 5, name: "Show", first_air_date: "2010-01-01" }] };
+      return { ok: true, status: 200, json: async () => payload } as unknown as Response;
+    }) as unknown as typeof fetch;
+    const client = new TmdbClient("tok", fake);
+    const results = await client.searchTvs("Show", 2011);
+    expect(results).toHaveLength(1);
+    expect(results[0]!.tmdbId).toBe(5);
+  });
+});
+
+describe("TmdbClient.allTvTitles", () => {
+  it("collects TV titles — alternative_titles uses `results` and translations use `data.name`", async () => {
+    const { fake, calls } = makeFetch({
+      id: 1396,
+      name: "Breaking Bad",
+      original_name: "Breaking Bad",
+      alternative_titles: {
+        results: [{ iso_3166_1: "RU", title: "Во все тяжкие" }],
+      },
+      translations: {
+        translations: [
+          { iso_639_1: "ja", data: { name: "ブレイキング・バッド" } },
+          { iso_639_1: "de", data: { name: "" } },
+        ],
+      },
+    });
+    const client = new TmdbClient("tok", fake);
+    const titles = await client.allTvTitles(1396);
+
+    expect(calls[0]!.url).toContain("/tv/1396");
+    expect(calls[0]!.url).toContain("append_to_response=alternative_titles,translations");
+    expect(titles).toContain("Breaking Bad");
+    expect(titles).toContain("Во все тяжкие");
+    expect(titles).toContain("ブレイキング・バッド");
+    expect(titles).not.toContain("");
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -21,8 +21,9 @@ export const IMAGE_CODECS = new Set([
 
 type SubTrack = {
   index: number;
-  codec: string;
+  codec?: string;
   language?: string;
+  title?: string;
 };
 
 /**
@@ -34,6 +35,13 @@ type SubTrack = {
  */
 export function injectTimestampMap(vtt: string): string {
   return vtt.replace(/^WEBVTT/, "WEBVTT\nX-TIMESTAMP-MAP=LOCAL:00:00:00.000,MPEGTS:0");
+}
+
+/** Human-readable label for a subtitle track (title tag > language > index). */
+function subtitleLabel(track: SubTrack): string {
+  if (track.title?.trim()) return track.title.trim();
+  if (track.language?.trim()) return track.language.trim().toUpperCase();
+  return `Track ${track.index}`;
 }
 
 export default async function subtitlesRoute(app: FastifyInstance) {
@@ -60,9 +68,10 @@ export default async function subtitlesRoute(app: FastifyInstance) {
 
       return tracks.map((t) => ({
         index: t.index,
-        codec: t.codec,
+        codec: t.codec ?? "unknown",
         language: t.language,
-        burnIn: IMAGE_CODECS.has(t.codec),
+        label: subtitleLabel(t),
+        burnIn: t.codec ? IMAGE_CODECS.has(t.codec) : false,
       }));
     },
   );
@@ -100,7 +109,7 @@ export default async function subtitlesRoute(app: FastifyInstance) {
       if (!track) return reply.code(404).send({ error: "track_not_found" });
 
       // Image-based subtitles cannot be served as VTT
-      if (IMAGE_CODECS.has(track.codec)) {
+      if (track.codec && IMAGE_CODECS.has(track.codec)) {
         return reply.code(415).send({ error: "image_subtitle_burn_in_required" });
       }
 
@@ -169,7 +178,7 @@ export default async function subtitlesRoute(app: FastifyInstance) {
       if (!track) return reply.code(404).send({ error: "track_not_found" });
 
       // Image-based subtitles have no VTT rendition to point to.
-      if (IMAGE_CODECS.has(track.codec)) {
+      if (IMAGE_CODECS.has(track.codec ?? "")) {
         return reply.code(415).send({ error: "image_subtitle_burn_in_required" });
       }
 

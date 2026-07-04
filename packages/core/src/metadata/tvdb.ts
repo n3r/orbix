@@ -22,6 +22,14 @@ export interface TvdbSearchResult {
   year?: number;
 }
 
+export interface TvdbSearchCandidate {
+  tvdbId: number;
+  title: string;
+  year?: number;
+  /** Every known name: display name + aliases + per-language translated names. */
+  names: string[];
+}
+
 export interface TvdbSeasonRef {
   seasonNumber: number;
   posterUrl?: string;
@@ -73,6 +81,8 @@ interface RawSearchItem {
   tvdb_id?: string;
   name?: string;
   year?: string;
+  aliases?: string[];
+  translations?: Record<string, string>;
 }
 interface RawArtwork {
   image?: string;
@@ -217,6 +227,35 @@ export class TvdbClient {
       title: pick.name ?? title,
       ...(pick.year ? { year: Number(pick.year) } : {}),
     };
+  }
+
+  /**
+   * Top 8 search candidates, each carrying EVERY name TVDB knows for the
+   * series (display + aliases + per-language translated names) — the search
+   * response includes them inline, so language-agnostic verification needs no
+   * follow-up calls.
+   */
+  async searchSeriesCandidates(query: string): Promise<TvdbSearchCandidate[]> {
+    const url = `${BASE}/search?query=${encodeURIComponent(query)}&type=series`;
+    const data = await this.get<{ data?: RawSearchItem[] }>(url);
+    return (data.data ?? [])
+      .filter((i) => i.tvdb_id != null)
+      .slice(0, 8)
+      .map((i) => {
+        const names = new Set<string>();
+        const add = (n: string | undefined) => {
+          if (n && n.trim().length > 0) names.add(n.trim());
+        };
+        add(i.name);
+        for (const alias of i.aliases ?? []) add(alias);
+        for (const translated of Object.values(i.translations ?? {})) add(translated);
+        return {
+          tvdbId: Number(i.tvdb_id),
+          title: i.name ?? query,
+          ...(i.year ? { year: Number(i.year) } : {}),
+          names: [...names],
+        };
+      });
   }
 
   async series(id: number): Promise<TvdbSeries> {

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { enrichSeries } from "./enrich-series";
 import type { TmdbTvLike, SaveSeriesInput } from "./enrich-series";
-import type { TmdbTv, TmdbEpisode, TmdbSearchResult } from "./tmdb";
+import type { TmdbTv, TmdbEpisode, TmdbSearchResult, TmdbSearchCandidate } from "./tmdb";
 import type { ImageKind } from "./images";
 
 const ARCANE = 94605;
@@ -30,12 +30,26 @@ const s1Episodes: TmdbEpisode[] = [
   { episodeNumber: 2, title: "Some Mysteries", overview: "o2", runtimeSec: 2520, tmdbEpisodeId: 2 },
 ];
 
-function makeClient(searchResult: TmdbSearchResult | null = { tmdbId: ARCANE, title: "Arcane", year: 2021 }) {
+function makeClient(
+  searchResult: TmdbSearchResult | null = { tmdbId: ARCANE, title: "Arcane", year: 2021 },
+  options: {
+    /** Per-query candidate override for the resolver ladder. */
+    searchTvs?: (query: string, year?: number, language?: string) => TmdbSearchCandidate[];
+    /** Per-id known-names list for the deep check. */
+    allTvTitles?: (id: number) => string[];
+  } = {},
+) {
   const seasonCalls: number[] = [];
+  const defaultCandidates: TmdbSearchCandidate[] = searchResult
+    ? [{ tmdbId: searchResult.tmdbId, title: searchResult.title, year: searchResult.year, voteCount: 9000 }]
+    : [];
   const client: TmdbTvLike & { seasonCalls: number[] } = {
     seasonCalls,
-    async searchTv() {
-      return searchResult;
+    async searchTvs(query, year, language) {
+      return options.searchTvs ? options.searchTvs(query, year, language) : defaultCandidates;
+    },
+    async allTvTitles(id) {
+      return options.allTvTitles ? options.allTvTitles(id) : [];
     },
     async tv() {
       return fakeTv;
@@ -192,7 +206,9 @@ describe("enrichSeries", () => {
     };
 
     await enrichSeries(
-      { id: "series-lang1", title: "Zephyra", year: 2021 },
+      // NB: the title must actually MATCH the fake candidate now — the resolver
+      // gates on similarity (the old blind first-result matcher did not).
+      { id: "series-lang1", title: "Arcane", year: 2021 },
       { client, cacheImage, saveSeries, localSeasonNumbers: [1], translateClients: new Map([["lang1", lang1Client]]) },
     );
 
@@ -222,5 +238,50 @@ describe("enrichSeries", () => {
     expect(result.matched).toBe(true);
     expect(calls[0].translations).toEqual([]);
     expect(calls[0].seasons[0].translations).toBeUndefined();
+  });
+
+  it("matches a Cyrillic-named series via the localized ladder attempt", async () => {
+    // The Cyrillic query gets a ru-RU attempt; the localized display name comes
+    // back in Russian and string-compares at sim 1.0.
+    const BB = 1396;
+    const client = makeClient(null, {
+      searchTvs: (query, _year, language) =>
+        query === "Во все тяжкие" && language === "ru-RU"
+          ? [{ tmdbId: BB, title: "Во все тяжкие", originalTitle: "Breaking Bad", year: 2008, voteCount: 12000 }]
+          : [],
+    });
+    const cacheImage = makeImageSpy();
+    const { saveSeries } = makeSaveSpy();
+
+    const result = await enrichSeries(
+      { id: "series-ru", title: "Во все тяжкие", year: 2008 },
+      { client, cacheImage, saveSeries, localSeasonNumbers: [1] },
+    );
+
+    expect(result.matched).toBe(true);
+    expect(result.tmdbId).toBe(BB);
+  });
+
+  it("verifies a foreign-named series against its known names (deep check)", async () => {
+    // Search surfaces the series but with an English display name; the deep
+    // check fetches all known names and finds the exact Japanese one.
+    const AOT = 1429;
+    const client = makeClient(null, {
+      searchTvs: (query) =>
+        query === "進撃の巨人"
+          ? [{ tmdbId: AOT, title: "Attack on Titan", year: 2013, voteCount: 7000 }]
+          : [],
+      allTvTitles: (id) => (id === AOT ? ["Attack on Titan", "進撃の巨人", "Атака титанов"] : []),
+    });
+    const cacheImage = makeImageSpy();
+    const { saveSeries } = makeSaveSpy();
+
+    const result = await enrichSeries(
+      { id: "series-ja", title: "進撃の巨人", year: 2013 },
+      { client, cacheImage, saveSeries, localSeasonNumbers: [1] },
+    );
+
+    expect(result.matched).toBe(true);
+    expect(result.tmdbId).toBe(AOT);
   });
 });
