@@ -150,11 +150,13 @@ final class AppModel {
 
     /// Runs once `client` is confirmed reachable: resolves a device token
     /// — the persisted `TokenStore` first, else the dev launch-arg/env
-    /// stand-in (persisted back to the store so a later tokenless launch
-    /// on the same simulator picks it up the same way a real pairing
-    /// would have) — then, if one was found, attaches it to `client` and
-    /// asks the server which profile (if any) is already active for it.
-    /// No token at all routes to `.needsPairing`.
+    /// stand-in (persisted back to the store — fire-and-forget, same as
+    /// `pairingApproved`'s save below, since the outcome is ignored either
+    /// way and the Keychain must never delay a phase transition — so a
+    /// later tokenless launch on the same simulator picks it up the same
+    /// way a real pairing would have) — then, if one was found, attaches it
+    /// to `client` and asks the server which profile (if any) is already
+    /// active for it. No token at all routes to `.needsPairing`.
     private func resolveOnboarding(client: OrbixClient) async {
         guard self.client === client else { return }
 
@@ -164,7 +166,7 @@ final class AppModel {
             if !devToken.isEmpty {
                 resolvedToken = devToken
                 let store = tokenStore
-                try? await store.save(token: devToken)
+                Task { try? await store.save(token: devToken) }
             }
         }
 
@@ -180,29 +182,67 @@ final class AppModel {
         await checkActiveProfile(client: client)
     }
 
+    /// Total `meProfile()` attempts (including the first) before giving up
+    /// on a non-401 failure — mirrors `PairingModel`'s poll loop, which
+    /// tolerates "3 in a row" transient errors before treating its own
+    /// polling as terminal.
+    private static let meProfileMaxAttempts = 3
+
+    /// Backoff between retried `meProfile()` attempts.
+    private static let meProfileRetryDelayNanoseconds: UInt64 = 1_000_000_000
+
     /// `GET /api/me/profile`: a non-null `id` means this token already has
     /// an active profile (persisted server-side on the device row for
     /// bearer clients) — skip straight to `.ready`; a null `id` means the
     /// picker is still needed. Per spec §7 ("401 on missing/revoked token
     /// → app drops to pairing screen"), an unauthorized response clears the
-    /// now-known-bad persisted token and routes back to `.needsPairing`;
-    /// any other failure (transient network blip, etc.) also routes to
-    /// `.needsPairing` — the only phase with a concrete recovery action —
-    /// but leaves the stored token alone since it hasn't actually been
-    /// disproven.
+    /// now-known-bad persisted token and routes straight to `.needsPairing`
+    /// — retrying with the same bad token can't help. Any other failure
+    /// (transient network blip, etc.) is realistically not worth forcing a
+    /// full re-pair over, so — same "consecutive failures" idiom as
+    /// `PairingModel`'s poll loop — it's tolerated for up to
+    /// `meProfileMaxAttempts` attempts total, `meProfileRetryDelayNanoseconds`
+    /// apart, before giving up. Only once retries are exhausted does it
+    /// route to `.needsPairing` (the only phase with a concrete recovery
+    /// action), and even then it leaves the persisted token alone since it
+    /// hasn't actually been disproven — a full relaunch still recovers.
     private func checkActiveProfile(client: OrbixClient) async {
-        do {
-            let me = try await client.meProfile()
+        var attempt = 0
+        while true {
             guard self.client === client else { return }
-            phase = (me.id != nil) ? .ready : .needsProfile
-        } catch {
-            if let orbixError = error as? OrbixError, case .http(401) = orbixError {
-                let store = tokenStore
-                await store.clear()
+            attempt += 1
+            do {
+                let me = try await client.meProfile()
+                guard self.client === client else { return }
+                phase = (me.id != nil) ? .ready : .needsProfile
+                return
+            } catch {
+                guard self.client === client else { return }
+
+                if let orbixError = error as? OrbixError, case .http(401) = orbixError {
+                    let store = tokenStore
+                    await store.clear()
+                    guard self.client === client else { return }
+                    token = nil
+                    phase = .needsPairing
+                    return
+                }
+
+                guard attempt < Self.meProfileMaxAttempts else {
+                    token = nil
+                    phase = .needsPairing
+                    return
+                }
+
+                do {
+                    try await Task.sleep(nanoseconds: Self.meProfileRetryDelayNanoseconds)
+                } catch {
+                    // Cancelled mid-backoff. Nothing owns cancelling this
+                    // Task today, but bail cleanly (leaving `phase`
+                    // untouched) rather than looping on a dead task.
+                    return
+                }
             }
-            guard self.client === client else { return }
-            token = nil
-            phase = .needsPairing
         }
     }
 
