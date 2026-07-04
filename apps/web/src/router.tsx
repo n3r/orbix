@@ -5,6 +5,7 @@ import SetupPage from "./pages/SetupPage";
 import ProfilesPage from "./pages/ProfilesPage";
 import HomePage from "./pages/HomePage";
 import TvHomePage from "./pages/TvHomePage";
+import TvGuidePage from "./pages/TvGuidePage";
 import LibraryPage from "./pages/LibraryPage";
 import SearchPage from "./pages/SearchPage";
 import WishlistPage from "./pages/WishlistPage";
@@ -25,6 +26,7 @@ export const router = createBrowserRouter([
     children: [
       { path: "/", element: <HomePage /> },
       { path: "/tv", element: <TvHomePage /> },
+      { path: "/tv/guide", element: <TvGuidePage /> },
       { path: "/library/:libraryId", element: <LibraryPage /> },
       { path: "/search", element: <SearchPage /> },
       { path: "/wishlist", element: <WishlistPage /> },
