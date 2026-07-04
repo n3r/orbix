@@ -1,6 +1,7 @@
 export * from "./auth/password";
 export * from "./auth/setup";
 export * from "./auth/session";
+export * from "./auth/device-token";
 export * from "./profiles/profiles";
 export * from "./settings/settings";
 export * from "./library/library";
@@ -28,6 +29,9 @@ export * from "./playback/quality";
 export * from "./playback/capabilities";
 export * from "./playback/resume";
 export * from "./playback/subs";
+export * from "./playback/keyframes";
+export * from "./playback/apple-playlist";
+export * from "./playback/codec-string";
 export * from "./discovery/similarity";
 export * from "./discovery/rows";
 export * from "./discovery/constraints";

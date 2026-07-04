@@ -2,7 +2,8 @@
   "title": "Account",
   "tabs": {
     "overview": "Overview",
-    "menu": "My Menu"
+    "menu": "My Menu",
+    "devices": "Devices"
   },
   "profileKind": {
     "standard": "Standard profile",
@@ -15,5 +16,19 @@
     "selectOne": "Select at least one category.",
     "moveUp": "Move {{name}} up",
     "moveDown": "Move {{name}} down"
+  },
+  "devices": {
+    "title": "Paired devices",
+    "empty": "No devices paired yet. Start pairing from the TV app.",
+    "pairTitle": "Pair a new device",
+    "pairHint": "Enter the 6-character code shown on your TV.",
+    "pairButton": "Approve",
+    "pairApproved": "Device approved — the TV will connect in a moment.",
+    "pairUnknown": "Code not found or expired.",
+    "lastSeen": "Last seen",
+    "revoked": "Revoked",
+    "revoke": "Revoke",
+    "rename": "Rename",
+    "save": "Save"
   }
 }

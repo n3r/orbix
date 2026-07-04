@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { requireAuth } from "../lib/auth";
-import { activeProfile, profileAllowsItem } from "../lib/catalog-filter";
+import { activeProfile, activeProfileId, profileAllowsItem } from "../lib/catalog-filter";
 
 /** Coalesce a nullable base value to a non-empty translation, else the base. */
 function pick(translated: string | null | undefined, base: string | null): string | null {
@@ -20,7 +20,7 @@ export default async function seriesRoute(app: FastifyInstance) {
       if (!Number.isInteger(seasonNumber)) {
         return reply.code(400).send({ error: "invalid_season" });
       }
-      const profileId = req.cookies["orbix_profile"];
+      const profileId = await activeProfileId(app, req);
 
       const [series, profile] = await Promise.all([
         app.prisma.mediaItem.findUnique({

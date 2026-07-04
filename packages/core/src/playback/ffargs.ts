@@ -25,6 +25,14 @@ export interface HlsArgsOpts {
   encoder?: EncoderSetting | "libx264";
   /** VAAPI render node (defaults to /dev/dri/renderD128). */
   vaapiDevice?: string;
+  /** Audio-RELATIVE track position for -map 0:a:N (default 0). */
+  audioTrackIndex?: number;
+  /** Target channel count when audioAction === "aac" (default 2). */
+  audioChannels?: number;
+  /** Exact seek pts (seconds) for restarts; overrides startSegment*segSec arithmetic. */
+  startTimeSec?: number;
+  /** Transcode only: force keyframes at the segment cadence so fixed EXTINFs are exact. */
+  forceKeyframes?: boolean;
   /** Optional downscale target for manually selected quality renditions. */
   targetHeight?: number | null;
   /** Optional target bitrate for manually selected quality renditions. */
@@ -59,15 +67,15 @@ export function buildHlsArgs(opts: HlsArgsOpts): string[] {
   }
 
   // 1. Input-side seek (before -i) when resuming
-  if (startSegment > 0) {
-    args.push("-ss", String(startSegment * segSec));
+  if (startSegment > 0 || (opts.startTimeSec !== undefined && opts.startTimeSec > 0)) {
+    args.push("-ss", String(opts.startTimeSec !== undefined ? opts.startTimeSec : startSegment * segSec));
   }
 
   // 2. Input
   args.push("-i", input);
 
   // 3. Stream mapping
-  args.push("-map", "0:v:0", "-map", "0:a:0?");
+  args.push("-map", "0:v:0", "-map", `0:a:${opts.audioTrackIndex ?? 0}?`);
 
   // 4. Video codec (+ hardware-upload pipeline for GPU encoders). Hardware
   //    encoders take frames on the GPU, so software-decoded frames are uploaded
@@ -128,27 +136,28 @@ export function buildHlsArgs(opts: HlsArgsOpts): string[] {
         pushTargetBitrate();
       }
     }
+    if (opts.forceKeyframes) {
+      args.push("-force_key_frames", `expr:gte(t,n_forced*${segSec})`);
+    }
   }
 
-  // 5. Audio codec. Downmix to stereo when transcoding: multichannel (5.1) AAC
-  //    over hls.js/MSE fails to append in the browser — segments load but never
-  //    decode (the <video> stays at readyState 0 / buffered empty, with no error).
-  //    Stereo AAC is universally compatible.
-  if (audioMode === "leveled") {
-    args.push(
-      "-c:a",
-      "aac",
-      "-b:a",
-      "192k",
-      "-ac",
-      "2",
-      "-af",
-      "loudnorm=I=-16:TP=-1.5:LRA=11",
-    );
-  } else if (audioAction === "copy") {
+  // 5. Audio codec (+ optional loudness normalization).
+  //    Channel count comes from the capability decision (via audioChannels): when
+  //    playing multichannel AAC over hls.js/MSE, segments load but fail to decode in
+  //    the browser (readyState 0, no error), so the decision downmixes web sessions
+  //    to stereo. The bitrate follows the channel count: 384k for >2ch, 192k otherwise.
+  //    `leveled` mode adds an EBU R128 loudnorm audio FILTER (-af); because a filter
+  //    requires re-encoding, it forces an AAC transcode even when audio would copy.
+  //    The filter composes with the channel-aware transcode below.
+  const leveled = audioMode === "leveled";
+  if (audioAction === "copy" && !leveled) {
     args.push("-c:a", "copy");
   } else {
-    args.push("-c:a", "aac", "-b:a", "192k", "-ac", "2");
+    const ac = opts.audioChannels ?? 2;
+    args.push("-c:a", "aac", "-b:a", ac > 2 ? "384k" : "192k", "-ac", String(ac));
+  }
+  if (leveled) {
+    args.push("-af", "loudnorm=I=-16:TP=-1.5:LRA=11");
   }
 
   // 6. HLS muxer flags

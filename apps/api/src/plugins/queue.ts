@@ -9,6 +9,7 @@ import type { FastifyInstance } from "fastify";
 import type { Env } from "@orbix/config";
 import { Prisma, type PrismaClient } from "@orbix/db";
 import { buildMountRuntime, type MountRuntime } from "../lib/mount-runtime";
+import { extractKeyframes, keyframeProbeRunner } from "../jobs/extract-keyframes";
 import type { ScanProgress } from "../lib/scan-status";
 import {
   scanSource,
@@ -122,6 +123,10 @@ export interface TranslateJobData {
   language: string;
 }
 
+export interface KeyframesJobData {
+  fileId: string;
+}
+
 /**
  * The set of content languages whose metadata must be cached: every distinct
  * profile language except the en base (which lives on the MediaItem/Genre rows).
@@ -164,6 +169,7 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
       const stub = { add: async () => undefined, close: async () => undefined };
       app.decorate("scanQueue", stub as unknown as Queue<ScanJobData>);
       app.decorate("translateQueue", stub as unknown as Queue<TranslateJobData>);
+      app.decorate("keyframesQueue", stub as unknown as Queue<KeyframesJobData>);
       return;
     }
 
@@ -206,6 +212,27 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
         return { mtime: row.mtime, size: row.size == null ? null : Number(row.size) };
       };
 
+      // Best-effort keyframe-index enqueue for a just-(up)serted file. Only
+      // probed video files without an existing index need the (expensive,
+      // full-file) scan; failures here must never fail the scan itself.
+      const enqueueKeyframesIfNeeded = async (
+        filePath: string,
+        tech: MediaFileTechnical,
+      ): Promise<void> => {
+        if (!(tech.probedOk && tech.videoCodec)) return;
+        try {
+          const f = await prisma.mediaFile.findUnique({
+            where: { path: filePath },
+            select: { id: true, keyframes: true },
+          });
+          if (f && !(Array.isArray(f.keyframes) && f.keyframes.length > 0)) {
+            await app.keyframesQueue.add("keyframes", { fileId: f.id }, { jobId: f.id });
+          }
+        } catch (err) {
+          app.log.warn({ err }, "keyframes enqueue failed");
+        }
+      };
+
       const upsertItemAndFile = async (input: {
         libraryId: string;
         file: { path: string; mtime: Date; size: number };
@@ -237,14 +264,28 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
           height: input.tech.height,
           durationSec: input.tech.durationSec,
           bitrate: input.tech.bitrate,
+          videoProfile: input.tech.videoProfile,
+          videoLevel: input.tech.videoLevel,
+          colorTransfer: input.tech.colorTransfer,
+          frameRate: input.tech.frameRate,
           // Prisma accepts Json as unknown[]
           subtitleTracks: input.tech.subtitleTracks as unknown as Prisma.InputJsonValue,
           audioTracks: input.tech.audioTracks as unknown as Prisma.InputJsonValue,
           probedOk,
+          // Reset on every (re)scan of a new-or-changed file: a stale index from
+          // a previous file at this path would otherwise survive an in-place
+          // replacement (this object isn't re-derived from tech) and permanently
+          // skip re-extraction, since extractKeyframes treats any non-empty
+          // array as already-indexed. enqueueKeyframesIfNeeded repopulates it.
+          // Prisma.DbNull (not a plain `null`) is required for a nullable Json
+          // column — matches the SQL NULL a fresh row gets when the field is
+          // omitted from create.
+          keyframes: Prisma.DbNull,
         };
 
         if (existing) {
           await prisma.mediaFile.update({ where: { id: existing.id }, data: fileData });
+          await enqueueKeyframesIfNeeded(input.file.path, input.tech);
           return { itemId: existing.mediaItemId, created: false };
         }
 
@@ -400,6 +441,7 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
             },
           });
 
+          await enqueueKeyframesIfNeeded(input.file.path, input.tech);
           return { itemId: series.id, created: true };
         }
 
@@ -444,6 +486,7 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
           },
         });
 
+        await enqueueKeyframesIfNeeded(input.file.path, input.tech);
         return { itemId: item.id, created: true };
       };
 
@@ -1569,11 +1612,39 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
 
     app.decorate("translateQueue", translateQueue);
 
+    // ── Keyframe extraction ──────────────────────────────────────────────────
+
+    // removeOnComplete/removeOnFail: the jobId=fileId dedup (see
+    // enqueueKeyframesIfNeeded / playback.ts) means a finished job's record
+    // would otherwise permanently block re-enqueue for that file (and grow
+    // Redis without bound) — remove it once it settles so a later rescan (or
+    // a subsequent remux negotiation) can re-extract.
+    const keyframesQueue = new Queue<KeyframesJobData>("keyframes", {
+      connection,
+      defaultJobOptions: { removeOnComplete: true, removeOnFail: true },
+    });
+
+    const keyframesWorker = new Worker<KeyframesJobData, void>(
+      "keyframes",
+      async (job) => {
+        const res = await extractKeyframes(job.data.fileId, {
+          run: keyframeProbeRunner,
+          prisma: app.prisma as never,
+        });
+        app.log.info({ fileId: job.data.fileId, res }, "keyframe extraction done");
+      },
+      { connection, concurrency: 1 },
+    );
+    keyframesWorker.on("error", (err) => app.log.error({ err }, "keyframes worker error"));
+    app.decorate("keyframesQueue", keyframesQueue);
+
     app.addHook("onClose", async () => {
       await worker.close();
       await queue.close();
       await translateWorker.close();
       await translateQueue.close();
+      await keyframesWorker.close();
+      await keyframesQueue.close();
     });
   });
 }
@@ -1584,5 +1655,6 @@ declare module "fastify" {
   interface FastifyInstance {
     scanQueue: Queue<ScanJobData>;
     translateQueue: Queue<TranslateJobData>;
+    keyframesQueue: Queue<KeyframesJobData>;
   }
 }

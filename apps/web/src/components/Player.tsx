@@ -16,35 +16,62 @@ import "@vidstack/react/player/styles/default/layouts/video.css";
 import Hls from "hls.js";
 import { apiFetch } from "@/lib/api";
 
-interface Decision {
-  mode: string;
-  url: string;
-  qualities?: QualityOption[];
-  audioModes?: AudioModeOption[];
-}
+type AudioMode = "standard" | "leveled";
 
 interface QualityOption {
   id: string;
   label: string;
-  type: "direct" | "hls";
-  url: string;
-  hlsUrl?: string;
+  width: number | null;
+  height: number | null;
+  bandwidth: number;
 }
-
-type AudioMode = "standard" | "leveled";
 
 interface AudioModeOption {
   id: AudioMode;
   label: string;
 }
 
-interface SubTrack {
+interface AudioTrackInfo {
   index: number;
-  codec: string;
+  codec?: string;
+  channels?: number;
+  language?: string;
+  selected: boolean;
+}
+
+interface SubtitleTrackInfo {
+  index: number;
+  codec?: string;
   language?: string;
   label?: string;
-  burnIn: boolean;
+  available: boolean;
+  reason?: string;
 }
+
+interface PlaybackInfo {
+  playSessionId: string;
+  mode: string;
+  streamUrl: string;
+  /** The quality/audio mode the server actually used for this session. */
+  quality: string;
+  audioMode: AudioMode;
+  qualities: QualityOption[];
+  audioModes: AudioModeOption[];
+  audioTracks: AudioTrackInfo[];
+  subtitleTracks: SubtitleTrackInfo[];
+}
+
+const WEB_CAPABILITIES = {
+  containers: ["mp4"],
+  videoCodecs: ["h264"],
+  audioCodecs: ["aac"],
+  maxAudioChannels: 2,
+  hlsMultichannelAacBroken: true,
+  // The player renders its own sidecar <Track> elements below (from
+  // playbackInfo.subtitleTracks), so the master playlist must NOT also emit
+  // EXT-X-MEDIA subtitle renditions — that would duplicate the subtitle menu.
+  subtitleDelivery: "sidecar" as const,
+};
 
 interface Progress {
   positionSec: number;
@@ -92,8 +119,7 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
     </SeekButton>
   );
 
-  const [decision, setDecision] = useState<Decision | null>(null);
-  const [subs, setSubs] = useState<SubTrack[]>([]);
+  const [info, setInfo] = useState<PlaybackInfo | null>(null);
   const [resume, setResume] = useState<Progress | null>(null);
   const [selectedQuality, setSelectedQuality] = useState("source");
   const [audioMode, setAudioMode] = useState<AudioMode>("standard");
@@ -103,52 +129,69 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
 
   const playerRef = useRef<MediaPlayerInstance>(null);
   const resumedRef = useRef(false);
+  const infoRef = useRef<PlaybackInfo | null>(null);
+  // Position to restore after a quality/audio-mode switch remounts the player
+  // (the new stream is a brand-new session that starts at 0).
   const pendingSeekRef = useRef<number | null>(null);
 
-  // Fetch decision, subtitle tracks, and saved progress on mount
+  // Negotiate playback for a given quality + audio mode. Each call mints a
+  // fresh play session (playSessionId) server-side; the response carries the
+  // stream URL, server-decided track lists, and the quality/audio ladders.
+  const negotiate = useCallback(
+    async (quality: string, mode: AudioMode): Promise<PlaybackInfo | null> => {
+      const res = await apiFetch("/playback/info", {
+        method: "POST",
+        body: JSON.stringify({
+          fileId,
+          capabilities: WEB_CAPABILITIES,
+          quality,
+          audioMode: mode,
+        }),
+      });
+      if (!res.ok) return null;
+      return (await res.json()) as PlaybackInfo;
+    },
+    [fileId],
+  );
+
+  // Initial negotiation (source quality, standard audio) + saved progress, in
+  // parallel on mount.
   useEffect(() => {
     void (async () => {
       try {
-        const [decisionRes, subsRes, progressRes] = await Promise.all([
-          apiFetch(`/play/${fileId}/decision`),
-          apiFetch(`/play/${fileId}/subs`),
+        const [data, progressRes] = await Promise.all([
+          negotiate("source", "standard"),
           apiFetch(`/items/${mediaItemId}/progress${progressQuery}`),
         ]);
-
-        if (!decisionRes.ok) {
+        if (!data) {
           setError(t("player:error.decision"));
           return;
         }
-        const d = (await decisionRes.json()) as Decision;
-        setDecision(d);
-        setSelectedQuality(d.qualities?.find((q) => q.id === "source")?.id ?? d.qualities?.[0]?.id ?? "source");
-        setAudioMode("standard");
-
-        if (subsRes.ok) {
-          const s = (await subsRes.json()) as SubTrack[];
-          setSubs(s);
-        }
-
-        if (progressRes.ok) {
-          const p = (await progressRes.json()) as Progress;
-          setResume(p);
-        }
+        infoRef.current = data;
+        setInfo(data);
+        setSelectedQuality(data.quality);
+        setAudioMode(data.audioMode);
+        if (progressRes.ok) setResume((await progressRes.json()) as Progress);
       } catch {
         setError(t("player:error.network"));
       } finally {
         setLoading(false);
       }
     })();
-  }, [fileId, mediaItemId, progressQuery, t]);
+  }, [fileId, mediaItemId, progressQuery, t, negotiate]);
 
+  // Drop a selected subtitle that the current session no longer offers (e.g.
+  // after a re-negotiation returns a different track list).
   useEffect(() => {
     if (selectedSubtitle === "off") return;
-    if (!subs.some((s) => !s.burnIn && String(s.index) === selectedSubtitle)) {
+    const tracks = info?.subtitleTracks ?? [];
+    if (!tracks.some((s) => s.available && String(s.index) === selectedSubtitle)) {
       setSelectedSubtitle("off");
     }
-  }, [selectedSubtitle, subs]);
+  }, [selectedSubtitle, info]);
 
-  // Save progress to the server (reads live state from the player ref)
+  // Save progress to the server (reads live state from the player ref); the
+  // playSessionId rides along so the server can attribute the play event.
   const saveProgress = useCallback(async () => {
     const player = playerRef.current;
     if (!player) return;
@@ -158,7 +201,12 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
     try {
       await apiFetch(`/items/${mediaItemId}/progress`, {
         method: "PUT",
-        body: JSON.stringify({ positionSec: pos, durationSec: dur, episodeId }),
+        body: JSON.stringify({
+          positionSec: pos,
+          durationSec: dur,
+          episodeId,
+          playSessionId: infoRef.current?.playSessionId,
+        }),
       });
     } catch {
       // Ignore transient save errors
@@ -167,24 +215,32 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
 
   // Periodic progress save (every 10s while playing)
   useEffect(() => {
-    if (!decision) return;
+    if (!info) return;
     const id = setInterval(async () => {
       const player = playerRef.current;
       if (!player || player.state.paused || player.state.duration <= 0) return;
       await saveProgress();
     }, SAVE_INTERVAL_MS);
     return () => clearInterval(id);
-  }, [decision, saveProgress]);
+  }, [info, saveProgress]);
 
-  // Save on page hide (tab switch, close) and on unmount
+  // Save progress on page hide (tab switch) and stop the play session (so its
+  // ffmpeg + temp dir are released) on page hide / unmount.
   useEffect(() => {
+    const stop = () => {
+      const id = infoRef.current?.playSessionId;
+      if (id) navigator.sendBeacon(`/api/playback/${id}/stop`);
+    };
     const handleVisibility = () => {
       if (document.visibilityState === "hidden") void saveProgress();
     };
     document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("pagehide", stop);
     return () => {
       document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("pagehide", stop);
       void saveProgress();
+      stop();
     };
   }, [saveProgress]);
 
@@ -197,7 +253,8 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
     }
   }, []);
 
-  // Resume: seek to saved position when the player is ready
+  // Resume: seek to the pending position after a quality/audio switch remount,
+  // otherwise seek to saved progress once when the player is first ready.
   const handleCanPlay = useCallback(() => {
     if (pendingSeekRef.current !== null) {
       const seekTo = pendingSeekRef.current;
@@ -222,6 +279,40 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
     pendingSeekRef.current = player.state.currentTime;
   }, []);
 
+  // Re-negotiate for a new quality / audio mode. Remembers the current time so
+  // the fresh session (a new streamUrl → key remount) resumes where we left
+  // off, and releases the previous session's ffmpeg.
+  const renegotiate = useCallback(
+    async (quality: string, mode: AudioMode) => {
+      rememberPlaybackTime();
+      const prevId = infoRef.current?.playSessionId;
+      const next = await negotiate(quality, mode);
+      if (!next) {
+        setError(t("player:error.decision"));
+        return;
+      }
+      if (prevId && prevId !== next.playSessionId) {
+        void apiFetch(`/playback/${prevId}/stop`, { method: "POST" }).catch(() => {});
+      }
+      infoRef.current = next;
+      setInfo(next);
+      setSelectedQuality(next.quality);
+      setAudioMode(next.audioMode);
+    },
+    [negotiate, rememberPlaybackTime, t],
+  );
+
+  const handleQualityChange = (value: string) => {
+    if (value === selectedQuality) return;
+    void renegotiate(value, audioMode);
+  };
+
+  const handleAudioModeChange = (enabled: boolean) => {
+    const next: AudioMode = enabled ? "leveled" : "standard";
+    if (next === audioMode) return;
+    void renegotiate(selectedQuality, next);
+  };
+
   if (loading) {
     return (
       <div className="grid h-full w-full place-items-center text-sm text-[var(--text-dim)]">
@@ -230,7 +321,7 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
     );
   }
 
-  if (error || !decision) {
+  if (error || !info) {
     return (
       <div className="grid h-full w-full place-items-center text-sm text-red-400">
         {error ?? t("player:error.generic")}
@@ -238,61 +329,21 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
     );
   }
 
-  const textTracks = subs.filter((s) => !s.burnIn);
+  const textTracks = info.subtitleTracks.filter((s) => s.available);
   const selectedTrack =
     selectedSubtitle === "off"
       ? null
       : textTracks.find((track) => String(track.index) === selectedSubtitle) ?? null;
-  const qualityOptions =
-    decision.qualities && decision.qualities.length > 0
-      ? decision.qualities
-      : [
-          {
-            id: "source",
-            label: "Original",
-            type: decision.mode === "direct" ? "direct" : "hls",
-            url: decision.url,
-            hlsUrl: decision.url,
-          } satisfies QualityOption,
-        ];
-  const activeQuality =
-    qualityOptions.find((quality) => quality.id === selectedQuality) ?? qualityOptions[0];
-  const audioModes =
-    decision.audioModes && decision.audioModes.length > 0
-      ? decision.audioModes
-      : [
-          { id: "standard" as const, label: t("player:audio.standard") },
-          { id: "leveled" as const, label: t("player:audio.leveling") },
-        ];
+  const qualityOptions = info.qualities;
+  const audioModes = info.audioModes;
   const audioLevelingAvailable = audioModes.some((mode) => mode.id === "leveled");
-  const sourceIsDirect = activeQuality.type === "direct" && audioMode === "standard";
-  const sourceUrl =
-    activeQuality.id === "auto"
-      ? `/api/play/${fileId}/master.m3u8?audio=${audioMode}`
-      : sourceIsDirect
-        ? activeQuality.url
-        : `/api/play/${fileId}/hls/${activeQuality.id}/${audioMode}/index.m3u8`;
-  const sourceType = sourceIsDirect ? "video/mp4" : "application/x-mpegurl";
-
-  const handleQualityChange = (value: string) => {
-    if (value === selectedQuality) return;
-    rememberPlaybackTime();
-    setSelectedQuality(value);
-  };
-
-  const handleAudioModeChange = (enabled: boolean) => {
-    const next = enabled ? "leveled" : "standard";
-    if (next === audioMode) return;
-    rememberPlaybackTime();
-    setAudioMode(next);
-  };
 
   return (
     <MediaPlayer
-      key={sourceUrl}
+      key={info.streamUrl}
       ref={playerRef}
       title={title}
-      src={{ src: sourceUrl, type: sourceType }}
+      src={{ src: info.streamUrl, type: info.mode === "direct" ? "video/mp4" : "application/x-mpegurl" }}
       className="relative h-full w-full bg-black"
       style={{ "--media-brand": "var(--accent)" }}
       autoPlay
@@ -325,13 +376,13 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
           <span>{t("player:controls.quality")}</span>
           <select
             aria-label={t("player:controls.quality")}
-            value={activeQuality.id}
+            value={selectedQuality}
             onChange={(event) => handleQualityChange(event.target.value)}
             className="max-w-32 rounded border border-white/15 bg-black/70 px-2 py-1 text-white outline-none transition-colors focus:border-[var(--accent)]"
           >
             {qualityOptions.map((quality) => (
               <option key={quality.id} value={quality.id}>
-                {quality.id === "auto" ? t("player:quality.auto") : quality.label}
+                {quality.label}
               </option>
             ))}
           </select>

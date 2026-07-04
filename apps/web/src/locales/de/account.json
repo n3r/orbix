@@ -2,7 +2,8 @@
   "title": "Konto",
   "tabs": {
     "overview": "Übersicht",
-    "menu": "Mein Menü"
+    "menu": "Mein Menü",
+    "devices": "Geräte"
   },
   "profileKind": {
     "standard": "Standardprofil",
@@ -15,5 +16,19 @@
     "selectOne": "Wähle mindestens eine Kategorie aus.",
     "moveUp": "{{name}} nach oben verschieben",
     "moveDown": "{{name}} nach unten verschieben"
+  },
+  "devices": {
+    "title": "Gekoppelte Geräte",
+    "empty": "Noch keine Geräte gekoppelt. Starte die Kopplung in der TV-App.",
+    "pairTitle": "Neues Gerät koppeln",
+    "pairHint": "Gib den 6-stelligen Code vom Fernseher ein.",
+    "pairButton": "Bestätigen",
+    "pairApproved": "Gerät bestätigt — der Fernseher verbindet sich gleich.",
+    "pairUnknown": "Code nicht gefunden oder abgelaufen.",
+    "lastSeen": "Zuletzt gesehen",
+    "revoked": "Widerrufen",
+    "revoke": "Widerrufen",
+    "rename": "Umbenennen",
+    "save": "Speichern"
   }
 }

@@ -17,6 +17,7 @@ import AdminSettingsPage from "./pages/AdminSettingsPage";
 import AccountLayout from "./pages/account/AccountLayout";
 import AccountOverview from "./pages/account/AccountOverview";
 import AccountMenuPage from "./pages/account/AccountMenuPage";
+import AccountDevicesPage from "./pages/account/AccountDevicesPage";
 import AccountTvPage from "./pages/account/AccountTvPage";
 
 export const router = createBrowserRouter([
@@ -44,6 +45,7 @@ export const router = createBrowserRouter([
           { path: "tv", element: <AccountTvPage /> },
           { path: "library", element: <AdminLibrariesPage /> },
           { path: "settings", element: <AdminSettingsPage /> },
+          { path: "devices", element: <AccountDevicesPage /> },
         ],
       },
       { path: "/admin/libraries", element: <Navigate to="/account/library" replace /> },

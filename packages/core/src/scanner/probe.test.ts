@@ -46,3 +46,32 @@ describe("probeFile", () => {
     expect(result.durationSec).toBeUndefined();
   });
 });
+
+describe("HLS metadata fields", () => {
+  it("captures profile, level, color transfer, and frame rate from the video stream", async () => {
+    const raw = JSON.stringify({
+      streams: [{
+        index: 0, codec_type: "video", codec_name: "hevc", width: 3840, height: 2160,
+        profile: "Main 10", level: 153, color_transfer: "smpte2084", r_frame_rate: "24000/1001",
+      }],
+      format: { format_name: "matroska,webm", duration: "100.0" },
+    });
+    const tech = await probeFile("/x.mkv", { run: async () => raw });
+    expect(tech.videoProfile).toBe("Main 10");
+    expect(tech.videoLevel).toBe(153);
+    expect(tech.colorTransfer).toBe("smpte2084");
+    expect(tech.frameRate).toBe(23.976);
+  });
+
+  it("tolerates missing/malformed frame rate", async () => {
+    const raw = JSON.stringify({
+      streams: [
+        { index: 0, codec_type: "video", codec_name: "h264", r_frame_rate: "0/0" },
+      ],
+      format: {},
+    });
+    const tech = await probeFile("/x.mkv", { run: async () => raw });
+    expect(tech.frameRate).toBeUndefined();
+    expect(tech.videoProfile).toBeUndefined();
+  });
+});

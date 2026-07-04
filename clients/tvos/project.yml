@@ -1,0 +1,70 @@
+name: Orbix
+options:
+  bundleIdPrefix: dev.orbix
+  deploymentTarget:
+    tvOS: "17.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    TVOS_DEPLOYMENT_TARGET: "17.0"
+    TARGETED_DEVICE_FAMILY: "3" # tvOS
+    CODE_SIGNING_ALLOWED: "NO" # simulator builds need no signing
+targets:
+  Orbix:
+    type: application
+    platform: tvOS
+    sources:
+      - path: Sources/Orbix
+      - path: Resources/Assets.xcassets
+    dependencies:
+      - target: OrbixKit
+    settings:
+      base:
+        INFOPLIST_FILE: Resources/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: dev.orbix.tvos
+        # tvOS "Brand Assets" App Icon & Top Shelf Image — see
+        # Resources/Assets.xcassets/App Icon & Top Shelf Image.brandassets.
+        ASSETCATALOG_COMPILER_APPICON_NAME: "App Icon & Top Shelf Image"
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: ""
+  OrbixKit:
+    type: framework
+    platform: tvOS
+    sources:
+      - path: Sources/OrbixKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.orbix.tvos.kit
+        GENERATE_INFOPLIST_FILE: "YES" # embedded framework needs an Info.plist to pass app-bundle validation
+  OrbixKitTests:
+    type: bundle.unit-test
+    platform: tvOS
+    sources:
+      - path: Tests/OrbixKitTests
+    dependencies:
+      - target: OrbixKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.orbix.tvos.kittests
+schemes:
+  OrbixKit:
+    build:
+      targets:
+        OrbixKit: all
+        OrbixKitTests: [test]
+    test:
+      targets:
+        - OrbixKitTests
+      # SP2 M1 live-gate passthrough: xcodebuild does NOT forward the
+      # invoking shell's environment into the simulator-hosted test
+      # process. `$(VAR)` here is an Xcode build-setting macro, resolved
+      # against the OrbixKit target's settings *including command-line
+      # overrides* — so `xcodebuild ... test ORBIX_TEST_BASE_URL=... ` (a
+      # plain build-setting override, no special prefix) makes it through
+      # to `ProcessInfo.processInfo.environment` inside
+      # PlaybackReadinessTests. Left unset, `$(VAR)` expands to empty, so
+      # the test's env-unset guards still fire and it skips cleanly.
+      environmentVariables:
+        ORBIX_TEST_BASE_URL: "$(ORBIX_TEST_BASE_URL)"
+        ORBIX_TEST_TOKEN: "$(ORBIX_TEST_TOKEN)"
+        ORBIX_TEST_FILE_IDS: "$(ORBIX_TEST_FILE_IDS)"

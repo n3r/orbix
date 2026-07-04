@@ -2,7 +2,8 @@
   "title": "Cuenta",
   "tabs": {
     "overview": "Resumen",
-    "menu": "Mi menú"
+    "menu": "Mi menú",
+    "devices": "Dispositivos"
   },
   "profileKind": {
     "standard": "Perfil estándar",
@@ -15,5 +16,19 @@
     "selectOne": "Selecciona al menos una categoría.",
     "moveUp": "Subir {{name}}",
     "moveDown": "Bajar {{name}}"
+  },
+  "devices": {
+    "title": "Dispositivos emparejados",
+    "empty": "Aún no hay dispositivos emparejados. Inicia el emparejamiento desde la app del TV.",
+    "pairTitle": "Emparejar un dispositivo nuevo",
+    "pairHint": "Introduce el código de 6 caracteres que aparece en tu TV.",
+    "pairButton": "Aprobar",
+    "pairApproved": "Dispositivo aprobado — el TV se conectará en un momento.",
+    "pairUnknown": "Código no encontrado o caducado.",
+    "lastSeen": "Última conexión",
+    "revoked": "Revocado",
+    "revoke": "Revocar",
+    "rename": "Renombrar",
+    "save": "Guardar"
   }
 }

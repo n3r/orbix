@@ -4,8 +4,17 @@ import path from "node:path";
 import os from "node:os";
 import type { ChildProcess } from "node:child_process";
 import { SessionManager, SegmentTimeoutError } from "./session";
-import { buildPlaybackQualities, decideStrategy } from "@orbix/core";
+import { buildPlaybackQualities } from "@orbix/core";
+import type { PlaybackPlan } from "@orbix/core";
 import type { SpawnFn } from "./session";
+
+// These tests exercise SessionManager plumbing (spawn/restart/reap), not
+// playback-decision logic, so a plan is provided as a literal rather than via
+// the (deleted) legacy decideStrategy. This is the decision that
+// decideStrategy({ container: "mkv", videoCodec: "hevc", audioCodecs: ["aac"] })
+// used to produce: hevc video forces transcode (not h264 → no remux/direct);
+// aac audio already present → copy (no re-encode needed).
+const HEVC_TRANSCODE_PLAN: PlaybackPlan = { mode: "transcode", audioAction: "copy" };
 
 // ---------------------------------------------------------------------------
 // Fake spawn factory
@@ -106,7 +115,7 @@ describe("SessionManager", () => {
     const { spawn, calls } = makeFakeSpawn();
     const manager = new SessionManager({ transcodeDir: testDir, spawn });
 
-    const plan = decideStrategy({ container: "mkv", videoCodec: "hevc", audioCodecs: ["aac"] });
+    const plan = HEVC_TRANSCODE_PLAN;
     const session = await manager.getOrCreate("file1:default", {
       inputPath: "/fake/video.mkv",
       plan,
@@ -129,7 +138,7 @@ describe("SessionManager", () => {
     const { spawn, calls } = makeFakeSpawn();
     const manager = new SessionManager({ transcodeDir: testDir, spawn });
 
-    const plan = decideStrategy({ container: "mkv", videoCodec: "hevc", audioCodecs: ["aac"] });
+    const plan = HEVC_TRANSCODE_PLAN;
     const session = await manager.getOrCreate("file2:default", {
       inputPath: "/fake/video.mkv",
       plan,
@@ -152,15 +161,35 @@ describe("SessionManager", () => {
     await manager.closeAll();
   });
 
+  it("plumbs audioTrackIndex/audioChannels/audioAction from the plan into the ffmpeg args", async () => {
+    const { spawn, calls } = makeFakeSpawn();
+    const manager = new SessionManager({ transcodeDir: testDir, spawn });
+
+    const session = await manager.getOrCreate("file-audio:default", {
+      inputPath: "/fake/video.mkv",
+      plan: { mode: "remux", audioAction: "aac", audioTrackIndex: 2, audioChannels: 6 },
+      quality: buildPlaybackQualities({ width: 1920, height: 1080 })[0],
+      durationSec: 120,
+      segSec: 6,
+    });
+
+    await manager.ensureSegment(session, 0);
+
+    expect(calls).toHaveLength(1);
+    const { args } = calls[0];
+    expect(args).toContain("0:a:2?");
+    expect(args).toContain("-ac");
+    expect(args[args.indexOf("-ac") + 1]).toBe("6");
+    expect(args).toContain("384k");
+
+    await manager.closeAll();
+  });
+
   it("ensureSegment(200) triggers kill+restart with start_number=200 (far-ahead seek)", async () => {
     const { spawn, calls } = makeFakeSpawn();
     const manager = new SessionManager({ transcodeDir: testDir, spawn });
 
-    const plan = decideStrategy({
-      container: "mkv",
-      videoCodec: "hevc",
-      audioCodecs: ["aac"],
-    });
+    const plan = HEVC_TRANSCODE_PLAN;
     const session = await manager.getOrCreate("file3:default", {
       inputPath: "/fake/video.mkv",
       plan,
@@ -188,15 +217,11 @@ describe("SessionManager", () => {
     await manager.closeAll();
   });
 
-  it("ensureSegment(0) after seek-to-200 triggers restart at 0 (backward seek)", async () => {
+  it("ensureSegment(150) after seek-to-200 triggers restart (backward seek, file absent)", async () => {
     const { spawn, calls } = makeFakeSpawn();
     const manager = new SessionManager({ transcodeDir: testDir, spawn });
 
-    const plan = decideStrategy({
-      container: "mkv",
-      videoCodec: "hevc",
-      audioCodecs: ["aac"],
-    });
+    const plan = HEVC_TRANSCODE_PLAN;
     const session = await manager.getOrCreate("file4:default", {
       inputPath: "/fake/video.mkv",
       plan,
@@ -209,12 +234,16 @@ describe("SessionManager", () => {
     await manager.ensureSegment(session, 200); // spawn #2 (far-ahead seek)
     const procAt200 = session.proc;
 
-    // Backward seek: n(0) < currentStart(200)
-    await manager.ensureSegment(session, 0);   // spawn #3
+    // Backward seek to a segment that was NEVER generated: n(150) <
+    // currentStart(200) AND seg150.m4s is absent, so the present-file
+    // short-circuit does not apply and this must still restart. (A backward
+    // seek back to seg0 — which IS already present from spawn #1 — now
+    // correctly does NOT restart; see "does not respawn ... already exists".)
+    await manager.ensureSegment(session, 150);   // spawn #3
 
     expect(procAt200?.kill).toHaveBeenCalledTimes(1);
     expect(calls).toHaveLength(3);
-    expect(calls[2].startSegment).toBe(0);
+    expect(calls[2].startSegment).toBe(150);
 
     await manager.closeAll();
   });
@@ -235,7 +264,7 @@ describe("SessionManager", () => {
     };
     const manager = new SessionManager({ transcodeDir: testDir, spawn, getEncoder });
 
-    const plan = decideStrategy({ container: "mkv", videoCodec: "hevc", audioCodecs: ["aac"] });
+    const plan = HEVC_TRANSCODE_PLAN;
     expect(plan.mode).toBe("transcode"); // guard: getEncoder is only consulted for transcode
     const session = await manager.getOrCreate("file-race:default", {
       inputPath: "/fake/video.mkv",
@@ -258,11 +287,11 @@ describe("SessionManager", () => {
     await manager.closeAll();
   });
 
-  it("respawns when the previous proc exited naturally (exitCode set, not killed)", async () => {
+  it("respawns when the previous proc exited naturally and the requested segment is absent", async () => {
     const { spawn, calls } = makeFakeSpawn();
     const manager = new SessionManager({ transcodeDir: testDir, spawn });
 
-    const plan = decideStrategy({ container: "mkv", videoCodec: "hevc", audioCodecs: ["aac"] });
+    const plan = HEVC_TRANSCODE_PLAN;
     const session = await manager.getOrCreate("file-exit:default", {
       inputPath: "/fake/video.mkv",
       plan,
@@ -277,9 +306,80 @@ describe("SessionManager", () => {
     // Simulate ffmpeg exiting on its own — exitCode is set but killed stays false.
     (session.proc as unknown as { exitCode: number }).exitCode = 0;
 
-    // Re-requesting seg0 must respawn (dead proc), not silently reuse the corpse.
-    await manager.ensureSegment(session, 0);
+    // Requesting a DIFFERENT, never-written segment must respawn (dead proc,
+    // file absent) rather than silently hang waiting on a corpse. (Requesting
+    // the SAME already-written seg0 instead must NOT respawn — present file
+    // always wins; see "does not respawn ... already exists" below.)
+    await manager.ensureSegment(session, 1);
     expect(calls).toHaveLength(2);
+    expect(calls[1].startSegment).toBe(1);
+
+    await manager.closeAll();
+  });
+
+  it("does not respawn when the segment file already exists and the proc is dead", async () => {
+    const { spawn, calls } = makeFakeSpawn();
+    const manager = new SessionManager({ transcodeDir: testDir, spawn });
+
+    const plan = HEVC_TRANSCODE_PLAN;
+    const session = await manager.getOrCreate("file-present:default", {
+      inputPath: "/fake/video.mkv",
+      plan,
+      quality: buildPlaybackQualities({ width: 1920, height: 1080 })[0],
+      durationSec: 120,
+      segSec: 6,
+    });
+
+    // Spawn once (fake ffmpeg writes init.mp4 + seg0.m4s).
+    await manager.ensureSegment(session, 0);
+    expect(calls).toHaveLength(1);
+
+    // Simulate a fast (stream-copy) remux that finished writing EVERY
+    // segment — including one further ahead than currentStart — before its
+    // ffmpeg process exited naturally (dead, but never killed by us).
+    const seg2Path = path.join(session.dir, "seg2.m4s");
+    await fsp.writeFile(seg2Path, Buffer.from("segment-2-real-content"));
+    (session.proc as unknown as { exitCode: number }).exitCode = 0;
+
+    const result = await manager.ensureSegment(session, 2);
+
+    expect(calls).toHaveLength(1); // present file wins — no second spawn
+    expect(result).toBe(seg2Path);
+
+    await manager.closeAll();
+  });
+
+  it("seek restart passes boundary start + epsilon", async () => {
+    const { spawn, calls } = makeFakeSpawn();
+    const manager = new SessionManager({ transcodeDir: testDir, spawn });
+
+    const plan: PlaybackPlan = { mode: "remux", audioAction: "copy" };
+    const session = await manager.getOrCreate("file-seek-epsilon:default", {
+      inputPath: "/fake/video.mkv",
+      plan,
+      quality: buildPlaybackQualities({ width: 1920, height: 1080 })[0],
+      durationSec: 12,
+      segSec: 6,
+      boundaries: [
+        { start: 0, duration: 6 },
+        { start: 6.006, duration: 6 },
+      ],
+    });
+
+    // Fresh session: proc is null (dead) and seg1.m4s is absent, so this
+    // forces a restart at segment 1 — spawnFfmpeg must pass boundaries[1]'s
+    // exact keyframe start (6.006) PLUS SEEK_EPSILON_SEC (0.25) as -ss, so
+    // ffmpeg's at-or-before container seek lands on the intended keyframe
+    // instead of one GOP early. (0.25, not ~0.01: live-verified against a
+    // real ffmpeg/MKV remux — see SEEK_EPSILON_SEC's doc comment in
+    // session.ts and task-9-report.md "Session fix pass".)
+    await manager.ensureSegment(session, 1);
+
+    expect(calls).toHaveLength(1);
+    const { args } = calls[0];
+    const ssIdx = args.indexOf("-ss");
+    expect(ssIdx).toBeGreaterThanOrEqual(0);
+    expect(args[ssIdx + 1]).toBe("6.256");
 
     await manager.closeAll();
   });
@@ -288,7 +388,7 @@ describe("SessionManager", () => {
     const { spawn } = makeFakeSpawn();
     const manager = new SessionManager({ transcodeDir: testDir, spawn, maxSessions: 2 });
 
-    const plan = decideStrategy({ container: "mkv", videoCodec: "hevc", audioCodecs: ["aac"] });
+    const plan = HEVC_TRANSCODE_PLAN;
     const opts = {
       inputPath: "/fake/video.mkv",
       plan,
@@ -330,7 +430,7 @@ describe("SessionManager", () => {
     // Use a very short timeoutMs so the test doesn't wait 30s.
     const manager = new SessionManager({ transcodeDir: testDir, spawn: noopSpawn, timeoutMs: 200 });
 
-    const plan = decideStrategy({ container: "mkv", videoCodec: "hevc", audioCodecs: ["aac"] });
+    const plan = HEVC_TRANSCODE_PLAN;
     const session = await manager.getOrCreate("file-timeout:default", {
       inputPath: "/fake/video.mkv",
       plan,
@@ -357,7 +457,9 @@ describe("SessionManager", () => {
     const { spawn, calls } = makeFakeSpawn();
     const manager = new SessionManager({ transcodeDir: testDir, spawn });
 
-    const plan = decideStrategy({ container: "mp4", videoCodec: "h264", audioCodecs: ["aac"] });
+    // A downscale forces transcode regardless of the base plan (see
+    // spawnFfmpeg); a remux literal keeps this a SessionManager-plumbing test.
+    const plan: PlaybackPlan = { mode: "remux", audioAction: "copy" };
     const quality = buildPlaybackQualities({ width: 1920, height: 1080 })[1];
     expect(quality.id).toBe("720p");
     const session = await manager.getOrCreate("file-quality:720p:leveled", {

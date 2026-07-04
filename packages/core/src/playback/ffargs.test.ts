@@ -264,4 +264,72 @@ describe("buildHlsArgs", () => {
       expect(a).not.toMatch(/^-\S+ -/);
     }
   });
+
+  describe("audio track selection args", () => {
+    it("maps the requested audio-relative track index", () => {
+      const args = buildHlsArgs({
+        input: "/m.mkv", startSegment: 0, segSec: 6, outDir: "/out",
+        mode: "remux", audioAction: "copy", audioTrackIndex: 2,
+      });
+      expect(args).toContain("0:a:2?");
+      expect(args).not.toContain("0:a:0?");
+    });
+
+    it("uses audioChannels for the aac encode branch", () => {
+      const args = buildHlsArgs({
+        input: "/m.mkv", startSegment: 0, segSec: 6, outDir: "/out",
+        mode: "remux", audioAction: "aac", audioChannels: 6,
+      });
+      const i = args.indexOf("-ac");
+      expect(args[i + 1]).toBe("6");
+    });
+
+    it("defaults: first audio track, stereo", () => {
+      const args = buildHlsArgs({
+        input: "/m.mkv", startSegment: 0, segSec: 6, outDir: "/out",
+        mode: "remux", audioAction: "aac",
+      });
+      expect(args).toContain("0:a:0?");
+      const i = args.indexOf("-ac");
+      expect(args[i + 1]).toBe("2");
+    });
+  });
+
+  describe("boundary-accurate seek + forced keyframes", () => {
+    it("uses startTimeSec verbatim for -ss when provided", () => {
+      const args = buildHlsArgs({
+        input: "/m.mkv", startSegment: 3, segSec: 6, outDir: "/out",
+        mode: "remux", audioAction: "copy", startTimeSec: 17.351,
+      });
+      const i = args.indexOf("-ss");
+      expect(args[i + 1]).toBe("17.351");
+    });
+
+    it("falls back to startSegment*segSec without startTimeSec", () => {
+      const args = buildHlsArgs({
+        input: "/m.mkv", startSegment: 3, segSec: 6, outDir: "/out",
+        mode: "remux", audioAction: "copy",
+      });
+      const i = args.indexOf("-ss");
+      expect(args[i + 1]).toBe("18");
+    });
+
+    it("emits -force_key_frames for transcode when forceKeyframes is set", () => {
+      const args = buildHlsArgs({
+        input: "/m.mkv", startSegment: 0, segSec: 6, outDir: "/out",
+        mode: "transcode", audioAction: "aac", forceKeyframes: true,
+      });
+      const i = args.indexOf("-force_key_frames");
+      expect(i).toBeGreaterThan(-1);
+      expect(args[i + 1]).toBe("expr:gte(t,n_forced*6)");
+    });
+
+    it("never emits -force_key_frames on remux (copy cannot re-place keyframes)", () => {
+      const args = buildHlsArgs({
+        input: "/m.mkv", startSegment: 0, segSec: 6, outDir: "/out",
+        mode: "remux", audioAction: "copy", forceKeyframes: true,
+      });
+      expect(args).not.toContain("-force_key_frames");
+    });
+  });
 });

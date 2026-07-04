@@ -13,6 +13,7 @@ import health from "./routes/health";
 import setup from "./routes/setup";
 import auth from "./routes/auth";
 import profilesRoute from "./routes/profiles";
+import devicesRoute from "./routes/devices";
 import menuRoute from "./routes/menu";
 import settingsRoute from "./routes/settings";
 import transcodeRoute from "./routes/transcode";
@@ -22,6 +23,7 @@ import scanRoute from "./routes/scan";
 import catalogRoute from "./routes/catalog";
 import streamRoute from "./routes/stream";
 import subtitlesRoute from "./routes/subtitles";
+import playbackRoute from "./routes/playback";
 import playstateRoute from "./routes/playstate";
 import wishlistRoute from "./routes/wishlist";
 import discoveryRoute from "./routes/discovery";
@@ -37,6 +39,8 @@ import type { TvUpstream } from "./lib/tv-upstream";
 import { staticWebPlugin } from "./plugins/static-web";
 import { TmdbClient, getSetting } from "@orbix/core";
 import { refreshMetadata } from "./jobs/refresh-metadata.js";
+import { SessionManager } from "./playback/session";
+import { PlaySessionRegistry } from "./playback/registry";
 
 export async function buildApp(
   env: Env,
@@ -52,12 +56,31 @@ export async function buildApp(
   await app.register(queuePlugin(env, { runtime }));
   await app.register(tvQueuePlugin(env));
   await app.register(mountsPlugin(env, { runtime }));
+
+  // Shared playback wiring: the stream routes and POST /api/playback/info
+  // must operate on the same SessionManager + PlaySessionRegistry pair.
+  const sessionManager = new SessionManager({
+    transcodeDir: env.TRANSCODE_DIR,
+    maxSessions: env.MAX_TRANSCODE_SESSIONS,
+    getEncoder: () =>
+      getSetting<string>("encoder", {
+        fallback: "software",
+        read: (k) => app.prisma.setting.findUnique({ where: { key: k } }),
+      }),
+  });
+  const playRegistry = new PlaySessionRegistry();
+  app.decorate("playSessions", playRegistry);
+  app.addHook("onClose", async () => {
+    await sessionManager.closeAll();
+  });
+
   await app.register(health); // root — used by the Docker healthcheck
   // All app API routes live under /api so Fastify can serve them same-origin
   // alongside the static SPA (the browser always calls relative /api/...).
   await app.register(setup, { prefix: "/api" });
   await app.register(auth, { prefix: "/api" });
   await app.register(profilesRoute, { prefix: "/api" });
+  await app.register(devicesRoute, { prefix: "/api" });
   await app.register(menuRoute, { prefix: "/api" });
   await app.register(settingsRoute, { prefix: "/api" });
   await app.register(transcodeRoute, { prefix: "/api" });
@@ -65,7 +88,8 @@ export async function buildApp(
   await app.register(imagesRoute(env), { prefix: "/api" });
   await app.register(scanRoute, { prefix: "/api" });
   await app.register(catalogRoute, { prefix: "/api" });
-  await app.register(streamRoute(env), { prefix: "/api" });
+  await app.register(streamRoute(env, { manager: sessionManager, registry: playRegistry }), { prefix: "/api" });
+  await app.register(playbackRoute({ registry: playRegistry, manager: sessionManager }), { prefix: "/api" });
   await app.register(subtitlesRoute, { prefix: "/api" });
   await app.register(playstateRoute, { prefix: "/api" });
   await app.register(wishlistRoute, { prefix: "/api" });
