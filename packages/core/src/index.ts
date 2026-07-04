@@ -24,6 +24,7 @@ export * from "./metadata/season-shape";
 export * from "./playback/strategy";
 export * from "./playback/playlist";
 export * from "./playback/ffargs";
+export * from "./playback/quality";
 export * from "./playback/capabilities";
 export * from "./playback/resume";
 export * from "./playback/subs";

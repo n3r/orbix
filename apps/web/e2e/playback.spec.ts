@@ -213,6 +213,9 @@ test.describe("Playback wiring", () => {
     // that the Player UI is up. (The inline aspect-video block was removed when
     // the player became a full-screen overlay.)
     await expect(page.getByRole("button", { name: /close player/i })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByLabel("Quality")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByLabel("Subtitles")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByLabel("Audio leveling")).toBeVisible({ timeout: 20_000 });
   });
 
   // ── Test 2: progress / continue-watching / resume round-trip ─────────────

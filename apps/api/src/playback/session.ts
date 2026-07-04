@@ -3,7 +3,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { spawn as nodeSpawn, type ChildProcess } from "node:child_process";
 import { buildVodPlaylist, buildHlsArgs } from "@orbix/core";
-import type { PlaybackPlan } from "@orbix/core";
+import type { PlaybackAudioMode, PlaybackPlan, PlaybackQuality } from "@orbix/core";
 
 export type { PlaybackPlan };
 
@@ -30,6 +30,8 @@ export interface Session {
   segSec: number;
   durationSec: number;
   plan: PlaybackPlan;
+  quality: PlaybackQuality;
+  audioMode: PlaybackAudioMode;
   inputPath: string;
   lastAccess: number;
 }
@@ -110,7 +112,14 @@ export class SessionManager {
   /** Return existing session or create a new one (mkdir recursive; does NOT spawn ffmpeg). */
   async getOrCreate(
     key: string,
-    opts: { inputPath: string; plan: PlaybackPlan; durationSec: number; segSec: number },
+    opts: {
+      inputPath: string;
+      plan: PlaybackPlan;
+      quality: PlaybackQuality;
+      audioMode?: PlaybackAudioMode;
+      durationSec: number;
+      segSec: number;
+    },
   ): Promise<Session> {
     const existing = this.sessions.get(key);
     if (existing) {
@@ -142,6 +151,8 @@ export class SessionManager {
       segSec: opts.segSec,
       durationSec: opts.durationSec,
       plan: opts.plan,
+      quality: opts.quality,
+      audioMode: opts.audioMode ?? "standard",
       inputPath: opts.inputPath,
       lastAccess: Date.now(),
     };
@@ -176,10 +187,15 @@ export class SessionManager {
   private async spawnFfmpeg(session: Session, startSegment: number): Promise<void> {
     this.killProc(session);
 
+    const downscaled = session.quality.id !== "source";
     const mode: "remux" | "transcode" =
-      session.plan.mode === "transcode" ? "transcode" : "remux";
+      downscaled || session.plan.mode === "transcode" ? "transcode" : "remux";
     const audioAction: "copy" | "aac" =
-      "audioAction" in session.plan ? session.plan.audioAction : "aac";
+      session.audioMode === "leveled"
+        ? "aac"
+        : "audioAction" in session.plan
+          ? session.plan.audioAction
+          : "copy";
 
     // Read the encoder setting for transcode mode; fall back to "software" on
     // any error or unknown value so existing playback is never broken.
@@ -203,6 +219,9 @@ export class SessionManager {
       audioAction,
       encoder: encoder as "software" | "vaapi" | "qsv" | "nvenc" | undefined,
       vaapiDevice: process.env.VAAPI_DEVICE || "/dev/dri/renderD128",
+      targetHeight: downscaled ? session.quality.height : null,
+      targetVideoBitrate: downscaled ? session.quality.targetVideoBitrate : null,
+      audioMode: session.audioMode,
     });
 
     const proc = this.spawnFn("ffmpeg", args, { stdio: "ignore" });

@@ -8,6 +8,20 @@
   "track": {
     "label": "Spur {{index}}"
   },
+  "controls": {
+    "quality": "Qualität",
+    "subtitles": "Untertitel"
+  },
+  "quality": {
+    "auto": "Automatisch"
+  },
+  "subtitles": {
+    "off": "Aus"
+  },
+  "audio": {
+    "standard": "Standard",
+    "leveling": "Audio-Ausgleich"
+  },
   "error": {
     "decision": "Wiedergabeentscheidung konnte nicht abgerufen werden",
     "network": "Netzwerkfehler beim Laden des Players",

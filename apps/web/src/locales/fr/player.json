@@ -8,6 +8,20 @@
   "track": {
     "label": "Piste {{index}}"
   },
+  "controls": {
+    "quality": "Qualité",
+    "subtitles": "Sous-titres"
+  },
+  "quality": {
+    "auto": "Auto"
+  },
+  "subtitles": {
+    "off": "Désactivés"
+  },
+  "audio": {
+    "standard": "Standard",
+    "leveling": "Nivellement audio"
+  },
   "error": {
     "decision": "Impossible d'obtenir la décision de lecture",
     "network": "Erreur réseau lors du chargement du lecteur",

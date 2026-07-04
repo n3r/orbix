@@ -1,6 +1,13 @@
 import fs from "node:fs";
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import { decideStrategy, getSetting } from "@orbix/core";
+import {
+  buildPlaybackQualities,
+  decideStrategy,
+  findPlaybackQuality,
+  getSetting,
+  isPlaybackQualityId,
+} from "@orbix/core";
+import type { PlaybackAudioMode, PlaybackPlan, PlaybackQuality } from "@orbix/core";
 import { requireAuth } from "../lib/auth";
 import { activeProfile, profileAllowsItem, assertFileAllowed } from "../lib/catalog-filter";
 import { SessionManager, SegmentTimeoutError } from "../playback/session";
@@ -17,6 +24,88 @@ function contentTypeForContainer(container: string | null | undefined): string {
   return "application/octet-stream";
 }
 
+function parseAudioMode(value: unknown): PlaybackAudioMode {
+  return value === "leveled" ? "leveled" : "standard";
+}
+
+function audioModeIsValid(value: string): value is PlaybackAudioMode {
+  return value === "standard" || value === "leveled";
+}
+
+function hlsIndexUrl(fileId: string, qualityId: string, audioMode: PlaybackAudioMode): string {
+  return `/api/play/${fileId}/hls/${qualityId}/${audioMode}/index.m3u8`;
+}
+
+function escapeAttribute(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+function buildMasterPlaylist(
+  qualities: PlaybackQuality[],
+  audioMode: PlaybackAudioMode,
+): string {
+  const lines = ["#EXTM3U", "#EXT-X-VERSION:7", "#EXT-X-INDEPENDENT-SEGMENTS"];
+
+  for (const quality of qualities) {
+    const attrs = [
+      `BANDWIDTH=${quality.bandwidth}`,
+      quality.width && quality.height ? `RESOLUTION=${quality.width}x${quality.height}` : null,
+      `NAME="${escapeAttribute(quality.label)}"`,
+    ].filter(Boolean);
+    lines.push(`#EXT-X-STREAM-INF:${attrs.join(",")}`);
+    lines.push(`hls/${quality.id}/${audioMode}/index.m3u8`);
+  }
+
+  return lines.join("\n");
+}
+
+function serializeQualityOptions(
+  file: {
+    id: string;
+    width: number | null;
+    height: number | null;
+    bitrate: number | null;
+  },
+  plan: PlaybackPlan,
+) {
+  const qualities = buildPlaybackQualities({
+    width: file.width,
+    height: file.height,
+    bitrate: file.bitrate,
+  });
+  const options = qualities.map((quality) => {
+    const direct = quality.id === "source" && plan.mode === "direct";
+    return {
+      id: quality.id,
+      label: quality.label,
+      width: quality.width,
+      height: quality.height,
+      bandwidth: quality.bandwidth,
+      type: direct ? "direct" : "hls",
+      url: direct ? `/api/play/${file.id}/direct` : hlsIndexUrl(file.id, quality.id, "standard"),
+      hlsUrl: hlsIndexUrl(file.id, quality.id, "standard"),
+    };
+  });
+
+  if (qualities.length > 1) {
+    return [
+      {
+        id: "auto",
+        label: "Auto",
+        width: null,
+        height: null,
+        bandwidth: null,
+        type: "hls",
+        url: `/api/play/${file.id}/master.m3u8`,
+        hlsUrl: `/api/play/${file.id}/master.m3u8`,
+      },
+      ...options,
+    ];
+  }
+
+  return options;
+}
+
 /**
  * Lookup MediaFile and return an active Session for the given fileId.
  * Returns null (+ sends reply) when file is not found, not probed, or blocked
@@ -26,9 +115,20 @@ async function resolveSession(
   app: FastifyInstance,
   manager: SessionManager,
   fileId: string,
+  qualityId: string,
+  audioMode: PlaybackAudioMode,
   req: FastifyRequest,
   reply: { code: (n: number) => { send: (b: unknown) => unknown } },
 ) {
+  if (!isPlaybackQualityId(qualityId)) {
+    reply.code(400).send({ error: "invalid_quality" });
+    return null;
+  }
+  if (!audioModeIsValid(audioMode)) {
+    reply.code(400).send({ error: "invalid_audio_mode" });
+    return null;
+  }
+
   // Load the file (with its parent item's rating) and the active profile in
   // parallel so we can enforce the kids maturity cap before serving any bytes.
   const [file, profile] = await Promise.all([
@@ -40,7 +140,10 @@ async function resolveSession(
         container: true,
         videoCodec: true,
         audioCodecs: true,
+        width: true,
+        height: true,
         durationSec: true,
+        bitrate: true,
         mediaItem: { select: { rating: true } },
       },
     }),
@@ -68,11 +171,23 @@ async function resolveSession(
     videoCodec: file.videoCodec ?? undefined,
     audioCodecs: file.audioCodecs,
   });
+  const qualities = buildPlaybackQualities({
+    width: file.width,
+    height: file.height,
+    bitrate: file.bitrate,
+  });
+  const quality = findPlaybackQuality(qualities, qualityId);
+  if (!quality) {
+    reply.code(404).send({ error: "quality_not_available" });
+    return null;
+  }
 
-  const key = `${fileId}:${DEFAULT_PROFILE}`;
+  const key = `${fileId}:${profile?.id ?? DEFAULT_PROFILE}:${quality.id}:${audioMode}`;
   const session = await manager.getOrCreate(key, {
     inputPath: file.path,
     plan,
+    quality,
+    audioMode,
     durationSec: file.durationSec,
     segSec: DEFAULT_SEG_SEC,
   });
@@ -116,6 +231,9 @@ export default function streamRoute(env: { TRANSCODE_DIR: string; MAX_TRANSCODE_
               container: true,
               videoCodec: true,
               audioCodecs: true,
+              width: true,
+              height: true,
+              bitrate: true,
               mediaItem: { select: { rating: true } },
             },
           }),
@@ -141,7 +259,15 @@ export default function streamRoute(env: { TRANSCODE_DIR: string; MAX_TRANSCODE_
             ? `/api/play/${file.id}/direct`
             : `/api/play/${file.id}/master.m3u8`;
 
-        return { mode: plan.mode, url };
+        return {
+          mode: plan.mode,
+          url,
+          qualities: serializeQualityOptions(file, plan),
+          audioModes: [
+            { id: "standard", label: "Standard" },
+            { id: "leveled", label: "Leveling" },
+          ],
+        };
       },
     );
 
@@ -234,18 +360,24 @@ export default function streamRoute(env: { TRANSCODE_DIR: string; MAX_TRANSCODE_
       { preHandler: requireAuth(app) },
       async (req, reply) => {
         const { fileId } = req.params;
+        const audioMode = parseAudioMode((req.query as { audio?: string }).audio);
 
         // Kids-safety gate: check before serving the master playlist.
         if (!await assertFileAllowed(app, req, fileId, reply)) return;
 
         const file = await app.prisma.mediaFile.findUnique({
           where: { id: fileId },
-          select: { id: true },
+          select: { id: true, width: true, height: true, bitrate: true },
         });
         if (!file) return reply.code(404).send({ error: "not_found" });
 
-        const master = ["#EXTM3U", "#EXT-X-STREAM-INF:BANDWIDTH=2000000", "index.m3u8"].join(
-          "\n",
+        const master = buildMasterPlaylist(
+          buildPlaybackQualities({
+            width: file.width,
+            height: file.height,
+            bitrate: file.bitrate,
+          }),
+          audioMode,
         );
 
         return reply
@@ -263,7 +395,15 @@ export default function streamRoute(env: { TRANSCODE_DIR: string; MAX_TRANSCODE_
       { preHandler: requireAuth(app) },
       async (req, reply) => {
         const { fileId } = req.params;
-        const session = await resolveSession(app, manager, fileId, req, reply);
+        const session = await resolveSession(
+          app,
+          manager,
+          fileId,
+          "source",
+          "standard",
+          req,
+          reply,
+        );
         if (!session) return;
 
         return reply
@@ -281,7 +421,15 @@ export default function streamRoute(env: { TRANSCODE_DIR: string; MAX_TRANSCODE_
       { preHandler: requireAuth(app) },
       async (req, reply) => {
         const { fileId } = req.params;
-        const session = await resolveSession(app, manager, fileId, req, reply);
+        const session = await resolveSession(
+          app,
+          manager,
+          fileId,
+          "source",
+          "standard",
+          req,
+          reply,
+        );
         if (!session) return;
 
         let initPath: string;
@@ -302,6 +450,88 @@ export default function streamRoute(env: { TRANSCODE_DIR: string; MAX_TRANSCODE_
     );
 
     // ------------------------------------------------------------------
+    // GET /play/:fileId/hls/:quality/:audio/index.m3u8
+    // ------------------------------------------------------------------
+    app.get<{ Params: { fileId: string; quality: string; audio: string } }>(
+      "/play/:fileId/hls/:quality/:audio/index.m3u8",
+      { preHandler: requireAuth(app) },
+      async (req, reply) => {
+        const { fileId, quality, audio } = req.params;
+        if (!audioModeIsValid(audio)) return reply.code(400).send({ error: "invalid_audio_mode" });
+        const session = await resolveSession(app, manager, fileId, quality, audio, req, reply);
+        if (!session) return;
+
+        return reply
+          .code(200)
+          .header("Content-Type", "application/vnd.apple.mpegurl")
+          .send(manager.playlist(session));
+      },
+    );
+
+    // ------------------------------------------------------------------
+    // GET /play/:fileId/hls/:quality/:audio/init.mp4
+    // ------------------------------------------------------------------
+    app.get<{ Params: { fileId: string; quality: string; audio: string } }>(
+      "/play/:fileId/hls/:quality/:audio/init.mp4",
+      { preHandler: requireAuth(app) },
+      async (req, reply) => {
+        const { fileId, quality, audio } = req.params;
+        if (!audioModeIsValid(audio)) return reply.code(400).send({ error: "invalid_audio_mode" });
+        const session = await resolveSession(app, manager, fileId, quality, audio, req, reply);
+        if (!session) return;
+
+        let initPath: string;
+        try {
+          initPath = await manager.ensureInit(session);
+        } catch (err) {
+          if (err instanceof SegmentTimeoutError) {
+            return reply.code(504).send({ error: "timeout", message: err.message });
+          }
+          throw err;
+        }
+
+        return reply
+          .code(200)
+          .header("Content-Type", "video/mp4")
+          .send(fs.createReadStream(initPath));
+      },
+    );
+
+    // ------------------------------------------------------------------
+    // GET /play/:fileId/hls/:quality/:audio/:seg
+    // ------------------------------------------------------------------
+    app.get<{ Params: { fileId: string; quality: string; audio: string; seg: string } }>(
+      "/play/:fileId/hls/:quality/:audio/:seg",
+      { preHandler: requireAuth(app) },
+      async (req, reply) => {
+        const { fileId, quality, audio, seg } = req.params;
+        if (!audioModeIsValid(audio)) return reply.code(400).send({ error: "invalid_audio_mode" });
+
+        const m = /^seg(\d+)\.m4s$/.exec(seg);
+        if (!m) return reply.code(400).send({ error: "bad_segment" });
+        const n = parseInt(m[1], 10);
+
+        const session = await resolveSession(app, manager, fileId, quality, audio, req, reply);
+        if (!session) return;
+
+        let segPath: string;
+        try {
+          segPath = await manager.ensureSegment(session, n);
+        } catch (err) {
+          if (err instanceof SegmentTimeoutError) {
+            return reply.code(504).send({ error: "timeout", message: err.message });
+          }
+          throw err;
+        }
+
+        return reply
+          .code(200)
+          .header("Content-Type", "video/iso.segment")
+          .send(fs.createReadStream(segPath));
+      },
+    );
+
+    // ------------------------------------------------------------------
     // GET /play/:fileId/:seg — fMP4 media segments (seg<N>.m4s)
     // ------------------------------------------------------------------
     app.get<{ Params: { fileId: string; seg: string } }>(
@@ -314,7 +544,15 @@ export default function streamRoute(env: { TRANSCODE_DIR: string; MAX_TRANSCODE_
         if (!m) return reply.code(400).send({ error: "bad_segment" });
         const n = parseInt(m[1], 10);
 
-        const session = await resolveSession(app, manager, fileId, req, reply);
+        const session = await resolveSession(
+          app,
+          manager,
+          fileId,
+          "source",
+          "standard",
+          req,
+          reply,
+        );
         if (!session) return;
 
         let segPath: string;

@@ -19,12 +19,30 @@ import { apiFetch } from "@/lib/api";
 interface Decision {
   mode: string;
   url: string;
+  qualities?: QualityOption[];
+  audioModes?: AudioModeOption[];
+}
+
+interface QualityOption {
+  id: string;
+  label: string;
+  type: "direct" | "hls";
+  url: string;
+  hlsUrl?: string;
+}
+
+type AudioMode = "standard" | "leveled";
+
+interface AudioModeOption {
+  id: AudioMode;
+  label: string;
 }
 
 interface SubTrack {
   index: number;
   codec: string;
   language?: string;
+  label?: string;
   burnIn: boolean;
 }
 
@@ -77,11 +95,15 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
   const [decision, setDecision] = useState<Decision | null>(null);
   const [subs, setSubs] = useState<SubTrack[]>([]);
   const [resume, setResume] = useState<Progress | null>(null);
+  const [selectedQuality, setSelectedQuality] = useState("source");
+  const [audioMode, setAudioMode] = useState<AudioMode>("standard");
+  const [selectedSubtitle, setSelectedSubtitle] = useState("off");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const playerRef = useRef<MediaPlayerInstance>(null);
   const resumedRef = useRef(false);
+  const pendingSeekRef = useRef<number | null>(null);
 
   // Fetch decision, subtitle tracks, and saved progress on mount
   useEffect(() => {
@@ -99,6 +121,8 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
         }
         const d = (await decisionRes.json()) as Decision;
         setDecision(d);
+        setSelectedQuality(d.qualities?.find((q) => q.id === "source")?.id ?? d.qualities?.[0]?.id ?? "source");
+        setAudioMode("standard");
 
         if (subsRes.ok) {
           const s = (await subsRes.json()) as SubTrack[];
@@ -116,6 +140,13 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
       }
     })();
   }, [fileId, mediaItemId, progressQuery, t]);
+
+  useEffect(() => {
+    if (selectedSubtitle === "off") return;
+    if (!subs.some((s) => !s.burnIn && String(s.index) === selectedSubtitle)) {
+      setSelectedSubtitle("off");
+    }
+  }, [selectedSubtitle, subs]);
 
   // Save progress to the server (reads live state from the player ref)
   const saveProgress = useCallback(async () => {
@@ -168,6 +199,12 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
 
   // Resume: seek to saved position when the player is ready
   const handleCanPlay = useCallback(() => {
+    if (pendingSeekRef.current !== null) {
+      const seekTo = pendingSeekRef.current;
+      pendingSeekRef.current = null;
+      if (seekTo > 0) playerRef.current?.remoteControl.seek(seekTo);
+      return;
+    }
     if (resumedRef.current) return;
     if (!resume || resume.positionSec <= 0 || resume.finished) return;
     resumedRef.current = true;
@@ -178,6 +215,12 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
   const handlePause = useCallback(() => {
     void saveProgress();
   }, [saveProgress]);
+
+  const rememberPlaybackTime = useCallback(() => {
+    const player = playerRef.current;
+    if (!player) return;
+    pendingSeekRef.current = player.state.currentTime;
+  }, []);
 
   if (loading) {
     return (
@@ -196,13 +239,61 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
   }
 
   const textTracks = subs.filter((s) => !s.burnIn);
+  const selectedTrack =
+    selectedSubtitle === "off"
+      ? null
+      : textTracks.find((track) => String(track.index) === selectedSubtitle) ?? null;
+  const qualityOptions =
+    decision.qualities && decision.qualities.length > 0
+      ? decision.qualities
+      : [
+          {
+            id: "source",
+            label: "Original",
+            type: decision.mode === "direct" ? "direct" : "hls",
+            url: decision.url,
+            hlsUrl: decision.url,
+          } satisfies QualityOption,
+        ];
+  const activeQuality =
+    qualityOptions.find((quality) => quality.id === selectedQuality) ?? qualityOptions[0];
+  const audioModes =
+    decision.audioModes && decision.audioModes.length > 0
+      ? decision.audioModes
+      : [
+          { id: "standard" as const, label: t("player:audio.standard") },
+          { id: "leveled" as const, label: t("player:audio.leveling") },
+        ];
+  const audioLevelingAvailable = audioModes.some((mode) => mode.id === "leveled");
+  const sourceIsDirect = activeQuality.type === "direct" && audioMode === "standard";
+  const sourceUrl =
+    activeQuality.id === "auto"
+      ? `/api/play/${fileId}/master.m3u8?audio=${audioMode}`
+      : sourceIsDirect
+        ? activeQuality.url
+        : `/api/play/${fileId}/hls/${activeQuality.id}/${audioMode}/index.m3u8`;
+  const sourceType = sourceIsDirect ? "video/mp4" : "application/x-mpegurl";
+
+  const handleQualityChange = (value: string) => {
+    if (value === selectedQuality) return;
+    rememberPlaybackTime();
+    setSelectedQuality(value);
+  };
+
+  const handleAudioModeChange = (enabled: boolean) => {
+    const next = enabled ? "leveled" : "standard";
+    if (next === audioMode) return;
+    rememberPlaybackTime();
+    setAudioMode(next);
+  };
 
   return (
     <MediaPlayer
+      key={sourceUrl}
       ref={playerRef}
       title={title}
-      src={{ src: decision.url, type: decision.mode === "direct" ? "video/mp4" : "application/x-mpegurl" }}
-      className="h-full w-full bg-black"
+      src={{ src: sourceUrl, type: sourceType }}
+      className="relative h-full w-full bg-black"
       style={{ "--media-brand": "var(--accent)" }}
       autoPlay
       playsInline
@@ -212,15 +303,16 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
       onPause={handlePause}
     >
       <MediaProvider>
-        {textTracks.map((track) => (
+        {selectedTrack && (
           <Track
-            key={String(track.index)}
-            src={`/api/play/${fileId}/subs/${track.index}.vtt`}
+            key={String(selectedTrack.index)}
+            src={`/api/play/${fileId}/subs/${selectedTrack.index}.vtt`}
             kind="subtitles"
-            label={track.language ?? t("player:track.label", { index: track.index })}
-            language={track.language ?? ""}
+            label={selectedTrack.label ?? selectedTrack.language ?? t("player:track.label", { index: selectedTrack.index })}
+            language={selectedTrack.language ?? ""}
+            default
           />
-        ))}
+        )}
       </MediaProvider>
       <DefaultVideoLayout
         icons={defaultLayoutIcons}
@@ -228,6 +320,53 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
         seekStep={10}
         slots={{ largeLayout: { beforePlayButton: seekBackward10, afterPlayButton: seekForward30 } }}
       />
+      <div className="pointer-events-none absolute left-16 right-3 top-3 z-10 flex flex-wrap justify-end gap-2 text-[11px] font-medium text-white/85 sm:left-auto sm:text-xs">
+        <label className="pointer-events-auto flex items-center gap-2 rounded-md border border-white/15 bg-black/55 px-2.5 py-2 shadow-lg backdrop-blur-md">
+          <span>{t("player:controls.quality")}</span>
+          <select
+            aria-label={t("player:controls.quality")}
+            value={activeQuality.id}
+            onChange={(event) => handleQualityChange(event.target.value)}
+            className="max-w-32 rounded border border-white/15 bg-black/70 px-2 py-1 text-white outline-none transition-colors focus:border-[var(--accent)]"
+          >
+            {qualityOptions.map((quality) => (
+              <option key={quality.id} value={quality.id}>
+                {quality.id === "auto" ? t("player:quality.auto") : quality.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="pointer-events-auto flex items-center gap-2 rounded-md border border-white/15 bg-black/55 px-2.5 py-2 shadow-lg backdrop-blur-md">
+          <span>{t("player:controls.subtitles")}</span>
+          <select
+            aria-label={t("player:controls.subtitles")}
+            value={selectedSubtitle}
+            onChange={(event) => setSelectedSubtitle(event.target.value)}
+            disabled={textTracks.length === 0}
+            className="max-w-36 rounded border border-white/15 bg-black/70 px-2 py-1 text-white outline-none transition-colors disabled:cursor-not-allowed disabled:text-white/45 focus:border-[var(--accent)]"
+          >
+            <option value="off">{t("player:subtitles.off")}</option>
+            {textTracks.map((track) => (
+              <option key={track.index} value={String(track.index)}>
+                {track.label ?? track.language ?? t("player:track.label", { index: track.index })}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="pointer-events-auto flex items-center gap-2 rounded-md border border-white/15 bg-black/55 px-2.5 py-2 shadow-lg backdrop-blur-md">
+          <input
+            type="checkbox"
+            aria-label={t("player:audio.leveling")}
+            checked={audioMode === "leveled"}
+            disabled={!audioLevelingAvailable}
+            onChange={(event) => handleAudioModeChange(event.target.checked)}
+            className="h-4 w-4 accent-[var(--accent)]"
+          />
+          <span>{t("player:audio.leveling")}</span>
+        </label>
+      </div>
     </MediaPlayer>
   );
 }
