@@ -171,7 +171,7 @@ export default function TvGuidePage() {
                   <span className="grid h-9 w-14 shrink-0 place-items-center overflow-hidden rounded bg-[var(--surface)]">
                     {c.logo ? (
                       <img
-                        src={`/api/images/${c.logo}`}
+                        src={c.logo}
                         alt=""
                         loading="lazy"
                         className="max-h-7 max-w-11 object-contain"

@@ -54,7 +54,7 @@ export default function ChannelCard({
         <div className="grid aspect-video w-full place-items-center">
           {channel.logo ? (
             <img
-              src={`/api/images/${channel.logo}`}
+              src={channel.logo}
               alt=""
               loading="lazy"
               className="max-h-[55%] max-w-[70%] object-contain"

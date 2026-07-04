@@ -214,7 +214,7 @@ export default function LiveTvOverlay({ channels, initialId, onClose }: Props) {
           <span className="text-2xl font-bold tabular-nums text-white/80">{current.number}</span>
           <span className="grid h-10 w-14 place-items-center overflow-hidden rounded bg-white/10">
             {current.logo ? (
-              <img src={`/api/images/${current.logo}`} alt="" className="max-h-8 max-w-12 object-contain" />
+              <img src={current.logo} alt="" className="max-h-8 max-w-12 object-contain" />
             ) : (
               <span
                 aria-hidden
