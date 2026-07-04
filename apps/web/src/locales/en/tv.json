@@ -53,6 +53,8 @@
   },
   "guidePage": {
     "title": "TV Guide",
+    "viewList": "List",
+    "viewGrid": "Grid",
     "searchPlaceholder": "Search channels",
     "all": "All",
     "favorites": "Favorites",
@@ -63,6 +65,14 @@
     "schedule": "Channel details",
     "noEpg": "No guide data",
     "next": "Next"
+  },
+  "grid": {
+    "now": "Now",
+    "prev": "Previous",
+    "next": "Next",
+    "today": "Today",
+    "tomorrow": "Tomorrow",
+    "showingOf": "Showing {{shown}} of {{total}} — narrow the filter"
   },
   "channel": {
     "number": "Channel {{number}}",

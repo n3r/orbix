@@ -53,6 +53,8 @@
   },
   "guidePage": {
     "title": "TV-Programm",
+    "viewList": "Liste",
+    "viewGrid": "Raster",
     "searchPlaceholder": "Sender suchen",
     "all": "Alle",
     "favorites": "Favoriten",
@@ -63,6 +65,14 @@
     "schedule": "Senderdetails",
     "noEpg": "Keine Programmdaten",
     "next": "Danach"
+  },
+  "grid": {
+    "now": "Jetzt",
+    "prev": "Zurück",
+    "next": "Weiter",
+    "today": "Heute",
+    "tomorrow": "Morgen",
+    "showingOf": "{{shown}} von {{total}} werden angezeigt — Filter eingrenzen"
   },
   "channel": {
     "number": "Sender {{number}}",

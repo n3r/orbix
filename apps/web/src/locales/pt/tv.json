@@ -53,6 +53,8 @@
   },
   "guidePage": {
     "title": "Guia de TV",
+    "viewList": "Lista",
+    "viewGrid": "Grade",
     "searchPlaceholder": "Buscar canais",
     "all": "Todos",
     "favorites": "Favoritos",
@@ -63,6 +65,14 @@
     "schedule": "Detalhes do canal",
     "noEpg": "Sem dados de guia",
     "next": "A seguir"
+  },
+  "grid": {
+    "now": "Agora",
+    "prev": "Anterior",
+    "next": "Próxima",
+    "today": "Hoje",
+    "tomorrow": "Amanhã",
+    "showingOf": "Mostrando {{shown}} de {{total}} — restrinja o filtro"
   },
   "channel": {
     "number": "Canal {{number}}",

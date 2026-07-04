@@ -53,6 +53,8 @@
   },
   "guidePage": {
     "title": "Телепрограмма",
+    "viewList": "Список",
+    "viewGrid": "Сетка",
     "searchPlaceholder": "Поиск каналов",
     "all": "Все",
     "favorites": "Избранное",
@@ -65,6 +67,14 @@
     "schedule": "Сведения о канале",
     "noEpg": "Нет данных телепрограммы",
     "next": "Далее"
+  },
+  "grid": {
+    "now": "Сейчас",
+    "prev": "Назад",
+    "next": "Вперёд",
+    "today": "Сегодня",
+    "tomorrow": "Завтра",
+    "showingOf": "Показано {{shown}} из {{total}} — уточните фильтр"
   },
   "channel": {
     "number": "Канал {{number}}",

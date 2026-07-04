@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn, Input } from "@orbix/ui";
 import { useTvGuide } from "@/lib/queries";
-import type { TvChannelCard } from "@/lib/types";
+import type { TvChannelCard, TvGridChannel } from "@/lib/types";
 import LiveTvOverlay from "@/components/tv/LiveTvOverlay";
 import { ChannelNowNext } from "@/components/tv/ChannelNowNext";
 import { ChannelLogo } from "@/components/tv/ChannelLogo";
+import TvGuideGrid from "@/components/tv/TvGuideGrid";
 import { regionName } from "@/lib/tv";
 import { InfoIcon } from "@/components/shell/icons";
 
@@ -16,6 +17,18 @@ type Filter =
   | { kind: "favorites" }
   | { kind: "country"; code: string }
   | { kind: "category"; id: string };
+
+type GuideView = "list" | "grid";
+const GUIDE_VIEW_STORAGE_KEY = "orbix.tv.guideView";
+
+/** Reads the last-chosen guide view, guarded for SSR/private-mode (no localStorage). */
+function initialGuideView(): GuideView {
+  try {
+    return localStorage.getItem(GUIDE_VIEW_STORAGE_KEY) === "grid" ? "grid" : "list";
+  } catch {
+    return "list"; // no localStorage — default, in-memory only for this session
+  }
+}
 
 // Taller than a plain single-line row (72 vs. 64) to fit the now/next block
 // (title + time, thin progress bar, next line) added below the channel name
@@ -54,6 +67,17 @@ export default function TvGuidePage() {
   const [search, setSearch] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
   const [playing, setPlaying] = useState<{ channels: TvChannelCard[]; id: string } | null>(null);
+  const [view, setViewState] = useState<GuideView>(initialGuideView);
+
+  // Persists across visits (default "list"); guarded the same way as the read.
+  const setView = useCallback((next: GuideView) => {
+    setViewState(next);
+    try {
+      localStorage.setItem(GUIDE_VIEW_STORAGE_KEY, next);
+    } catch {
+      /* no localStorage — the choice just won't survive this session */
+    }
+  }, []);
 
   // 300 ms search debounce.
   useEffect(() => {
@@ -120,13 +144,35 @@ export default function TvGuidePage() {
     }
   }, [virtualItems, channels.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
+  // The grid opens the player exactly like a list row does; it just hands
+  // back its own (now/next-less) channel shape, so bridge it to the
+  // TvChannelCard-shaped zap context LiveTvOverlay expects.
+  const handleGridTune = useCallback((gridChannels: TvGridChannel[], id: string) => {
+    setPlaying({ channels: gridChannels.map((c) => ({ ...c, now: null, next: null })), id });
+  }, []);
+
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-6 md:px-8">
-      <div className="flex items-center justify-between gap-4">
+    <main
+      className={cn(
+        "mx-auto flex w-full flex-col gap-4 px-4 py-6 md:px-8",
+        view === "grid" ? "max-w-7xl" : "max-w-5xl",
+      )}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-bold text-[var(--text)]">{t("tv:guidePage.title")}</h1>
-        <span className="text-sm text-[var(--text-dim)]">
-          {t("tv:guidePage.channelCount", { count: total })}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-[var(--text-dim)]">
+            {t("tv:guidePage.channelCount", { count: total })}
+          </span>
+          <div className="flex gap-2">
+            <Chip active={view === "list"} onClick={() => setView("list")}>
+              {t("tv:guidePage.viewList")}
+            </Chip>
+            <Chip active={view === "grid"} onClick={() => setView("grid")}>
+              {t("tv:guidePage.viewGrid")}
+            </Chip>
+          </div>
+        </div>
       </div>
 
       <Input
@@ -163,70 +209,73 @@ export default function TvGuidePage() {
         ))}
       </div>
 
-      {guide.isLoading ? (
-        <p className="p-4 text-[var(--text-dim)]">{t("common:status.loading")}</p>
-      ) : channels.length === 0 ? (
-        <p className="p-4 text-[var(--text-dim)]">{t("tv:guidePage.empty")}</p>
-      ) : (
-        <div
-          ref={parentRef}
-          className="h-[calc(100vh-260px)] overflow-y-auto rounded-[var(--radius)] border border-[var(--surface-2)]"
-        >
-          <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative" }}>
-            {virtualItems.map((vi) => {
-              const c = channels[vi.index]!;
-              return (
-                <div
-                  key={c.id}
-                  className="group absolute left-0 top-0 flex w-full items-center gap-3 overflow-hidden border-b border-[var(--surface)] px-3"
-                  style={{ height: vi.size, transform: `translateY(${vi.start}px)` }}
-                >
-                  <span className="w-10 shrink-0 text-right text-sm tabular-nums text-[var(--text-dim)]">
-                    {c.number}
-                  </span>
-                  <ChannelLogo
-                    logo={c.logo}
-                    name={c.name}
-                    channelId={c.id}
-                    className="h-9 w-14 shrink-0 rounded bg-[var(--surface)]"
-                    imgClassName="max-h-7 max-w-11"
-                    monogramClassName="text-xs font-bold text-white/90"
-                    loading="lazy"
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-[var(--text)]">{c.name}</span>
-                    <ChannelNowNext now={c.now} next={c.next} />
-                  </span>
-                  {c.quality && (
-                    <span className="shrink-0 rounded-sm bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-[var(--text-dim)]">
-                      {c.quality}
-                    </span>
-                  )}
+      {view === "grid" && <TvGuideGrid filter={params} onTune={handleGridTune} />}
 
-                  {/* Whole row tunes (painted above the cells — later sibling). */}
-                  <button
-                    type="button"
-                    onClick={() => setPlaying({ channels, id: c.id })}
-                    aria-label={t("tv:guidePage.play", { name: c.name })}
-                    className="absolute inset-0 hover:bg-white/5 focus-visible:bg-white/5 focus-visible:outline-none"
-                  />
-                  {/* Channel-details affordance, painted above the row button. */}
-                  <Link
-                    to={`/tv/channel/${c.id}`}
-                    aria-label={t("tv:guidePage.schedule")}
-                    className="relative shrink-0 rounded p-1 text-[var(--text-dim)] opacity-0 transition-opacity hover:text-[var(--text)] focus-visible:opacity-100 group-hover:opacity-100"
+      {view === "list" &&
+        (guide.isLoading ? (
+          <p className="p-4 text-[var(--text-dim)]">{t("common:status.loading")}</p>
+        ) : channels.length === 0 ? (
+          <p className="p-4 text-[var(--text-dim)]">{t("tv:guidePage.empty")}</p>
+        ) : (
+          <div
+            ref={parentRef}
+            className="h-[calc(100vh-260px)] overflow-y-auto rounded-[var(--radius)] border border-[var(--surface-2)]"
+          >
+            <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative" }}>
+              {virtualItems.map((vi) => {
+                const c = channels[vi.index]!;
+                return (
+                  <div
+                    key={c.id}
+                    className="group absolute left-0 top-0 flex w-full items-center gap-3 overflow-hidden border-b border-[var(--surface)] px-3"
+                    style={{ height: vi.size, transform: `translateY(${vi.start}px)` }}
                   >
-                    <InfoIcon className="h-4 w-4" />
-                  </Link>
-                </div>
-              );
-            })}
+                    <span className="w-10 shrink-0 text-right text-sm tabular-nums text-[var(--text-dim)]">
+                      {c.number}
+                    </span>
+                    <ChannelLogo
+                      logo={c.logo}
+                      name={c.name}
+                      channelId={c.id}
+                      className="h-9 w-14 shrink-0 rounded bg-[var(--surface)]"
+                      imgClassName="max-h-7 max-w-11"
+                      monogramClassName="text-xs font-bold text-white/90"
+                      loading="lazy"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-[var(--text)]">{c.name}</span>
+                      <ChannelNowNext now={c.now} next={c.next} />
+                    </span>
+                    {c.quality && (
+                      <span className="shrink-0 rounded-sm bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-[var(--text-dim)]">
+                        {c.quality}
+                      </span>
+                    )}
+
+                    {/* Whole row tunes (painted above the cells — later sibling). */}
+                    <button
+                      type="button"
+                      onClick={() => setPlaying({ channels, id: c.id })}
+                      aria-label={t("tv:guidePage.play", { name: c.name })}
+                      className="absolute inset-0 hover:bg-white/5 focus-visible:bg-white/5 focus-visible:outline-none"
+                    />
+                    {/* Channel-details affordance, painted above the row button. */}
+                    <Link
+                      to={`/tv/channel/${c.id}`}
+                      aria-label={t("tv:guidePage.schedule")}
+                      className="relative shrink-0 rounded p-1 text-[var(--text-dim)] opacity-0 transition-opacity hover:text-[var(--text)] focus-visible:opacity-100 group-hover:opacity-100"
+                    >
+                      <InfoIcon className="h-4 w-4" />
+                    </Link>
+                  </div>
+                );
+              })}
+            </div>
+            {isFetchingNextPage && (
+              <p className="p-3 text-center text-sm text-[var(--text-dim)]">{t("common:status.loading")}</p>
+            )}
           </div>
-          {isFetchingNextPage && (
-            <p className="p-3 text-center text-sm text-[var(--text-dim)]">{t("common:status.loading")}</p>
-          )}
-        </div>
-      )}
+        ))}
 
       {playing && (
         <LiveTvOverlay

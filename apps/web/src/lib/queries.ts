@@ -158,10 +158,18 @@ export interface TvGridParams {
   limit?: number;
 }
 
-/** Windowed time×channel grid page: each visible channel's programmes over [start, start+hours). */
+/**
+ * Windowed time×channel grid page: each visible channel's programmes over
+ * [start, start+hours). `placeholderData` keeps the previous window's data
+ * visible while Prev/Next/Now/day-chip nav loads the next one (same reason
+ * `useTvProgrammes` keeps the previous day visible on a tab switch) — the
+ * grid's query key changes on every nav click (it embeds `start`), and
+ * without this it would flash to a full loading state each time.
+ */
 export function useTvGrid(params: TvGridParams) {
   return useQuery({
     queryKey: ["tv-grid", params],
+    placeholderData: keepPreviousData,
     queryFn: () => {
       const qs = new URLSearchParams();
       if (params.start) qs.set("start", params.start);
