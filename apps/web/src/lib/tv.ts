@@ -6,7 +6,7 @@ export function channelInitials(name: string): string {
   return (
     words
       .slice(0, 2)
-      .map((w) => w[0]!.toUpperCase())
+      .map((w) => [...w][0]!.toUpperCase())
       .join("") || "?"
   );
 }

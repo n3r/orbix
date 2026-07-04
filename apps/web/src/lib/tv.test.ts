@@ -11,6 +11,12 @@ describe("channelInitials", () => {
     expect(channelInitials("")).toBe("?");
     expect(channelInitials("   ")).toBe("?");
   });
+  it("is code-point-aware and does not split astral-plane characters (emoji)", () => {
+    expect(channelInitials("😀 CNN")).toBe("😀C");
+  });
+  it("still handles Cyrillic (BMP) correctly — no regression", () => {
+    expect(channelInitials("Первый канал")).toBe("ПК");
+  });
 });
 
 describe("channelHue", () => {

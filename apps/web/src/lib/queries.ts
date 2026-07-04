@@ -128,7 +128,7 @@ export interface TvGuideParams {
 export function useTvGuide(params: TvGuideParams) {
   const limit = params.limit ?? 100;
   return useInfiniteQuery({
-    queryKey: ["tv-guide", params],
+    queryKey: ["tv-guide", { ...params, limit }],
     initialPageParam: 0,
     queryFn: ({ pageParam }) => {
       const qs = new URLSearchParams();
@@ -156,7 +156,10 @@ export function useTvChannel(id: string | undefined) {
 }
 
 export function useTvFavorites() {
-  return useQuery({ queryKey: ["tv-favorites"], queryFn: () => apiJson<TvChannelCard[]>("/tv/favorites") });
+  return useQuery({
+    queryKey: ["tv-favorites"],
+    queryFn: async () => (await apiJson<{ favorites: TvChannelCard[] }>("/tv/favorites")).favorites,
+  });
 }
 
 /** Day schedule for the channel page (empty until the EPG phase). */
