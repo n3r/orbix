@@ -81,24 +81,24 @@ export default function TopNav({ profile }: { profile: Profile | null }) {
           </div>
         </div>
 
-        {/* Right: heart · search · avatar */}
-        <div className="flex shrink-0 items-center gap-4">
+        {/* Right: heart · search · avatar — each a 44px tap target for touch. */}
+        <div className="-mr-2 flex shrink-0 items-center gap-1">
           <Link
             to="/wishlist"
             aria-label={t("nav:wishlist")}
             aria-current={pathname === "/wishlist" ? "page" : undefined}
             className={cn(
-              "transition-colors",
+              "grid h-11 w-11 place-items-center rounded-full transition-colors",
               pathname === "/wishlist" ? "text-[var(--accent)]" : "text-[var(--text)] hover:text-[var(--text-dim)]",
               focusRing,
             )}
           >
-            <HeartIcon />
+            <HeartIcon className="h-5 w-5" />
           </Link>
-          <Link to="/search" aria-label={t("nav:search")} className={cn("text-[var(--text)] hover:text-[var(--text-dim)] transition-colors", focusRing)}>
-            <SearchIcon />
+          <Link to="/search" aria-label={t("nav:search")} className={cn("grid h-11 w-11 place-items-center rounded-full text-[var(--text)] transition-colors hover:text-[var(--text-dim)]", focusRing)}>
+            <SearchIcon className="h-5 w-5" />
           </Link>
-          <Link to="/account" aria-label={t("nav:account")} className={cn("rounded-full", focusRing)}>
+          <Link to="/account" aria-label={t("nav:account")} className={cn("grid h-11 w-11 place-items-center rounded-full", focusRing)}>
             <Avatar name={profile?.name ?? "?"} src={profile?.avatar ?? undefined} size={32} />
           </Link>
         </div>

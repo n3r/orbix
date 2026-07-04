@@ -42,7 +42,7 @@ const RULER_HEIGHT = 40;
 const NAV_BTN =
   "shrink-0 rounded-full border border-[var(--surface-2)] px-3 py-1 text-sm text-[var(--text-dim)] transition-colors hover:border-[var(--accent)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]";
 const NAV_ICON_BTN =
-  "grid h-7 w-7 shrink-0 place-items-center rounded-full border border-[var(--surface-2)] text-[var(--text-dim)] transition-colors hover:border-[var(--accent)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]";
+  "grid min-h-11 min-w-11 shrink-0 place-items-center rounded-full border border-[var(--surface-2)] text-[var(--text-dim)] transition-colors hover:border-[var(--accent)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]";
 
 export interface TvGuideGridFilter {
   country?: string;

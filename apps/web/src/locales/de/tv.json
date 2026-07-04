@@ -95,7 +95,8 @@
     "tryingSource": "Nächste Quelle wird ausprobiert ({{n}}/{{total}})…",
     "source": "Quelle {{n}}/{{total}}",
     "miniGuide": "Sender",
-    "next": "Danach"
+    "next": "Danach",
+    "previousChannel": "Vorheriger Sender"
   },
   "admin": {
     "title": "Live-TV",

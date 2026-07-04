@@ -7,7 +7,7 @@ import LiveTvPlayer from "./LiveTvPlayer";
 import { NowProgressBar } from "./NowProgressBar";
 import { ChannelNowNext } from "./ChannelNowNext";
 import { ChannelLogo } from "./ChannelLogo";
-import { ChevronDownIcon } from "@/components/shell/icons";
+import { ChevronDownIcon, TvIcon } from "@/components/shell/icons";
 
 const OSD_MS = 4_000;
 
@@ -189,7 +189,18 @@ export default function LiveTvOverlay({ channels, initialId, onClose }: Props) {
     setOffline(true);
   }, []);
 
+  // Pointer equivalent of the "g" shortcut, for the on-screen guide button.
+  const toggleGuide = useCallback(() => {
+    setGuideOpen((open) => {
+      if (!open) setGuideIndex(Math.max(0, channels.findIndex((c) => c.id === currentId)));
+      return !open;
+    });
+  }, [channels, currentId]);
+
   if (!current) return null;
+
+  const ctrlCls =
+    "grid h-11 w-11 place-items-center rounded-full bg-black/40 text-white/90 backdrop-blur transition-colors hover:bg-black/70 hover:text-white";
 
   return createPortal(
     <div
@@ -312,6 +323,20 @@ export default function LiveTvOverlay({ channels, initialId, onClose }: Props) {
           </div>
         </div>
       )}
+
+      {/* Persistent pointer controls so the overlay works without a keyboard
+          (touch / TV-browser): channel up · guide · channel down. */}
+      <div className="absolute right-3 top-1/2 z-30 flex -translate-y-1/2 flex-col gap-2">
+        <button type="button" aria-label={t("tv:player.previousChannel")} onClick={() => zap(-1)} className={cn(ctrlCls, focusRing)}>
+          <ChevronDownIcon className="h-6 w-6 rotate-180" />
+        </button>
+        <button type="button" aria-label={t("tv:player.miniGuide")} onClick={toggleGuide} className={cn(ctrlCls, focusRing)}>
+          <TvIcon className="h-6 w-6" />
+        </button>
+        <button type="button" aria-label={t("tv:player.nextChannel")} onClick={() => zap(1)} className={cn(ctrlCls, focusRing)}>
+          <ChevronDownIcon className="h-6 w-6" />
+        </button>
+      </div>
 
       {/* Close affordance — top-left, above everything (PlayerOverlay pattern). */}
       <button

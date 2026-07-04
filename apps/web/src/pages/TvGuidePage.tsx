@@ -263,7 +263,7 @@ export default function TvGuidePage() {
                     <Link
                       to={`/tv/channel/${c.id}`}
                       aria-label={t("tv:guidePage.schedule")}
-                      className="relative shrink-0 rounded p-1 text-[var(--text-dim)] opacity-0 transition-opacity hover:text-[var(--text)] focus-visible:opacity-100 group-hover:opacity-100"
+                      className="relative shrink-0 rounded p-1 text-[var(--text-dim)] opacity-0 transition-opacity hover:text-[var(--text)] focus-visible:opacity-100 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100"
                     >
                       <InfoIcon className="h-4 w-4" />
                     </Link>

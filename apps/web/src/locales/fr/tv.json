@@ -95,7 +95,8 @@
     "tryingSource": "Tentative de la source suivante ({{n}}/{{total}})…",
     "source": "Source {{n}}/{{total}}",
     "miniGuide": "Chaînes",
-    "next": "Ensuite"
+    "next": "Ensuite",
+    "previousChannel": "Chaîne précédente"
   },
   "admin": {
     "title": "TV en direct",

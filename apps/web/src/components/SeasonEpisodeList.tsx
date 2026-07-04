@@ -91,7 +91,7 @@ export default function SeasonEpisodeList({
               aria-selected={active}
               onClick={() => setSelected(s.seasonNumber)}
               className={cn(
-                "-mb-px border-b-2 px-4 py-2 text-sm transition-colors",
+                "-mb-px min-h-11 border-b-2 px-4 py-2 text-sm transition-colors",
                 active
                   ? "border-[var(--accent)] font-medium text-[var(--text)]"
                   : "border-transparent text-[var(--text-dim)] hover:text-[var(--text)]",

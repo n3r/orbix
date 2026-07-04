@@ -95,7 +95,8 @@
     "tryingSource": "Tentando a próxima fonte ({{n}}/{{total}})…",
     "source": "Fonte {{n}}/{{total}}",
     "miniGuide": "Canais",
-    "next": "A seguir"
+    "next": "A seguir",
+    "previousChannel": "Canal anterior"
   },
   "admin": {
     "title": "TV ao vivo",
