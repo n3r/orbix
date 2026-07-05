@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import path from "node:path";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import {
   buildVodPlaylist,
@@ -7,13 +8,14 @@ import {
   videoCodecString,
   audioCodecString,
   videoRange,
+  selectSubtitleRenditions,
+  subtitleVttRelPath,
 } from "@orbix/core";
 import { requireAuth } from "../lib/auth";
 import { queryTokenAuth, tokenSuffix } from "../lib/device-auth";
 import { assertFileAllowed } from "../lib/catalog-filter";
 import { SessionManager, SegmentTimeoutError } from "../playback/session";
 import type { PlaySessionRegistry, PlaySessionEntry } from "../playback/registry";
-import { IMAGE_CODECS } from "./subtitles";
 
 const DEFAULT_SEG_SEC = 6;
 
@@ -81,7 +83,7 @@ async function resolveByPlaySession(
 }
 
 export default function streamRoute(
-  env: { TRANSCODE_DIR: string; MAX_TRANSCODE_SESSIONS?: number },
+  env: { TRANSCODE_DIR: string; METADATA_DIR: string; MAX_TRANSCODE_SESSIONS?: number },
   deps: { manager: SessionManager; registry: PlaySessionRegistry },
 ) {
   return async function (app: FastifyInstance) {
@@ -232,24 +234,32 @@ export default function streamRoute(
         // client that declared "sidecar" (the web player) adds its own
         // <Track>s, so in-manifest renditions here would duplicate them —
         // omit the whole list for that client.
-        const subtitles = entry.subtitleRenditions
-          ? (media?.subtitleTracks ?? [])
-              .filter((t) => !IMAGE_CODECS.has(t.codec ?? ""))
-              .map((t) => ({
-                name: t.language ?? `Track ${t.index}`,
-                language: t.language,
-                uri: `subs/${t.index}/index.m3u8?playSessionId=${playSessionId}${tokenSuffix(req)}`,
-                // AUTOSELECT=NO: never let a subtitle rendition auto-load. The
-                // WebVTT is extracted live by ffmpeg (`subtitles.ts`), which for
-                // a feature-length file takes tens of seconds; if AVPlayer
-                // auto-selects it, it blocks .readyToPlay on that fetch — the
-                // item hangs at status=unknown (black screen + spinner) and
-                // re-requests the VTT forever. Off by default → video plays
-                // immediately; subtitles stay available for manual selection
-                // (and are cached after first extraction, see subtitles.ts).
-                autoselect: false,
-              }))
-          : [];
+        //
+        // AUTOSELECT is enabled ONLY for tracks whose WebVTT is already
+        // pre-extracted on disk (checked fresh here). A not-yet-extracted track
+        // stays AUTOSELECT=NO so AVPlayer never auto-points at the slow (~30s)
+        // live extraction and stalls .readyToPlay (black screen + endless
+        // re-fetch). Once extracted (scan/backfill/first manual fetch), a later
+        // negotiation's master flips it to AUTOSELECT=YES. The `ready` check is
+        // the freshest possible signal — it reflects extractions that finished
+        // after negotiation but before this playlist fetch.
+        let subtitles: { name: string; language?: string; uri: string; autoselect: boolean }[] = [];
+        if (entry.subtitleRenditions) {
+          const withReady = await Promise.all(
+            (media?.subtitleTracks ?? []).map(async (t) => ({
+              ...t,
+              ready: await fs.promises
+                .access(path.join(env.METADATA_DIR, subtitleVttRelPath(fileId, t.index)))
+                .then(() => true, () => false),
+            })),
+          );
+          subtitles = selectSubtitleRenditions(withReady).map((r) => ({
+            name: r.name,
+            ...(r.language ? { language: r.language } : {}),
+            uri: `subs/${r.index}/index.m3u8?playSessionId=${playSessionId}${tokenSuffix(req)}`,
+            autoselect: r.autoselect,
+          }));
+        }
 
         const master = buildMultivariantPlaylist({
           mediaUri: `index.m3u8?playSessionId=${playSessionId}${tokenSuffix(req)}`,
