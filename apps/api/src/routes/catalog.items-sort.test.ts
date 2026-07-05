@@ -75,12 +75,19 @@ describe("GET /libraries/:id/items — new sorts and genre filter", () => {
     await app.close();
   });
 
-  it("rejects a non-integer genre", async () => {
-    const app = await buildApp(env);
-    authed(app as any);
-    const res = await app.inject({ method: "GET", url: "/api/libraries/lib1/items?genre=abc", cookies });
-    expect(res.statusCode).toBe(400);
-    expect(res.json()).toEqual({ error: "invalid_genre" });
-    await app.close();
-  });
+  it.each(["abc", "", "1e2", "0x23", " ", "1.5", "-1"])(
+    "rejects a non-integer genre (genre=%j)",
+    async (genre) => {
+      const app = await buildApp(env);
+      authed(app as any);
+      const res = await app.inject({
+        method: "GET",
+        url: `/api/libraries/lib1/items?genre=${encodeURIComponent(genre)}`,
+        cookies,
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toEqual({ error: "invalid_genre" });
+      await app.close();
+    },
+  );
 });

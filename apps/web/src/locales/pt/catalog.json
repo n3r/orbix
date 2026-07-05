@@ -17,6 +17,7 @@
   },
   "library": {
     "tabs": { "categories": "Categorias", "browse": "Explorar" },
+    "viewSwitcher": "Visualizações da biblioteca",
     "seeAll": "Ver tudo ({{total}})",
     "back": "Voltar às categorias",
     "emptyCategories": "Ainda sem categorias — os títulos aparecem aqui quando tiverem informação de gênero. Veja a aba Explorar para ver tudo."

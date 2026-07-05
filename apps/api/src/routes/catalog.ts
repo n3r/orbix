@@ -25,10 +25,10 @@ export default async function catalogRoute(app: FastifyInstance) {
       }
       let genreId: number | undefined;
       if (req.query.genre !== undefined) {
-        genreId = Number(req.query.genre);
-        if (!Number.isInteger(genreId)) {
+        if (!/^\d+$/.test(req.query.genre)) {
           return reply.code(400).send({ error: "invalid_genre" });
         }
+        genreId = Number(req.query.genre);
       }
 
       // alpha/rating sort in-memory below; the DB keeps a deterministic

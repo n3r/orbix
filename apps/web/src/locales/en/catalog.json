@@ -17,6 +17,7 @@
   },
   "library": {
     "tabs": { "categories": "Categories", "browse": "Browse" },
+    "viewSwitcher": "Library views",
     "seeAll": "See all ({{total}})",
     "back": "Back to categories",
     "emptyCategories": "No categories yet — titles appear here once they have genre info. See the Browse tab for everything."

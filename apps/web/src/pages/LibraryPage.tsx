@@ -35,7 +35,7 @@ export default function LibraryPage() {
           {libraryName ?? t("catalog:browse.title")}
         </h1>
         <Tabs
-          aria-label={t("catalog:browse.title")}
+          aria-label={t("catalog:library.viewSwitcher")}
           tabs={[
             { value: "categories", label: t("catalog:library.tabs.categories") },
             { value: "browse", label: t("catalog:library.tabs.browse") },

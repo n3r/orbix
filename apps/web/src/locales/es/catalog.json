@@ -17,6 +17,7 @@
   },
   "library": {
     "tabs": { "categories": "Categorías", "browse": "Explorar" },
+    "viewSwitcher": "Vistas de la biblioteca",
     "seeAll": "Ver todo ({{total}})",
     "back": "Volver a categorías",
     "emptyCategories": "Aún no hay categorías: los títulos aparecerán aquí cuando tengan información de género. En la pestaña Explorar está todo."
