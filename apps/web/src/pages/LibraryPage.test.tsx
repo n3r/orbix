@@ -49,6 +49,8 @@ describe("LibraryPage", () => {
     expect(screen.getByRole("link", { name: "See all (30)" }).getAttribute("href")).toBe(
       "/library/lib1?genre=35",
     );
+    const panel = screen.getByRole("tabpanel");
+    expect(panel.getAttribute("aria-labelledby")).toBe("tab-categories");
   });
 
   it("?tab=browse renders the flat alphabetical grid with search, no rails", () => {
@@ -58,6 +60,8 @@ describe("LibraryPage", () => {
     expect(screen.getByRole("link", { name: /Alien/ })).toBeTruthy();
     expect(screen.getByRole("link", { name: /Брат/ })).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "Comedy" })).toBeNull();
+    const panel = screen.getByRole("tabpanel");
+    expect(panel.getAttribute("aria-labelledby")).toBe("tab-browse");
   });
 
   it("?genre=35 renders the See-all grid with genre heading and a back link", () => {

@@ -47,11 +47,13 @@ export default function LibraryPage() {
         />
       </div>
 
-      {tab === "categories" ? (
-        <CategoriesTab libraryId={libraryId} />
-      ) : (
-        <BrowseTab libraryId={libraryId} />
-      )}
+      <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
+        {tab === "categories" ? (
+          <CategoriesTab libraryId={libraryId} />
+        ) : (
+          <BrowseTab key={libraryId} libraryId={libraryId} />
+        )}
+      </div>
     </main>
   );
 }
