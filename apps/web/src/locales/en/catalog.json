@@ -1,8 +1,12 @@
 {
   "rows": {
     "continue": "Continue Watching",
+    "wishlist": "From your wishlist",
+    "recentlyAdded": "Recently added",
     "hiddenGems": "Hidden gems",
     "tonight": "Pick something for tonight",
+    "topRated": "Critically acclaimed",
+    "series": "Binge-worthy series",
     "scrollLeft": "Scroll left",
     "scrollRight": "Scroll right"
   },

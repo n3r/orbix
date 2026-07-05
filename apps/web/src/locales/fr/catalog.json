@@ -1,8 +1,12 @@
 {
   "rows": {
     "continue": "Reprendre la lecture",
+    "wishlist": "De votre liste",
+    "recentlyAdded": "Ajoutés récemment",
     "hiddenGems": "Perles cachées",
     "tonight": "Une idée pour ce soir",
+    "topRated": "Acclamés par la critique",
+    "series": "Séries à dévorer",
     "scrollLeft": "Faire défiler vers la gauche",
     "scrollRight": "Faire défiler vers la droite"
   },

@@ -85,6 +85,7 @@ export default async function discoveryRoute(app: FastifyInstance) {
       const itemSelect = {
         id: true,
         title: true,
+        kind: true,
         year: true,
         runtimeSec: true,
         rating: true,
@@ -97,7 +98,7 @@ export default async function discoveryRoute(app: FastifyInstance) {
         metacritic: true,
         translations: { where: { language: lang }, select: { title: true } },
         genres: {
-          select: { genre: { select: { name: true } } },
+          select: { genre: { select: { id: true, name: true } } },
         },
         keywords: {
           select: { keyword: { select: { name: true } } },
@@ -118,7 +119,7 @@ export default async function discoveryRoute(app: FastifyInstance) {
       // large libraries (similarity computation is O(catalog) per anchor — fine).
       // For kids profiles, apply the maturity rating filter so blocked titles never
       // enter the rows (profile + ratingFilter resolved above).
-      const [rawItems, allStates, playedEvents, histEvents] = await Promise.all([
+      const [rawItems, allStates, playedEvents, histEvents, wishlistEntries] = await Promise.all([
         app.prisma.mediaItem.findMany({
           take: 2000,
           orderBy: [{ addedAt: "desc" }, { id: "asc" }],
@@ -149,18 +150,27 @@ export default async function discoveryRoute(app: FastifyInstance) {
           take: 50,
           select: { mediaItemId: true },
         }),
+        // Wishlist entries (newest first): the "From your wishlist" row
+        app.prisma.wishlistEntry.findMany({
+          where: { profileId },
+          orderBy: { addedAt: "desc" },
+          select: { mediaItemId: true },
+        }),
       ]);
 
       // Build initial id→item lookup
       const itemById = new Map(rawItems.map((item) => [item.id, item]));
 
       // ── 2. Union-in must-include items ───────────────────────────────────────
-      // history anchors (histEvents) + continue-watching items (allStates) MUST
-      // appear in the catalog regardless of the 2000 cap, so smart rows never
-      // drop a resume card or a "because you watched" anchor.
+      // history anchors (histEvents) + continue-watching items (allStates) +
+      // wishlist entries MUST appear in the catalog regardless of the 2000 cap,
+      // so smart rows never drop a resume card, a "because you watched" anchor,
+      // or a saved title. The extras query keeps the kids rating filter, so a
+      // blocked wishlist item simply never materialises.
       const mustIncludeIds = new Set<string>([
         ...allStates.map((s) => s.mediaItemId),
         ...histEvents.map((e) => e.mediaItemId),
+        ...wishlistEntries.map((w) => w.mediaItemId),
       ]);
       const missingIds = [...mustIncludeIds].filter((id) => !itemById.has(id));
 
@@ -199,6 +209,7 @@ export default async function discoveryRoute(app: FastifyInstance) {
           title: item.title,
           features: { genres, keywords, cast, director },
           playedByProfile: playedIds.has(item.id),
+          kind: item.kind,
           year: item.year,
           runtimeSec: item.runtimeSec,
           addedAt: item.addedAt,
@@ -260,10 +271,37 @@ export default async function discoveryRoute(app: FastifyInstance) {
       const smartRows = buildSmartRows({
         continueWatching: cwList,
         history,
+        wishlist: wishlistEntries,
         catalog,
         simOf: itemSimilarity,
         limit: 20,
       });
+
+      // Localize genre-row titles (core emits the base/en genre name). Like
+      // "because you watched <title>", genre headings are data-bearing, so the
+      // server owns their localization; static headings localize client-side.
+      const genreRows = smartRows.filter((row) => row.key.startsWith("genre:"));
+      if (lang !== "en" && genreRows.length > 0) {
+        const genreIdByName = new Map<string, number>();
+        for (const item of allItems) {
+          for (const g of item.genres) genreIdByName.set(g.genre.name, g.genre.id);
+        }
+        const wantedIds = genreRows
+          .map((row) => genreIdByName.get(row.title))
+          .filter((id): id is number => id !== undefined);
+        if (wantedIds.length > 0) {
+          const genreTrs = await app.prisma.genreTranslation.findMany({
+            where: { language: lang, genreId: { in: wantedIds } },
+            select: { genreId: true, name: true },
+          });
+          const trByGenreId = new Map(genreTrs.map((t) => [t.genreId, t.name]));
+          for (const row of genreRows) {
+            const id = genreIdByName.get(row.title);
+            const tr = id !== undefined ? trByGenreId.get(id) : undefined;
+            if (tr && tr.trim()) row.title = tr;
+          }
+        }
+      }
 
       // ── 7. Hydrate itemIds → cards ──────────────────────────────────────────
       // itemById covers both the capped catalog AND the union-in extras, so
