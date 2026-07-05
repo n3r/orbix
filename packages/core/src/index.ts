@@ -38,6 +38,7 @@ export * from "./discovery/constraints";
 export * from "./discovery/rank";
 export * from "./ratings/maturity";
 export * from "./menu/resolve";
+export * from "./catalog/alpha-sort";
 export * from "./tv/types";
 export * from "./tv/parse-m3u";
 export * from "./tv/clean-name";
