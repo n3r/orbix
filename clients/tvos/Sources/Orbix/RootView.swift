@@ -1,29 +1,24 @@
 import SwiftUI
+import OrbixKit
 
 /// Routes by `AppModel.OnboardingPhase`:
-/// - `.needsServer` — the M0 acceptance surface: the configured server base
-///   URL, editable, reporting reachability (`GET /health`) as a green/red
-///   result. No server address is hardcoded — `AppModel` resolves an
-///   initial value from a launch argument or environment variable, or
-///   leaves the field blank for manual entry.
-/// - `.needsPairing` — the M2 pairing screen (`PairingView`): a code to
-///   enter on another device.
+/// - `.needsServer` — LAN autodetect + manual entry (`serverSelectionView`):
+///   auto-scans the subnet for Orbix servers, offers found ones to pick, and
+///   falls back to a manual address field (with `http://` made optional).
+/// - `.needsPairing` — the M2 pairing screen (`PairingView`).
 /// - `.needsProfile` — the M2 profile picker (`ProfilePickerView`).
-/// - `.ready` — a top-level `TabView` (the tvOS-standard top tab bar) with
-///   two tabs: "Home" (`HomeView`, the M3 Netflix-style rails loaded from
-///   `/api/home/rows`, replacing the M1 playback spike `SpikeListView`) and
-///   "Search" (`SearchView`, M3 Task 5). Each tab owns its own
-///   `NavigationStack`, so drilling into a title from Search doesn't affect
-///   Home's navigation state or vice versa.
+/// - `.ready` — the tvOS top tab bar: "Home" (`HomeView`) and "Search"
+///   (`SearchView`), each owning its own `NavigationStack`.
 struct RootView: View {
     @State private var model = AppModel()
     @State private var baseURLText = ""
+    @State private var showManualEntry = false
     @FocusState private var isTextFieldFocused: Bool
 
     var body: some View {
         switch model.phase {
         case .needsServer:
-            reachabilityView
+            serverSelectionView
         case .needsPairing:
             pairingOrFallback
         case .needsProfile:
@@ -40,56 +35,120 @@ struct RootView: View {
         }
     }
 
-    /// `.needsPairing` is only reached once `configure(baseURLString:)` has
-    /// built a client and confirmed it reachable, so `model.client` is
-    /// always non-nil here in practice; this fallback just avoids force-
-    /// unwrapping across that invariant.
+    /// `.needsPairing`/`.needsProfile` are only reached once
+    /// `configure(baseURLString:)` has built a client, so `model.client` is
+    /// non-nil in practice; these fallbacks just avoid force-unwrapping.
     @ViewBuilder
     private var pairingOrFallback: some View {
-        if model.client != nil {
-            PairingView(model: model)
-        } else {
-            reachabilityView
-        }
+        if model.client != nil { PairingView(model: model) } else { serverSelectionView }
     }
 
-    /// Same invariant/fallback reasoning as `pairingOrFallback`, for the
-    /// profile-picker phase.
     @ViewBuilder
     private var profilePickerOrFallback: some View {
-        if model.client != nil {
-            ProfilePickerView(model: model)
-        } else {
-            reachabilityView
+        if model.client != nil { ProfilePickerView(model: model) } else { serverSelectionView }
+    }
+
+    // MARK: - Server selection (.needsServer)
+
+    private var serverSelectionView: some View {
+        VStack(spacing: 48) {
+            Text("Orbix").font(.system(size: 96, weight: .bold))
+
+            Group {
+                if model.isScanning {
+                    scanningView
+                } else if !model.discoveredServers.isEmpty && !showManualEntry {
+                    serverListView
+                } else {
+                    manualEntryView
+                }
+            }
+            .frame(maxWidth: 1000)
+        }
+        .padding(80)
+        .task {
+            // Auto-scan once on first appearance when no server is configured.
+            if model.baseURL == nil && !model.didScan {
+                await model.scanForServers()
+            }
         }
     }
 
-    private var reachabilityView: some View {
-        VStack(spacing: 40) {
-            Text("Orbix")
-                .font(.system(size: 96, weight: .bold))
-            Text("tvOS client — scaffold")
+    private var scanningView: some View {
+        VStack(spacing: 24) {
+            ProgressView().scaleEffect(1.5)
+            Text("Searching your network for Orbix…")
                 .font(.title2)
                 .foregroundStyle(.secondary)
+        }
+        .accessibilityIdentifier("scanningIndicator")
+    }
 
-            VStack(spacing: 24) {
-                TextField("http://192.168.1.10:1061", text: $baseURLText)
-                    .textFieldStyle(.plain)
-                    .focused($isTextFieldFocused)
-                    .frame(maxWidth: 900)
-                    .onSubmit(checkServer)
-                    .accessibilityIdentifier("baseURLField")
+    private var serverListView: some View {
+        VStack(spacing: 24) {
+            Text("Select your server").font(.title2)
 
-                Button("Check server", action: checkServer)
+            ForEach(model.discoveredServers) { server in
+                Button {
+                    model.configure(baseURLString: server.baseURL)
+                } label: {
+                    HStack(spacing: 20) {
+                        Image(systemName: "server.rack").font(.title2)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(server.name).font(.title3)
+                            Text(server.baseURL).font(.callout).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                    }
+                    .frame(maxWidth: 760)
+                }
+                .accessibilityIdentifier("server_\(server.host)")
+            }
+
+            HStack(spacing: 24) {
+                Button("Enter address manually") { showManualEntry = true }
+                Button("Scan again") { Task { await model.scanForServers() } }
+            }
+            .padding(.top, 8)
+
+            statusView
+        }
+    }
+
+    private var manualEntryView: some View {
+        VStack(spacing: 24) {
+            if model.didScan && model.discoveredServers.isEmpty {
+                Text("No Orbix servers found on your network")
+                    .font(.title2)
+                    .foregroundStyle(.secondary)
+            }
+
+            TextField("192.168.1.10:8080", text: $baseURLText)
+                .textFieldStyle(.plain)
+                .focused($isTextFieldFocused)
+                .frame(maxWidth: 900)
+                .onSubmit(checkServer)
+                .accessibilityIdentifier("baseURLField")
+
+            Text("No need to type http:// — it's added for you.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 24) {
+                Button("Connect", action: checkServer)
                     .disabled(trimmedBaseURLText.isEmpty)
                     .accessibilityIdentifier("checkServerButton")
-
-                statusView
-                    .accessibilityIdentifier("reachabilityStatus")
+                Button("Scan again") {
+                    showManualEntry = false
+                    Task { await model.scanForServers() }
+                }
+                if !model.discoveredServers.isEmpty {
+                    Button("Back to list") { showManualEntry = false }
+                }
             }
-            .padding(.top, 16)
+
+            statusView.accessibilityIdentifier("reachabilityStatus")
         }
-        .padding(80)
         .onAppear {
             if baseURLText.isEmpty {
                 baseURLText = model.baseURL?.absoluteString ?? ""
@@ -106,12 +165,12 @@ struct RootView: View {
                     .font(.title3)
                     .foregroundStyle(.green)
             } else {
-                Label("Server unreachable", systemImage: "xmark.circle.fill")
+                Label("Couldn't reach that server", systemImage: "xmark.circle.fill")
                     .font(.title3)
                     .foregroundStyle(.red)
             }
-        } else {
-            Text(model.isChecking ? "Checking…" : "Not checked yet")
+        } else if model.isChecking {
+            Text("Checking…")
                 .font(.title3)
                 .foregroundStyle(.secondary)
         }
@@ -122,7 +181,9 @@ struct RootView: View {
     }
 
     private func checkServer() {
-        model.configure(baseURLString: trimmedBaseURLText)
+        // Normalize so a viewer can type `192.168.1.95:8080`; an unparseable
+        // string falls through to `configure`, which reports it unreachable.
+        model.configure(baseURLString: normalizeServerURL(trimmedBaseURLText) ?? trimmedBaseURLText)
     }
 }
 

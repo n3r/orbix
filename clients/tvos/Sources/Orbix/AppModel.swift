@@ -56,6 +56,14 @@ final class AppModel {
     /// The current onboarding phase. See `OnboardingPhase`.
     private(set) var phase: OnboardingPhase = .needsServer
 
+    /// LAN autodetect (see `ServerDiscovery`): `true` while a subnet scan is
+    /// running, the Orbix servers the last scan found, and whether any scan
+    /// has completed — the last distinguishes "haven't scanned yet" from
+    /// "scanned and found nothing" for the server-selection UI.
+    private(set) var isScanning = false
+    private(set) var discoveredServers: [DiscoveredServer] = []
+    private(set) var didScan = false
+
     private let tokenStore: TokenStore
 
     init(tokenStore: TokenStore = TokenStore()) {
@@ -267,5 +275,28 @@ final class AppModel {
     /// succeeds: advances to the M3 home screen (`HomeView`).
     func profileSelected() {
         phase = .ready
+    }
+
+    /// Scans the local subnet for Orbix servers (matching the `service:
+    /// "orbix"` marker on `GET /health`) and publishes the results for the
+    /// server-selection UI. A no-op while a scan is already in flight. The
+    /// scan itself runs off the main actor (`ServerDiscovery` is a plain
+    /// `Sendable` struct), so the UI stays responsive; only the state writes
+    /// hop back here.
+    func scanForServers() async {
+        guard !isScanning else { return }
+        isScanning = true
+        discoveredServers = []
+        let servers = await ServerDiscovery().scan()
+        // A concurrent `configure` (e.g. the viewer picked a server or typed
+        // an address while the scan ran) may have advanced past server
+        // selection; don't resurrect stale scan results over it.
+        guard phase == .needsServer else {
+            isScanning = false
+            return
+        }
+        discoveredServers = servers
+        didScan = true
+        isScanning = false
     }
 }
