@@ -1,4 +1,7 @@
 import { describe, it, expect } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { buildApp } from "../app";
 import { injectTimestampMap } from "./subtitles";
 import type { Env } from "@orbix/config";
@@ -244,6 +247,55 @@ describe("Apple-grade playlists", () => {
     expect(res.body).toContain("/api/play/f1/subs/2.vtt?hls=1");
     expect(res.body).toContain("#EXT-X-ENDLIST");
     await app.close();
+  });
+});
+
+// The safety property that lets auto-subtitles be re-enabled: a subtitle
+// rendition may only carry AUTOSELECT=YES once its WebVTT is pre-extracted on
+// disk. Otherwise AVPlayer would auto-load it, block .readyToPlay on the slow
+// live extraction, and black-screen. Readiness is a fresh per-request disk
+// check against METADATA_DIR/subs/<fileId>_<index>.vtt.
+describe("subtitle AUTOSELECT is gated on pre-extraction readiness", () => {
+  function envWith(metadataDir: string): Env {
+    return { ...env, METADATA_DIR: metadataDir };
+  }
+
+  it("keeps AUTOSELECT=NO for a text track with no persisted VTT", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "orbix-subs-"));
+    try {
+      const app = await buildApp(envWith(dir));
+      stubAll(app);
+      const sid = await negotiate(app);
+      const res = await app.inject({ method: "GET", url: `/api/play/f1/master.m3u8?playSessionId=${sid}`, cookies });
+      const mediaLine = res.body.split("\n").find((l) => l.startsWith("#EXT-X-MEDIA"))!;
+      expect(mediaLine).toContain(`URI="subs/2/index.m3u8?playSessionId=${sid}"`);
+      expect(mediaLine).toContain("AUTOSELECT=NO");
+      await app.close();
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("flips to AUTOSELECT=YES once the track's VTT is persisted", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "orbix-subs-"));
+    try {
+      // Pre-extract the en (subrip, index 2) track to its durable location.
+      fs.mkdirSync(path.join(dir, "subs"), { recursive: true });
+      fs.writeFileSync(path.join(dir, "subs", "f1_2.vtt"), "WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nHi\n");
+
+      const app = await buildApp(envWith(dir));
+      stubAll(app);
+      const sid = await negotiate(app);
+      const res = await app.inject({ method: "GET", url: `/api/play/f1/master.m3u8?playSessionId=${sid}`, cookies });
+      const mediaLine = res.body.split("\n").find((l) => l.startsWith("#EXT-X-MEDIA"))!;
+      expect(mediaLine).toContain(`URI="subs/2/index.m3u8?playSessionId=${sid}"`);
+      expect(mediaLine).toContain("AUTOSELECT=YES");
+      // The PGS track (3) is still excluded entirely regardless of readiness.
+      expect(res.body).not.toContain("subs/3/");
+      await app.close();
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

@@ -90,7 +90,7 @@ export async function buildApp(
   await app.register(catalogRoute, { prefix: "/api" });
   await app.register(streamRoute(env, { manager: sessionManager, registry: playRegistry }), { prefix: "/api" });
   await app.register(playbackRoute({ registry: playRegistry, manager: sessionManager }), { prefix: "/api" });
-  await app.register(subtitlesRoute, { prefix: "/api" });
+  await app.register(subtitlesRoute(env), { prefix: "/api" });
   await app.register(playstateRoute, { prefix: "/api" });
   await app.register(wishlistRoute, { prefix: "/api" });
   await app.register(discoveryRoute, { prefix: "/api" });

@@ -10,6 +10,7 @@ import type { Env } from "@orbix/config";
 import { Prisma, type PrismaClient } from "@orbix/db";
 import { buildMountRuntime, type MountRuntime } from "../lib/mount-runtime";
 import { extractKeyframes, keyframeProbeRunner } from "../jobs/extract-keyframes";
+import { extractSubtitles, subtitleExtractRunner } from "../jobs/extract-subtitles";
 import type { ScanProgress } from "../lib/scan-status";
 import {
   scanSource,
@@ -31,6 +32,7 @@ import {
   tvdbLanguageTag,
   planTmdbDedup,
   planSeriesDedup,
+  selectTextSubtitleTracks,
   parseMediaPath,
   matchSpecialEpisode,
   PROVISIONAL_SPECIAL_BASE,
@@ -127,6 +129,10 @@ export interface KeyframesJobData {
   fileId: string;
 }
 
+export interface SubtitlesJobData {
+  fileId: string;
+}
+
 /**
  * The set of content languages whose metadata must be cached: every distinct
  * profile language except the en base (which lives on the MediaItem/Genre rows).
@@ -170,6 +176,7 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
       app.decorate("scanQueue", stub as unknown as Queue<ScanJobData>);
       app.decorate("translateQueue", stub as unknown as Queue<TranslateJobData>);
       app.decorate("keyframesQueue", stub as unknown as Queue<KeyframesJobData>);
+      app.decorate("subtitlesQueue", stub as unknown as Queue<SubtitlesJobData>);
       return;
     }
 
@@ -233,6 +240,32 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
         }
       };
 
+      // Best-effort pre-extraction of TEXT subtitle tracks for a just-(up)serted
+      // file. Runs as a background job (per-track ffmpeg demux is tens of
+      // seconds for a feature film) so the persisted WebVTT is ready before a
+      // client ever selects it — and so the master playlist can safely
+      // AUTOSELECT it. The job itself skips tracks already on disk, so a rescan
+      // only extracts what's missing. Image-only / un-probed files enqueue
+      // nothing; failures must never fail the scan.
+      const enqueueSubtitlesIfNeeded = async (
+        filePath: string,
+        tech: MediaFileTechnical,
+      ): Promise<void> => {
+        if (!tech.probedOk) return;
+        if (selectTextSubtitleTracks(tech.subtitleTracks).length === 0) return;
+        try {
+          const f = await prisma.mediaFile.findUnique({
+            where: { path: filePath },
+            select: { id: true },
+          });
+          if (f) {
+            await app.subtitlesQueue.add("subtitles", { fileId: f.id }, { jobId: f.id });
+          }
+        } catch (err) {
+          app.log.warn({ err }, "subtitles enqueue failed");
+        }
+      };
+
       const upsertItemAndFile = async (input: {
         libraryId: string;
         file: { path: string; mtime: Date; size: number };
@@ -286,6 +319,7 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
         if (existing) {
           await prisma.mediaFile.update({ where: { id: existing.id }, data: fileData });
           await enqueueKeyframesIfNeeded(input.file.path, input.tech);
+          await enqueueSubtitlesIfNeeded(input.file.path, input.tech);
           return { itemId: existing.mediaItemId, created: false };
         }
 
@@ -442,6 +476,7 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
           });
 
           await enqueueKeyframesIfNeeded(input.file.path, input.tech);
+          await enqueueSubtitlesIfNeeded(input.file.path, input.tech);
           return { itemId: series.id, created: true };
         }
 
@@ -487,6 +522,7 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
         });
 
         await enqueueKeyframesIfNeeded(input.file.path, input.tech);
+        await enqueueSubtitlesIfNeeded(input.file.path, input.tech);
         return { itemId: item.id, created: true };
       };
 
@@ -1638,6 +1674,39 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
     keyframesWorker.on("error", (err) => app.log.error({ err }, "keyframes worker error"));
     app.decorate("keyframesQueue", keyframesQueue);
 
+    // ── Subtitle pre-extraction ──────────────────────────────────────────────
+
+    // Pre-extract text subtitle tracks to durable WebVTT (METADATA_DIR) so a
+    // selected subtitle serves instantly and the master playlist can safely
+    // AUTOSELECT it. jobId=fileId dedups concurrent enqueues (scan + backfill);
+    // removeOnComplete/removeOnFail keeps Redis bounded and lets a later rescan
+    // re-enqueue. Concurrency 1: extraction is a slow full-file demux — run it
+    // steadily in the background, never in a burst that starves playback ffmpeg.
+    const subtitlesQueue = new Queue<SubtitlesJobData>("subtitles", {
+      connection,
+      defaultJobOptions: { removeOnComplete: true, removeOnFail: true },
+    });
+
+    const subtitlesWorker = new Worker<SubtitlesJobData, void>(
+      "subtitles",
+      async (job) => {
+        const res = await extractSubtitles(job.data.fileId, {
+          run: subtitleExtractRunner,
+          exists: (a) => fs.promises.access(a).then(() => true, () => false),
+          writeFile: async (a, content) => {
+            await fs.promises.mkdir(path.dirname(a), { recursive: true });
+            await fs.promises.writeFile(a, content, "utf8");
+          },
+          metadataDir: env.METADATA_DIR,
+          prisma: app.prisma as never,
+        });
+        app.log.info({ fileId: job.data.fileId, res }, "subtitle extraction done");
+      },
+      { connection, concurrency: 1 },
+    );
+    subtitlesWorker.on("error", (err) => app.log.error({ err }, "subtitles worker error"));
+    app.decorate("subtitlesQueue", subtitlesQueue);
+
     app.addHook("onClose", async () => {
       await worker.close();
       await queue.close();
@@ -1645,6 +1714,8 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
       await translateQueue.close();
       await keyframesWorker.close();
       await keyframesQueue.close();
+      await subtitlesWorker.close();
+      await subtitlesQueue.close();
     });
   });
 }
@@ -1656,5 +1727,6 @@ declare module "fastify" {
     scanQueue: Queue<ScanJobData>;
     translateQueue: Queue<TranslateJobData>;
     keyframesQueue: Queue<KeyframesJobData>;
+    subtitlesQueue: Queue<SubtitlesJobData>;
   }
 }
