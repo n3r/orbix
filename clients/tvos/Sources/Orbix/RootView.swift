@@ -45,9 +45,7 @@ struct RootView: View {
     // MARK: - Server selection (.needsServer)
 
     private var serverSelectionView: some View {
-        VStack(spacing: 48) {
-            Text("Orbix").font(.system(size: 96, weight: .bold))
-
+        OnboardingChrome {
             Group {
                 if model.isScanning {
                     scanningView
@@ -59,7 +57,6 @@ struct RootView: View {
             }
             .frame(maxWidth: 1000)
         }
-        .padding(80)
         .task {
             // Auto-scan once on first appearance when no server is configured.
             if model.baseURL == nil && !model.didScan {
@@ -73,7 +70,7 @@ struct RootView: View {
             ProgressView().scaleEffect(1.5)
             Text("Searching your network for Orbix…")
                 .font(.title2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(OrbixColor.textDim)
         }
         .accessibilityIdentifier("scanningIndicator")
     }
@@ -90,18 +87,21 @@ struct RootView: View {
                         Image(systemName: "server.rack").font(.title2)
                         VStack(alignment: .leading, spacing: 4) {
                             Text(server.name).font(.title3)
-                            Text(server.baseURL).font(.callout).foregroundStyle(.secondary)
+                            Text(server.baseURL).font(.callout).foregroundStyle(OrbixColor.textDim)
                         }
                         Spacer()
                     }
                     .frame(maxWidth: 760)
                 }
+                .buttonStyle(OrbixButtonStyle(.ghost))
                 .accessibilityIdentifier("server_\(server.host)")
             }
 
             HStack(spacing: 24) {
                 Button("Enter address manually") { showManualEntry = true }
+                    .buttonStyle(OrbixButtonStyle(.ghost))
                 Button("Scan again") { Task { await model.scanForServers() } }
+                    .buttonStyle(OrbixButtonStyle(.ghost))
             }
             .padding(.top, 8)
 
@@ -114,7 +114,7 @@ struct RootView: View {
             if model.didScan && model.discoveredServers.isEmpty {
                 Text("No Orbix servers found on your network")
                     .font(.title2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(OrbixColor.textDim)
             }
 
             TextField("192.168.1.10:8080", text: $baseURLText)
@@ -126,18 +126,21 @@ struct RootView: View {
 
             Text("No need to type http:// — it's added for you.")
                 .font(.callout)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(OrbixColor.textDim)
 
             HStack(spacing: 24) {
                 Button("Connect", action: checkServer)
+                    .buttonStyle(OrbixButtonStyle(.primary))
                     .disabled(trimmedBaseURLText.isEmpty)
                     .accessibilityIdentifier("checkServerButton")
                 Button("Scan again") {
                     showManualEntry = false
                     Task { await model.scanForServers() }
                 }
+                .buttonStyle(OrbixButtonStyle(.ghost))
                 if !model.discoveredServers.isEmpty {
                     Button("Back to list") { showManualEntry = false }
+                        .buttonStyle(OrbixButtonStyle(.ghost))
                 }
             }
 
@@ -157,16 +160,16 @@ struct RootView: View {
             if reachable {
                 Label("Server reachable", systemImage: "checkmark.circle.fill")
                     .font(.title3)
-                    .foregroundStyle(.green)
+                    .foregroundStyle(OrbixColor.success)
             } else {
                 Label("Couldn't reach that server", systemImage: "xmark.circle.fill")
                     .font(.title3)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(OrbixColor.danger)
             }
         } else if model.isChecking {
             Text("Checking…")
                 .font(.title3)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(OrbixColor.textDim)
         }
     }
 
