@@ -1,6 +1,5 @@
 import OrbixKit
 import SwiftUI
-import UIKit
 
 /// A pushed title/detail-page destination on the shared `NavigationStack`
 /// path `HomeView` owns (see `HomeView.path`, a type-erased `NavigationPath`
@@ -20,15 +19,20 @@ struct TitleRoute: Hashable {
     var autoplay: Bool = false
 }
 
-/// SP2 M3 title/detail page for a single item (movie or series), reached by
-/// selecting a `PosterCard` from a `HomeView` rail (or from this page's own
-/// "More Like This" rail, which pushes another `TitlePage` onto the same
-/// stack — see `path`). Loads `GET /api/items/:id` (+ `/similar`, best
-/// effort) via `TitleModel` and renders a full-bleed, dimmed backdrop with
-/// title/logo, a year·rating·runtime·genres metadata row, the overview, and
-/// either a **Play** button (movie) or a season strip (series — a season
-/// chip pushes a `SeasonRoute` onto `path`; see `SeasonEpisodeView.swift`
-/// for the M3 Task 4 episode list + per-episode playback + next-episode).
+/// Phase 3 Task 3 title/detail page for a single item (movie or series),
+/// reached by selecting a `PosterCard`/billboard "More Info" from `HomeView`
+/// (or from this page's own "More Like This" rail, which pushes another
+/// `TitlePage` onto the same stack — see `path`). Loads `GET /api/items/:id`
+/// (+ `/similar`, best effort) via `TitleModel` and renders the shared
+/// cinematic `TitleHeroView` (backdrop/logo, `RatingBadges`, meta row,
+/// overview, Play/Resume + optimistic Wishlist toggle — tvOS port of the
+/// web's `apps/web/src/components/TitleHero.tsx`), then a page body mirroring
+/// `apps/web/src/pages/TitlePage.tsx`'s section order: hero → (series: season
+/// strip, unchanged this task) → unmatched notice → Cast rail → More Like
+/// This → Details. A season chip pushes a `SeasonRoute` onto `path`; see
+/// `SeasonEpisodeView.swift` for the Task 4 episode list + per-episode
+/// playback + next-episode (which also retires the season strip in favor of
+/// inline tabs + grid).
 struct TitlePage: View {
     let itemId: String
     let model: AppModel
@@ -46,11 +50,6 @@ struct TitlePage: View {
     /// when `detailView` re-appears after the player is dismissed (which
     /// `refreshAfterPlayback` triggers) or on any other re-render.
     @State private var didAutoplay = false
-
-    /// Fixed height of the hero backdrop; large enough to read as
-    /// "full-bleed" on a 1080pt-tall tvOS screen while still leaving the
-    /// season-strip/similar rails visibly peeking in before any scrolling.
-    private static let heroHeight: CGFloat = 820
 
     var body: some View {
         Group {
@@ -96,7 +95,7 @@ struct TitlePage: View {
     /// Fires the direct-play deep-link once: only when `autoplay` was
     /// requested, only for a **movie** (web parity: movie → first file), and
     /// only when there's a playable file. Reuses the same `presentPlayer`
-    /// path the on-page Play button uses. A series `autoplay` route is a
+    /// path the hero's Play button uses. A series `autoplay` route is a
     /// no-op here (documented Phase-2 decision — it just shows the page).
     private func autoplayIfNeeded(_ detail: ItemDetail, client: OrbixClient) {
         guard autoplay, !didAutoplay, detail.kind == "movie",
@@ -108,128 +107,61 @@ struct TitlePage: View {
     private func detailView(_ detail: ItemDetail, similar: [MediaCard], client: OrbixClient) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 56) {
-                hero(detail, client: client)
+                TitleHeroView(
+                    detail: detail,
+                    baseURL: model.baseURL,
+                    imageLoader: imageLoader,
+                    canPlay: canPlay(detail),
+                    resumeAvailable: isSeries(detail) ? false : titleModel.resumeAvailable,
+                    inWishlist: titleModel.inWishlist,
+                    onPlay: { onHeroPlay(detail, client: client) },
+                    onToggleWishlist: { Task { await titleModel.toggleWishlist(client: client) } }
+                )
 
                 if isSeries(detail) {
                     seasonStrip(detail)
                 }
 
+                unmatchedNotice(detail)
+
+                if let cast = detail.cast, !cast.isEmpty {
+                    castRail(cast)
+                }
+
                 if !similar.isEmpty {
                     moreLikeThisRail(similar)
                 }
+
+                detailsBlock(detail)
             }
             .padding(.bottom, 80)
         }
         .accessibilityIdentifier("titlePage_\(detail.id)")
     }
 
-    // MARK: - Hero
+    // MARK: - Hero (TitleHeroView wiring)
 
-    private func hero(_ detail: ItemDetail, client: OrbixClient) -> some View {
-        ZStack(alignment: .bottomLeading) {
-            BackdropImage(url: imageURL(path: detail.backdropPath), imageLoader: imageLoader)
-                .frame(height: Self.heroHeight)
-                .frame(maxWidth: .infinity)
-                .overlay {
-                    // Dims the backdrop so title/metadata/overview text
-                    // stays legible over an arbitrary, potentially busy
-                    // image — heavier toward the bottom, where the text sits.
-                    LinearGradient(
-                        colors: [.black.opacity(0.1), .black.opacity(0.55), .black.opacity(0.92)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                }
-                .clipped()
+    /// Web parity (`TitlePage.tsx` `canPlay`): movie → a playable file
+    /// exists; series → at least one season is known. Drives both
+    /// `TitleHeroView.canPlay` (dims/disables Play) and `onHeroPlay`'s guard.
+    private func canPlay(_ detail: ItemDetail) -> Bool {
+        isSeries(detail) ? !(detail.seasons ?? []).isEmpty : detail.files?.first != nil
+    }
 
-            VStack(alignment: .leading, spacing: 20) {
-                titleOrLogo(detail)
-                metadataRow(detail)
-                overviewText(detail)
-                if !isSeries(detail) {
-                    playButton(detail, client: client)
-                        .padding(.top, 8)
-                }
-            }
-            .frame(maxWidth: 1200, alignment: .leading)
-            .padding(.horizontal, 64)
-            .padding(.bottom, 56)
+    /// Web parity (`TitlePage.tsx` `startPlayback`): a movie plays its first
+    /// file directly through the existing `presentPlayer`/`fullScreenCover`
+    /// plumbing. **Task-4 bridge:** a series has no inline first-episode
+    /// playback yet, so the hero's Play instead pushes the default (first)
+    /// season via the existing `SeasonRoute` — the same destination a season
+    /// chip in `seasonStrip` pushes. Task 4 replaces the season strip with
+    /// inline tabs + a grid and wires true first-episode play here.
+    private func onHeroPlay(_ detail: ItemDetail, client: OrbixClient) {
+        if isSeries(detail) {
+            guard let firstSeason = detail.seasons?.first else { return }
+            path.append(SeasonRoute(seriesId: itemId, seasonNumber: firstSeason.seasonNumber))
+        } else if let fileId = detail.files?.first?.id {
+            presentPlayer(fileId: fileId, title: detail.title, client: client)
         }
-    }
-
-    @ViewBuilder
-    private func titleOrLogo(_ detail: ItemDetail) -> some View {
-        if let url = imageURL(path: detail.logoPath) {
-            LogoImage(url: url, imageLoader: imageLoader, fallbackTitle: detail.title)
-        } else {
-            Text(detail.title)
-                .font(.system(size: 64, weight: .bold))
-                .foregroundStyle(.white)
-                .lineLimit(2)
-                .shadow(color: .black.opacity(0.6), radius: 8, y: 2)
-        }
-    }
-
-    @ViewBuilder
-    private func metadataRow(_ detail: ItemDetail) -> some View {
-        let parts = metadataParts(detail)
-        if !parts.isEmpty {
-            Text(parts.joined(separator: "   ·   "))
-                .font(.callout.weight(.medium))
-                .foregroundStyle(.white.opacity(0.8))
-        }
-    }
-
-    private func metadataParts(_ detail: ItemDetail) -> [String] {
-        var parts: [String] = []
-        if let year = detail.year { parts.append(String(year)) }
-        if let rating = detail.rating, !rating.isEmpty { parts.append(rating) }
-        if let runtime = Self.formattedRuntime(detail.runtimeSec) { parts.append(runtime) }
-        if let genres = detail.genres, !genres.isEmpty { parts.append(genres.joined(separator: ", ")) }
-        return parts
-    }
-
-    /// `3720` → `"1h 2m"`; `600` → `"10m"`; `nil`/non-positive → `nil` (the
-    /// metadata row simply omits runtime rather than showing "0m").
-    private static func formattedRuntime(_ seconds: Int?) -> String? {
-        guard let seconds, seconds > 0 else { return nil }
-        let hours = seconds / 3600
-        let minutes = (seconds % 3600) / 60
-        return hours > 0 ? "\(hours)h \(minutes)m" : "\(minutes)m"
-    }
-
-    @ViewBuilder
-    private func overviewText(_ detail: ItemDetail) -> some View {
-        if let overview = detail.overview, !overview.isEmpty {
-            Text(overview)
-                .font(.title3)
-                .foregroundStyle(.white.opacity(0.9))
-                .lineLimit(3)
-                .frame(maxWidth: 1000, alignment: .leading)
-        }
-    }
-
-    /// Always rendered for a movie (never conditionally hidden): a dimmed,
-    /// `disabled` Play button when there's no playable file communicates
-    /// "this title has no file to play" rather than silently omitting the
-    /// button, which would look like the page just failed to load one.
-    /// (Not a focus-stability concern: tvOS's focus engine simply skips a
-    /// `disabled` control rather than parking focus on it, so this is a
-    /// visual-affordance choice, not one about what's focusable.)
-    @ViewBuilder
-    private func playButton(_ detail: ItemDetail, client: OrbixClient) -> some View {
-        let fileId = detail.files?.first?.id
-        Button {
-            if let fileId { presentPlayer(fileId: fileId, title: detail.title, client: client) }
-        } label: {
-            Label(titleModel.resumeAvailable ? "Resume" : "Play", systemImage: "play.fill")
-                .font(.title3.bold())
-                .padding(.horizontal, 8)
-        }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.large)
-        .disabled(fileId == nil)
-        .accessibilityIdentifier("titlePagePlayButton")
     }
 
     /// Presents the production player (`PlayerScreen`) full-screen — see
@@ -244,10 +176,10 @@ struct TitlePage: View {
     }
 
     /// `.fullScreenCover` covers `TitlePage` rather than pushing away from
-    /// it, so without an explicit refresh, the Play/Resume label and
-    /// "More Like This" rail would keep showing pre-playback state until
-    /// the user navigated away and back. Re-fetching after the player is
-    /// dismissed keeps them current.
+    /// it, so without an explicit refresh, the hero's Play/Resume label,
+    /// wishlist membership, and "More Like This" rail would keep showing
+    /// pre-playback state until the user navigated away and back. Re-fetching
+    /// after the player is dismissed keeps them current.
     private func refreshAfterPlayback() {
         guard let client = model.client else { return }
         Task { await titleModel.load(itemId: itemId, client: client) }
@@ -267,7 +199,81 @@ struct TitlePage: View {
         let baseURL: URL
     }
 
-    // MARK: - Seasons (series)
+    // MARK: - Unmatched notice (web TitlePage.tsx lines 142-144)
+
+    /// A `matchState` other than `"matched"`/`"manual"` means the scanner
+    /// never found (or a human never confirmed) a TMDB/TVDB match — web
+    /// shows a yellow inline notice and a "fix match" control; TV has no
+    /// fix-match UI (admin-only, web-only per the brief), just the notice.
+    @ViewBuilder
+    private func unmatchedNotice(_ detail: ItemDetail) -> some View {
+        if detail.matchState != "matched", detail.matchState != "manual" {
+            Text("Metadata not matched yet — scan with a TMDB token to enrich.")
+                .font(.callout)
+                .foregroundStyle(OrbixColor.warning)
+                .padding(.horizontal, 64)
+                .accessibilityIdentifier("titlePageUnmatchedNotice")
+        }
+    }
+
+    // MARK: - Cast (web TitlePage.tsx lines 146-161)
+
+    private func castRail(_ cast: [ItemDetail.CastMember]) -> some View {
+        VStack(alignment: .leading, spacing: 20) {
+            Text("Cast")
+                .font(.title3.bold())
+                .foregroundStyle(OrbixColor.text)
+                .padding(.leading, 4)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 24) {
+                    ForEach(Array(cast.enumerated()), id: \.offset) { index, member in
+                        castCard(member, index: index)
+                    }
+                }
+                .padding(.horizontal, 4)
+                .padding(.vertical, 16)
+            }
+            .focusSection()
+        }
+        .padding(.horizontal, 64)
+        .accessibilityIdentifier("titlePageCastRail")
+    }
+
+    /// `Button(action: {})` rather than a plain plate: on tvOS a
+    /// `ScrollView(.horizontal)` only auto-scrolls to reveal off-screen
+    /// content when something inside is focusable (unlike the web's
+    /// non-interactive `<div>` cards) — matches `seasonChip`/`PosterCard`'s
+    /// focusable-card convention. There's no cast-detail destination to
+    /// navigate to, so the action is intentionally a no-op.
+    private func castCard(_ member: ItemDetail.CastMember, index: Int) -> some View {
+        Button {
+            // No-op: no cast-detail page exists on TV; the card exists so
+            // the rail is focus-navigable, matching web's read-only cards.
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(member.name)
+                    .font(.headline)
+                    .foregroundStyle(OrbixColor.text)
+                    .lineLimit(1)
+                if let character = member.character, !character.isEmpty {
+                    Text(character)
+                        .font(.subheadline)
+                        .foregroundStyle(OrbixColor.textDim)
+                        .lineLimit(1)
+                }
+            }
+            .frame(width: 200, alignment: .leading)
+            .padding(16)
+            .background(OrbixColor.surface, in: RoundedRectangle(cornerRadius: OrbixRadius.md, style: .continuous))
+        }
+        .buttonStyle(.card)
+        .accessibilityIdentifier("castCard_\(index)")
+    }
+
+    // MARK: - Seasons (series — unchanged this task; Task 4 replaces this
+    // strip with inline season tabs + an episode grid and retires
+    // `SeasonRoute`)
 
     private func isSeries(_ detail: ItemDetail) -> Bool {
         detail.kind == "series"
@@ -363,6 +369,32 @@ struct TitlePage: View {
         path.append(TitleRoute(itemId: card.id))
     }
 
+    // MARK: - Details (web TitlePage.tsx lines 167-179)
+
+    @ViewBuilder
+    private func detailsBlock(_ detail: ItemDetail) -> some View {
+        if detail.director != nil || !(detail.genres ?? []).isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                if let director = detail.director {
+                    detailLine(label: "Director", value: director.name)
+                }
+                if let genres = detail.genres, !genres.isEmpty {
+                    detailLine(label: "Genres", value: genres.joined(separator: ", "))
+                }
+            }
+            .padding(.horizontal, 64)
+            .accessibilityIdentifier("titlePageDetails")
+        }
+    }
+
+    private func detailLine(label: String, value: String) -> some View {
+        (
+            Text("\(label): ").foregroundStyle(OrbixColor.text)
+                + Text(value).foregroundStyle(OrbixColor.textDim)
+        )
+        .font(.callout)
+    }
+
     // MARK: - Loading / empty / error states
 
     private var notFoundView: some View {
@@ -389,21 +421,15 @@ struct TitlePage: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityIdentifier("titlePageErrorState")
     }
-
-    // MARK: - Images
-
-    private func imageURL(path: String?) -> URL? {
-        guard let path, let baseURL = model.baseURL else { return nil }
-        return baseURL.appending(path: "api/images/\(path)")
-    }
 }
 
 /// Drives `TitlePage`: loads `GET /api/items/:id` and, best-effort,
-/// `GET /api/items/:id/similar`. A failed `similar` fetch degrades to an
-/// empty "More Like This" rail rather than failing the whole page — the
-/// main item detail having loaded is what matters; a kids-blocked or
-/// missing item 404s the detail fetch itself, which `loadState` surfaces as
-/// `.notFound` (see `TitlePage.notFoundView`) rather than a crash.
+/// `GET /api/items/:id/similar` + `GET /api/wishlist/ids`. A failed
+/// `similar`/wishlist fetch degrades gracefully (empty "More Like This" rail;
+/// hidden wishlist toggle) rather than failing the whole page — the main item
+/// detail having loaded is what matters; a kids-blocked or missing item 404s
+/// the detail fetch itself, which `loadState` surfaces as `.notFound` (see
+/// `TitlePage.notFoundView`) rather than a crash.
 @MainActor
 @Observable
 final class TitleModel {
@@ -427,10 +453,23 @@ final class TitleModel {
     /// this `false` ("Play"), the same graceful-degradation `similar` gets.
     private(set) var resumeAvailable = false
 
+    /// Wishlist membership for the hero's toggle — `nil` while unknown
+    /// (still loading, or the `wishlistIds` fetch failed/400'd), matching web
+    /// `inWishlist === undefined` (`TitleHero.tsx` line 112): `TitleHeroView`
+    /// hides the toggle entirely rather than guessing. Reset to `nil` at the
+    /// top of every `load` so a reload starts from "unknown" again, not
+    /// stale membership from a previous item.
+    private(set) var inWishlist: Bool?
+
     /// Same "first attempt has resolved one way or another" latch
     /// `HomeModel.hasLoaded` uses, so the single frame before `.task`
     /// starts the first `load` reads as `.loading`, not some other state.
     private(set) var hasLoaded = false
+
+    /// The most recently `load`-ed item id, remembered so `toggleWishlist`
+    /// (which the brief specifies as taking only a `client:`, no `itemId:`)
+    /// has something to call `add/removeFromWishlist(itemId:)` with.
+    private var loadedItemId: String?
 
     init() {}
 
@@ -443,15 +482,19 @@ final class TitleModel {
         return .error(loadError ?? "Something went wrong.")
     }
 
-    /// Fetches the item detail (+ similar, best-effort). Safe to call again
-    /// (e.g. the error state's Retry button) once the previous call has
-    /// finished — mirrors `HomeModel.load`'s re-entrancy guard.
+    /// Fetches the item detail (+ similar, + wishlist membership, all
+    /// best-effort past the detail fetch). Safe to call again (e.g. the
+    /// error state's Retry button, or `TitlePage.refreshAfterPlayback`) once
+    /// the previous call has finished — mirrors `HomeModel.load`'s
+    /// re-entrancy guard.
     func load(itemId: String, client: OrbixClient) async {
         guard !isLoading else { return }
         isLoading = true
         loadError = nil
         notFound = false
         resumeAvailable = false
+        inWishlist = nil
+        loadedItemId = itemId
 
         do {
             detail = try await client.itemDetail(id: itemId)
@@ -476,72 +519,29 @@ final class TitleModel {
             resumeAvailable = progress.positionSec > 0 && !progress.finished
         }
 
+        inWishlist = (try? await client.wishlistIds()).map { $0.contains(itemId) }
+
         isLoading = false
         hasLoaded = true
     }
-}
 
-/// Full-bleed backdrop art fetched via `ImageLoader`; a plain dark fill
-/// while loading or on a missing/failed backdrop — unlike `PosterCard`'s
-/// placeholder glyph, there's no sensible icon for a backdrop, and the
-/// gradient dimming overlay above it reads fine either way.
-private struct BackdropImage: View {
-    let url: URL?
-    let imageLoader: ImageLoader
-
-    @State private var uiImage: UIImage?
-
-    var body: some View {
-        ZStack {
-            Color.black
-            if let uiImage {
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-            }
-        }
-        .clipped()
-        .task(id: url) {
-            uiImage = nil
-            guard let url else { return }
-            if let data = await imageLoader.image(for: url) {
-                uiImage = UIImage(data: data)
-            }
-        }
-    }
-}
-
-/// A title's logo art (transparent-background wordmark), fetched via
-/// `ImageLoader`; falls back to the plain title `Text` (same styling
-/// `TitlePage.titleOrLogo`'s no-logo branch uses) while loading or on a
-/// missing/failed logo.
-private struct LogoImage: View {
-    let url: URL
-    let imageLoader: ImageLoader
-    let fallbackTitle: String
-
-    @State private var uiImage: UIImage?
-
-    var body: some View {
-        Group {
-            if let uiImage {
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: 800, maxHeight: 200, alignment: .leading)
+    /// Web parity (`TitlePage.tsx` lines 111-113 → `useToggleWishlist`):
+    /// optimistic flip, revert on failure. **Known live gap:** the NAS may
+    /// run a server build without the wishlist device-auth fix, in which
+    /// case `add/removeFromWishlist` 400s and this flips then reverts —
+    /// that's the expected, graceful degradation this task's smoke checks
+    /// for, not a bug to chase.
+    func toggleWishlist(client: OrbixClient) async {
+        guard let current = inWishlist, let itemId = loadedItemId else { return }
+        inWishlist = !current
+        do {
+            if current {
+                try await client.removeFromWishlist(itemId: itemId)
             } else {
-                Text(fallbackTitle)
-                    .font(.system(size: 64, weight: .bold))
-                    .foregroundStyle(.white)
-                    .lineLimit(2)
-                    .shadow(color: .black.opacity(0.6), radius: 8, y: 2)
+                try await client.addToWishlist(itemId: itemId)
             }
-        }
-        .task(id: url) {
-            uiImage = nil
-            if let data = await imageLoader.image(for: url) {
-                uiImage = UIImage(data: data)
-            }
+        } catch {
+            inWishlist = current
         }
     }
 }

@@ -106,7 +106,7 @@ struct HomeBillboardView: View {
             HStack(spacing: 12) {
                 if fresh { NewBadge() }
                 if !parts.isEmpty {
-                    Text(parts.joined(separator: "  ·  "))
+                    Text(parts.joined(separator: " · "))
                         .font(.system(size: 26, weight: .medium))
                         .foregroundStyle(OrbixColor.text.opacity(0.85))
                         .shadow(color: .black.opacity(0.7), radius: 2, y: 1)
