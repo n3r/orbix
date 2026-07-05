@@ -26,6 +26,8 @@ Rejected alternatives: clean-room rebuild (re-risks paid-for playback lessons, n
 
 ## 3. Server change (the only one)
 
+> **Amendment (Phase 2 planning):** a second, equally scoped server change surfaced — `apps/api/src/routes/wishlist.ts` reads the `orbix_profile` cookie directly, so device-token clients get `400 no_profile` on every wishlist route. Fix (Phase 2 Task 1): resolve the profile via the shared `activeProfileId(app, req)` helper like `/home/rows` does. Cookie behavior unchanged; covered by a device-token vitest.
+
 `/api/tv/proxy/:streamId/{index.m3u8,p,s}` (apps/api/src/routes/tv-play.ts) currently use `[requireAuth, requireTvAccess]` with **no `queryTokenAuth`** — AVPlayer carries no headers/cookies, so live streams 401 for native clients. Change, mirroring VOD `/api/play/*`:
 
 1. Add `queryTokenAuth` preHandler to the three tv-proxy routes.
