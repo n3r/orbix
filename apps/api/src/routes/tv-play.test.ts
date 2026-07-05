@@ -4,7 +4,7 @@ import type { AddressInfo } from "node:net";
 import type { LookupFunction } from "node:net";
 import { buildApp } from "../app";
 import { makeTvUpstream, BROWSER_UA } from "../lib/tv-upstream";
-import { encodeUpstream, signProxyPayload } from "@orbix/core";
+import { encodeUpstream, signProxyPayload, hashDeviceToken } from "@orbix/core";
 import type { Env } from "@orbix/config";
 
 const env: Env = {
@@ -328,6 +328,98 @@ describe("POST /tv/streams/:id/health", () => {
     (app as any).prisma.tvStream = { findUnique: async () => null, update: async () => ({}) };
     const res = await app.inject({ method: "POST", url: "/api/tv/streams/nope/health", cookies, payload: { ok: true } });
     expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+});
+
+const RAW = "orb_tv-proxy-token";
+const HASH = hashDeviceToken(RAW);
+
+function stubDeviceAuth(app: unknown, opts: { kids?: boolean } = {}) {
+  const device = {
+    id: "dev1", tokenHash: HASH, name: "TV", platform: "tvos",
+    activeProfileId: opts.kids ? "p_kid" : "p_std",
+    lastSeenAt: new Date(), createdAt: new Date(), revokedAt: null,
+  };
+  (app as any).prisma.deviceToken = {
+    findUnique: async ({ where }: any) =>
+      where.tokenHash === HASH || where.id === "dev1" ? device : null,
+    update: async () => device,
+  };
+  (app as any).prisma.account = { findFirst: async () => ({ id: "a1" }), findUnique: async () => ({ isAdmin: true }) };
+  (app as any).prisma.profile = {
+    findUnique: async ({ where }: any) =>
+      where.id === "p_kid" ? kidsProfile : where.id === "p_std" ? standardProfile : null,
+  };
+}
+
+describe("query-token auth on /tv/proxy/*", () => {
+  it("serves the entry playlist with ?token= and no cookies, and propagates the token into child URIs", async () => {
+    const app = await buildTvApp();           // fixture upstream
+    stubDeviceAuth(app);
+    (app as any).prisma.tvStream = { findUnique: async () => streamRow(), update: async () => ({}) };
+    const res = await app.inject({ method: "GET", url: `/api/tv/proxy/st1/index.m3u8?token=${RAW}` });
+    expect(res.statusCode).toBe(200);
+    // every rewritten child URI must keep u=, sig= AND carry token=
+    const lines = res.body.split(/\r?\n/).filter((l: string) => l.includes("/api/tv/proxy/st1/"));
+    expect(lines.length).toBeGreaterThan(0);
+    for (const l of lines) expect(l).toContain(`token=${encodeURIComponent(RAW)}`);
+    await app.close();
+  });
+
+  it("401s the entry playlist without credentials and with an unknown token", async () => {
+    const app = await buildTvApp();
+    stubDeviceAuth(app);
+    (app as any).prisma.tvStream = { findUnique: async () => streamRow(), update: async () => ({}) };
+    expect((await app.inject({ method: "GET", url: "/api/tv/proxy/st1/index.m3u8" })).statusCode).toBe(401);
+    expect((await app.inject({ method: "GET", url: "/api/tv/proxy/st1/index.m3u8?token=orb_wrong" })).statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("403s a kids-profile device token (requireTvAccess still enforced)", async () => {
+    const app = await buildTvApp(kidsProfile);
+    stubDeviceAuth(app, { kids: true });
+    (app as any).prisma.tvStream = { findUnique: async () => streamRow(), update: async () => ({}) };
+    const res = await app.inject({ method: "GET", url: `/api/tv/proxy/st1/index.m3u8?token=${RAW}` });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it("follows the tokened chain: nested playlist (p) and segment bytes (s) authenticate via ?token=", async () => {
+    const app = await buildTvApp();
+    stubDeviceAuth(app);
+    (app as any).prisma.tvStream = { findUnique: async () => streamRow(), update: async () => ({}) };
+    const entry = await app.inject({ method: "GET", url: `/api/tv/proxy/st1/index.m3u8?token=${RAW}` });
+    // pull a rewritten child URI straight from the playlist and fetch it
+    const child = entry.body.split(/\r?\n/).find((l: string) => l.startsWith("/api/tv/proxy/st1/p?"));
+    expect(child).toBeTruthy();
+    const nested = await app.inject({ method: "GET", url: child! });
+    expect(nested.statusCode).toBe(200);
+    const seg = nested.body.split(/\r?\n/).find((l: string) => l.startsWith("/api/tv/proxy/st1/s?"));
+    expect(seg).toBeTruthy();
+    const bytes = await app.inject({ method: "GET", url: seg! });
+    expect(bytes.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("appends ?token= to /tv/channels/:id/play sources for device-token requests, not for cookie requests", async () => {
+    const app = await buildTvApp();
+    stubDeviceAuth(app);
+    (app as any).prisma.tvChannel = {
+      findUnique: async () => ({
+        id: "ch1", number: 5, name: "One", logoPath: null, country: "RU", quality: "1080p", hidden: false,
+        streams: [{ id: "st1", quality: null, label: null, priority: 0, protocol: "hls", status: "ok" }],
+      }),
+    };
+    (app as any).prisma.tvProgramme = { findMany: async () => [] };
+    const viaToken = await app.inject({
+      method: "GET", url: "/api/tv/channels/ch1/play",
+      headers: { authorization: `Bearer ${RAW}` },
+    });
+    expect(viaToken.statusCode).toBe(200);
+    expect(viaToken.json().sources[0].src).toBe(`/api/tv/proxy/st1/index.m3u8?token=${encodeURIComponent(RAW)}`);
+    const viaCookie = await app.inject({ method: "GET", url: "/api/tv/channels/ch1/play", cookies });
+    expect(viaCookie.json().sources[0].src).toBe("/api/tv/proxy/st1/index.m3u8");
     await app.close();
   });
 });
