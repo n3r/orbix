@@ -122,9 +122,12 @@ public struct PlaybackInfo: Codable, Sendable, Equatable {
 
 /// Decodes the common fields of a home-row / catalog item, per the shape
 /// `GET /api/home/rows` sends (see `apps/api/src/routes/discovery.ts`'s
-/// `rows` hydration step). `addedAt` is the one field on the server's card
-/// this type still doesn't model — simply ignored by Codable's synthesized
-/// `init(from:)` — since nothing in the tvOS app needs it yet.
+/// `rows` hydration step). Also doubles as the decode target for the
+/// narrower `{id,title,year,posterPath,matchState}` shape shared by
+/// `GET /libraries/:id/items`, `GET /wishlist`, `similar`, and `search` —
+/// every field beyond `id`/`title` is `Optional`, so a card missing
+/// `backdropPath`/`progress`/`resume`/`addedAt`/`matchState` on the wire
+/// still decodes cleanly with those `nil`.
 public struct MediaCard: Codable, Sendable, Equatable {
     /// A movie/series' resume position, as sent on a home-row card with an
     /// in-progress `PlaybackState` (`cw` in the server's row-hydration
@@ -165,6 +168,15 @@ public struct MediaCard: Codable, Sendable, Equatable {
     public var backdropPath: String?
     public var progress: Progress?
     public var resume: Resume?
+    /// The item's `addedAt` timestamp (ISO 8601 string), present on
+    /// home-row cards (`discovery.ts`'s row hydration) and absent from the
+    /// narrower catalog/wishlist/search shapes — drives the billboard/
+    /// box-art "NEW" badge (Phase 2 Tasks 2/3).
+    public var addedAt: String?
+    /// The item's recognition state (`"matched"`, `"unmatched"`, `"manual"`,
+    /// ...), present on the narrower catalog/wishlist/search/similar card
+    /// shapes and absent from home-row cards.
+    public var matchState: String?
 
     public init(
         id: String,
@@ -173,7 +185,9 @@ public struct MediaCard: Codable, Sendable, Equatable {
         posterPath: String? = nil,
         backdropPath: String? = nil,
         progress: Progress? = nil,
-        resume: Resume? = nil
+        resume: Resume? = nil,
+        addedAt: String? = nil,
+        matchState: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -182,6 +196,8 @@ public struct MediaCard: Codable, Sendable, Equatable {
         self.backdropPath = backdropPath
         self.progress = progress
         self.resume = resume
+        self.addedAt = addedAt
+        self.matchState = matchState
     }
 }
 
@@ -359,10 +375,9 @@ public struct ProgressState: Codable, Sendable, Equatable {
 /// Response of `GET /api/items/:id/similar` (see
 /// `apps/api/src/routes/similar.ts`): `{items: [...]}`, each entry a subset
 /// of `MediaCard`'s fields (`id,title,year,posterPath,matchState`) —
-/// `matchState` isn't modeled (nothing needs it yet), and
-/// `backdropPath`/`progress`/`resume` are simply absent on the wire, which
-/// decode to `nil` since every one of those is already `Optional` on
-/// `MediaCard`.
+/// `backdropPath`/`progress`/`resume`/`addedAt` are simply absent on the
+/// wire, which decode to `nil` since every one of those is already
+/// `Optional` on `MediaCard`.
 public struct SimilarResponse: Codable, Sendable, Equatable {
     public var items: [MediaCard]
 
@@ -376,10 +391,9 @@ public struct SimilarResponse: Codable, Sendable, Equatable {
 /// Response of `GET /api/search?q=` (see `apps/api/src/routes/discovery.ts`'s
 /// `/search` route): `{items: [...], usedEmbeddings: boolean}`. `items`
 /// shares `SimilarResponse`'s narrow per-card shape (`id,title,year,
-/// posterPath,matchState`; `matchState` unmodeled, same rationale as
-/// `SimilarResponse`'s doc comment — `backdropPath`/`progress`/`resume`
-/// simply aren't on the wire here either, decoding to `nil` since all three
-/// are already `Optional` on `MediaCard`). `usedEmbeddings` reports whether
+/// posterPath,matchState`) — `backdropPath`/`progress`/`resume`/`addedAt`
+/// simply aren't on the wire here either, decoding to `nil` since all four
+/// are already `Optional` on `MediaCard`. `usedEmbeddings` reports whether
 /// the route's vector-similarity ranking actually fired for this query
 /// versus its keyword-degrade fallback (`EmbedderUnavailable`, no
 /// embeddings backfilled yet, a non-finite query vector, ...) — modeled
@@ -541,7 +555,7 @@ public struct Profile: Codable, Sendable, Equatable {
 /// `cuid`); `name` is modeled `Optional` per this file's decode-safety
 /// stance even though `resolveProfileMenu` never actually nulls it today
 /// (`Library.name` is `NOT NULL`).
-public struct MenuItem: Decodable, Sendable, Equatable {
+public struct MenuItem: Codable, Sendable, Equatable {
     public var libraryId: String
     public var name: String?
 
@@ -555,7 +569,7 @@ public struct MenuItem: Decodable, Sendable, Equatable {
 /// active yet, `menu.ts` sends `{items: []}` rather than erroring (see its
 /// `if (!profile) return reply.send({ items: [] })`), which decodes to an
 /// empty array here, not a decode failure.
-public struct MenuResponse: Decodable, Sendable, Equatable {
+public struct MenuResponse: Codable, Sendable, Equatable {
     public var items: [MenuItem]
 
     public init(items: [MenuItem]) {
@@ -593,5 +607,20 @@ public struct MeProfile: Codable, Sendable, Equatable {
         self.kind = kind
         self.maturityCap = maturityCap
         self.language = language
+    }
+}
+
+// MARK: - Wishlist (Phase 2 Task 1)
+
+/// Response of `GET /api/wishlist/ids` (see
+/// `apps/api/src/routes/wishlist.ts`): membership ids for the active
+/// profile's saved titles, newest-first, filtered to only what the profile
+/// can currently see (fail-safe: never leaks a kids-blocked id). `{ids: []}`
+/// when the wishlist is empty.
+public struct WishlistIdsResponse: Codable, Sendable, Equatable {
+    public var ids: [String]
+
+    public init(ids: [String]) {
+        self.ids = ids
     }
 }

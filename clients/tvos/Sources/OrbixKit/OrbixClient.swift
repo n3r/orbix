@@ -120,21 +120,63 @@ public actor OrbixClient {
     }
 
     /// `GET /api/search?q=<query>` (see `apps/api/src/routes/discovery.ts`'s
-    /// `/search` route) → `{items: [...], usedEmbeddings: boolean}`,
-    /// unwrapped to the bare array — same convention as `similar(id:)` —
-    /// since no caller needs `usedEmbeddings` yet. `query` is percent-encoded
-    /// by `URL.appending(queryItems:)`, so callers pass the raw typed text
-    /// (spaces, punctuation, non-ASCII) verbatim; an empty string is still a
-    /// well-formed request — the route treats "no residual text" as
-    /// "sort by recency/title" rather than erroring — but `SearchModel`
-    /// (the tvOS search screen) never actually calls this for an empty
-    /// query, since a blank search box has nothing worth showing results for.
-    public func search(query: String) async throws -> [MediaCard] {
+    /// `/search` route) → `{items: [...], usedEmbeddings: boolean}`. Returns
+    /// the full envelope (Phase 2 Task 1) rather than unwrapping to the bare
+    /// array, so callers can read `usedEmbeddings` — surfacing it in the UI
+    /// is Task 6. `query` is percent-encoded by `URL.appending(queryItems:)`,
+    /// so callers pass the raw typed text (spaces, punctuation, non-ASCII)
+    /// verbatim; an empty string is still a well-formed request — the route
+    /// treats "no residual text" as "sort by recency/title" rather than
+    /// erroring — but `SearchModel` (the tvOS search screen) never actually
+    /// calls this for an empty query, since a blank search box has nothing
+    /// worth showing results for.
+    public func search(query: String) async throws -> SearchResponse {
         let url = baseURL
             .appending(path: "api/search")
             .appending(queryItems: [URLQueryItem(name: "q", value: query)])
-        let response: SearchResponse = try await send(method: "GET", url: url)
-        return response.items
+        return try await send(method: "GET", url: url)
+    }
+
+    // MARK: - Library browse
+
+    /// `GET /api/libraries/:id/items?sort=&q=` (see
+    /// `apps/api/src/routes/catalog.ts`) — a library's items as poster
+    /// cards. Bare array, no envelope. `sort` is one of `title|added|year`
+    /// (the server 400s anything else); `q` filters the base title
+    /// case-insensitively and is omitted from the wire when nil/empty.
+    public func libraryItems(id: String, sort: String = "title", q: String? = nil) async throws -> [MediaCard] {
+        var queryItems = [URLQueryItem(name: "sort", value: sort)]
+        if let q, !q.isEmpty { queryItems.append(URLQueryItem(name: "q", value: q)) }
+        let url = baseURL.appending(path: "api/libraries/\(id)/items").appending(queryItems: queryItems)
+        return try await send(method: "GET", url: url)
+    }
+
+    // MARK: - Wishlist
+
+    /// `GET /api/wishlist` (see `apps/api/src/routes/wishlist.ts`) — the
+    /// active profile's saved titles as poster cards, newest-first. Bare
+    /// array.
+    public func wishlist() async throws -> [MediaCard] {
+        try await send(method: "GET", url: baseURL.appending(path: "api/wishlist"))
+    }
+
+    /// `GET /api/wishlist/ids` — membership ids for the title-page toggle
+    /// (Phase 3). Unwrapped to the bare array from the `{ids: [...]}`
+    /// envelope, same convention as `menu()`.
+    public func wishlistIds() async throws -> [String] {
+        let response: WishlistIdsResponse = try await send(method: "GET", url: baseURL.appending(path: "api/wishlist/ids"))
+        return response.ids
+    }
+
+    /// `POST /api/wishlist/:itemId` — idempotent add (404s an
+    /// unknown/kids-blocked id).
+    public func addToWishlist(itemId: String) async throws {
+        _ = try await perform(method: "POST", url: baseURL.appending(path: "api/wishlist/\(itemId)"))
+    }
+
+    /// `DELETE /api/wishlist/:itemId` — idempotent remove.
+    public func removeFromWishlist(itemId: String) async throws {
+        _ = try await perform(method: "DELETE", url: baseURL.appending(path: "api/wishlist/\(itemId)"))
     }
 
     // MARK: - Item detail

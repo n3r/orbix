@@ -546,4 +546,74 @@ final class DTOTests: XCTestCase {
         let me = try JSONDecoder().decode(MeProfile.self, from: json)
         XCTAssertNil(me.language)
     }
+
+    // MARK: - Library items (Phase 2 Task 1) — GET /libraries/:id/items (bare array)
+
+    func testDecodeLibraryItemsBareArray() throws {
+        // apps/api/src/routes/catalog.ts:44-60 select: {id,title,year,posterPath,matchState}
+        // (title localized). Bare array, no envelope. year/posterPath nullable;
+        // an unmatched item carries matchState:"unmatched" and a null poster.
+        let json = """
+        [{"id":"m1","title":"Arrival","year":2016,"posterPath":"/p1.jpg","matchState":"matched"},
+         {"id":"m2","title":"Untitled Import","year":null,"posterPath":null,"matchState":"unmatched"}]
+        """.data(using: .utf8)!
+        let items = try JSONDecoder().decode([MediaCard].self, from: json)
+        XCTAssertEqual(items.count, 2)
+        XCTAssertEqual(items[0].id, "m1")
+        XCTAssertEqual(items[0].matchState, "matched")
+        XCTAssertEqual(items[1].matchState, "unmatched")
+        XCTAssertNil(items[1].year)
+        XCTAssertNil(items[1].posterPath)
+        // Fields not on this wire shape decode to nil, not throw.
+        XCTAssertNil(items[0].backdropPath)
+        XCTAssertNil(items[0].addedAt)
+        XCTAssertNil(items[0].progress)
+    }
+
+    // MARK: - Wishlist (Phase 2 Task 1)
+
+    func testDecodeWishlistItemsBareArray() throws {
+        // apps/api/src/routes/wishlist.ts:38-44 — newest-first, {id,title,year,posterPath,matchState}.
+        let json = """
+        [{"id":"m2","title":"Beta","year":2020,"posterPath":"/p2.jpg","matchState":"matched"},
+         {"id":"m1","title":"Alpha","year":2019,"posterPath":"/p1.jpg","matchState":"manual"}]
+        """.data(using: .utf8)!
+        let items = try JSONDecoder().decode([MediaCard].self, from: json)
+        XCTAssertEqual(items.map(\.id), ["m2", "m1"])
+        XCTAssertEqual(items.first?.matchState, "matched")
+    }
+
+    func testDecodeWishlistEmpty() throws {
+        // wishlist.ts:18 returns [] when there are no entries.
+        let items = try JSONDecoder().decode([MediaCard].self, from: Data("[]".utf8))
+        XCTAssertTrue(items.isEmpty)
+    }
+
+    func testDecodeWishlistIdsResponse() throws {
+        // wishlist.ts:67 → {ids:[...]}; :58 → {ids:[]} when empty.
+        let json = """
+        {"ids":["m2","m1"]}
+        """.data(using: .utf8)!
+        let response = try JSONDecoder().decode(WishlistIdsResponse.self, from: json)
+        XCTAssertEqual(response.ids, ["m2", "m1"])
+        let empty = try JSONDecoder().decode(WishlistIdsResponse.self, from: Data(#"{"ids":[]}"#.utf8))
+        XCTAssertTrue(empty.ids.isEmpty)
+    }
+
+    // MARK: - MediaCard new fields (Phase 2 Task 1)
+
+    func testDecodeHomeCardAddedAtNowModeled() throws {
+        // discovery.ts:285 sends addedAt on every home-row card; it is now modeled
+        // (needed by the billboard/box-art NEW badge — Task 2/3). matchState is
+        // absent on home cards and must decode to nil.
+        let json = """
+        {"id":"m1","title":"Arrival","year":2016,"posterPath":"/p1.jpg",
+         "backdropPath":"/b1.jpg","addedAt":"2026-07-01T00:00:00.000Z",
+         "progress":null,"resume":null}
+        """.data(using: .utf8)!
+        let card = try JSONDecoder().decode(MediaCard.self, from: json)
+        XCTAssertEqual(card.addedAt, "2026-07-01T00:00:00.000Z")
+        XCTAssertEqual(card.backdropPath, "/b1.jpg")
+        XCTAssertNil(card.matchState)
+    }
 }

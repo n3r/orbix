@@ -259,12 +259,12 @@ final class SearchModel {
 
     private func performSearch(query: String, client: OrbixClient) async {
         do {
-            let items = try await client.search(query: query)
+            let response = try await client.search(query: query)
             // A newer queryChanged() call may have cancelled this task
             // (and started its own) while the request was in flight — don't
             // let a slow, superseded response clobber newer state.
             guard !Task.isCancelled else { return }
-            results = items
+            results = response.items
             searchedQuery = query
             loadError = nil
         } catch {
