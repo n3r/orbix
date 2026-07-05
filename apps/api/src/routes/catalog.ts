@@ -1,13 +1,16 @@
 import type { FastifyInstance } from "fastify";
-import { localizeItem, localizeGenres, localizeName, buildLibraryGenreRows } from "@orbix/core";
+import {
+  localizeItem, localizeGenres, localizeName,
+  buildLibraryGenreRows, compareDisplayTitles, compareByRating,
+} from "@orbix/core";
 import { requireAuth } from "../lib/auth";
 import { activeProfile, kidsRatingWhere, profileAllowsItem } from "../lib/catalog-filter";
 
 export default async function catalogRoute(app: FastifyInstance) {
-  // GET /libraries/:id/items?sort=&q=
+  // GET /libraries/:id/items?sort=&q=&genre=
   app.get<{
     Params: { id: string };
-    Querystring: { sort?: string; q?: string };
+    Querystring: { sort?: string; q?: string; genre?: string };
   }>(
     "/libraries/:id/items",
     { preHandler: requireAuth(app) },
@@ -16,11 +19,20 @@ export default async function catalogRoute(app: FastifyInstance) {
       const sort = req.query.sort ?? "title";
       const q = req.query.q?.trim();
 
-      const allowedSorts = ["title", "added", "year"];
+      const allowedSorts = ["title", "added", "year", "alpha", "rating"];
       if (!allowedSorts.includes(sort)) {
         return reply.code(400).send({ error: "invalid_sort" });
       }
+      let genreId: number | undefined;
+      if (req.query.genre !== undefined) {
+        genreId = Number(req.query.genre);
+        if (!Number.isInteger(genreId)) {
+          return reply.code(400).send({ error: "invalid_genre" });
+        }
+      }
 
+      // alpha/rating sort in-memory below; the DB keeps a deterministic
+      // sortTitle order so the item cap truncates stably.
       const orderBy =
         sort === "added"
           ? [{ addedAt: "desc" as const }]
@@ -32,32 +44,48 @@ export default async function catalogRoute(app: FastifyInstance) {
       const ratingFilter = kidsRatingWhere(profile);
       const lang = profile?.language ?? "en";
 
-      // MVP cap at 500 items
       // NOTE: the `q` filter matches the base (en) title only; localized-title
       // search is a deliberate Phase-2 follow-up, not required here.
       const items = await app.prisma.mediaItem.findMany({
         where: {
           libraryId: id,
           ...(q ? { title: { contains: q, mode: "insensitive" } } : {}),
+          ...(genreId !== undefined ? { genres: { some: { genreId } } } : {}),
           ...(ratingFilter ?? {}),
         },
         select: {
           id: true,
           title: true,
+          sortTitle: true,
           year: true,
           posterPath: true,
           matchState: true,
+          imdbRating: true,
+          tmdbScore: true,
           translations: { where: { language: lang }, select: { title: true } },
         },
         orderBy,
-        take: 500,
+        take: 2000,
       });
 
-      // Coalesce title → requested-language translation, else base.
-      return items.map(({ translations, ...rest }) => ({
-        ...rest,
-        title: localizeItem({ title: rest.title }, translations[0]).title,
+      // Coalesce title → requested-language translation, else base; the
+      // sort fields stay behind — the response is plain MediaCards.
+      const enriched = items.map(({ translations, sortTitle, imdbRating, tmdbScore, ...rest }) => ({
+        sortTitle,
+        imdbRating,
+        tmdbScore,
+        card: { ...rest, title: localizeItem({ title: rest.title }, translations[0]).title },
       }));
+
+      if (sort === "alpha") {
+        // Browse order: script-bucketed A→Z/А→Я over the *displayed* title.
+        const cmp = compareDisplayTitles(lang);
+        enriched.sort((a, b) => cmp(a.card.title, b.card.title) || a.sortTitle.localeCompare(b.sortTitle));
+      } else if (sort === "rating") {
+        enriched.sort((a, b) => compareByRating({ id: a.card.id, ...a }, { id: b.card.id, ...b }));
+      }
+
+      return enriched.map((e) => e.card);
     },
   );
 
