@@ -4,7 +4,23 @@
   "form": {
     "title": "Nouveau profil",
     "nameLabel": "Nom",
-    "namePlaceholder": "Nom du profil"
+    "namePlaceholder": "Nom du profil",
+    "mode": {
+      "personal": "Personnel",
+      "group": "Ensemble"
+    }
+  },
+  "group": {
+    "badge": "Ensemble",
+    "membersLabel": "Regarde avec",
+    "notEnoughProfiles": "Créez d'abord au moins deux profils personnels."
+  },
+  "pin": {
+    "badge": "PIN",
+    "label": "Code du profil",
+    "placeholder": "4 à 6 chiffres",
+    "dialogTitle": "Code pour {{name}}",
+    "unlock": "Déverrouiller"
   },
   "language": {
     "label": "Langue",
@@ -13,7 +29,10 @@
   "errors": {
     "loadFailed": "Échec du chargement des profils.",
     "selectFailed": "Échec de la sélection du profil.",
-    "pinNotSupported": "Ce profil nécessite un code PIN. La saisie du code PIN n'est pas encore prise en charge."
+    "pinNotSupported": "Ce profil nécessite un code PIN. La saisie du code PIN n'est pas encore prise en charge.",
+    "pinRequired": "Saisissez le code du profil.",
+    "invalidPin": "Utilisez 4 à 6 chiffres.",
+    "groupMembersRequired": "Choisissez au moins deux profils."
   },
   "emptyHint": "Créez votre premier profil pour commencer à regarder."
 }

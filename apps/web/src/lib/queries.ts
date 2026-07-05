@@ -9,6 +9,7 @@ export interface SetupStatus { complete: boolean }
 export interface ActiveProfile {
   id: string | null; name: string | null; avatar: string | null;
   kind: string | null; maturityCap: number | null; language?: string | null;
+  isGroup?: boolean; hasPin?: boolean; members?: Profile["members"];
 }
 
 export function useSetupStatus() {

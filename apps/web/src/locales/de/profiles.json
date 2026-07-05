@@ -4,7 +4,23 @@
   "form": {
     "title": "Neues Profil",
     "nameLabel": "Name",
-    "namePlaceholder": "Profilname"
+    "namePlaceholder": "Profilname",
+    "mode": {
+      "personal": "Persönlich",
+      "group": "Zusammen"
+    }
+  },
+  "group": {
+    "badge": "Zusammen",
+    "membersLabel": "Schaut mit",
+    "notEnoughProfiles": "Erstelle zuerst mindestens zwei persönliche Profile."
+  },
+  "pin": {
+    "badge": "PIN",
+    "label": "Profilcode",
+    "placeholder": "4-6 Ziffern",
+    "dialogTitle": "Code für {{name}}",
+    "unlock": "Entsperren"
   },
   "language": {
     "label": "Sprache",
@@ -13,7 +29,10 @@
   "errors": {
     "loadFailed": "Profile konnten nicht geladen werden.",
     "selectFailed": "Profil konnte nicht ausgewählt werden.",
-    "pinNotSupported": "Für dieses Profil ist eine PIN erforderlich. Die PIN-Eingabe wird noch nicht unterstützt."
+    "pinNotSupported": "Für dieses Profil ist eine PIN erforderlich. Die PIN-Eingabe wird noch nicht unterstützt.",
+    "pinRequired": "Gib den Profilcode ein.",
+    "invalidPin": "Verwende 4-6 Ziffern.",
+    "groupMembersRequired": "Wähle mindestens zwei Profile aus."
   },
   "emptyHint": "Erstelle dein erstes Profil, um loszulegen."
 }
