@@ -4,7 +4,23 @@
   "form": {
     "title": "Novo perfil",
     "nameLabel": "Nome",
-    "namePlaceholder": "Nome do perfil"
+    "namePlaceholder": "Nome do perfil",
+    "mode": {
+      "personal": "Pessoal",
+      "group": "Juntos"
+    }
+  },
+  "group": {
+    "badge": "Juntos",
+    "membersLabel": "Assistindo com",
+    "notEnoughProfiles": "Crie pelo menos dois perfis pessoais primeiro."
+  },
+  "pin": {
+    "badge": "PIN",
+    "label": "Código do perfil",
+    "placeholder": "4-6 dígitos",
+    "dialogTitle": "Código para {{name}}",
+    "unlock": "Desbloquear"
   },
   "language": {
     "label": "Idioma",
@@ -13,7 +29,10 @@
   "errors": {
     "loadFailed": "Falha ao carregar os perfis.",
     "selectFailed": "Falha ao selecionar o perfil.",
-    "pinNotSupported": "Este perfil requer um PIN. A entrada de PIN ainda não é suportada."
+    "pinNotSupported": "Este perfil requer um PIN. A entrada de PIN ainda não é suportada.",
+    "pinRequired": "Digite o código do perfil.",
+    "invalidPin": "Use de 4 a 6 dígitos.",
+    "groupMembersRequired": "Escolha pelo menos dois perfis."
   },
   "emptyHint": "Crie seu primeiro perfil para começar a assistir."
 }

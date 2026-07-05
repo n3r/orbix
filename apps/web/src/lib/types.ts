@@ -55,6 +55,19 @@ export interface Profile {
   avatar: string | null;
   kind: string;
   maturityCap: number | null;
+  language?: string | null;
+  isGroup?: boolean;
+  hasPin?: boolean;
+  members?: ProfileMember[];
+}
+
+export interface ProfileMember {
+  id: string;
+  name: string;
+  avatar: string | null;
+  kind: string;
+  maturityCap: number | null;
+  isGroup?: boolean;
 }
 
 /** One catalog category in the profile's nav (one per library). */

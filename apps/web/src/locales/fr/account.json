@@ -7,7 +7,21 @@
   },
   "profileKind": {
     "standard": "Profil standard",
-    "kids": "Profil enfant"
+    "kids": "Profil enfant",
+    "group": "Profil de groupe",
+    "groupKids": "Profil de groupe enfant"
+  },
+  "pin": {
+    "label": "Code du profil",
+    "enabled": "Activé",
+    "disabled": "Non défini",
+    "placeholder": "4 à 6 chiffres",
+    "save": "Enregistrer le code",
+    "remove": "Supprimer le code",
+    "saved": "Code enregistré.",
+    "removed": "Code supprimé.",
+    "invalid": "Utilisez 4 à 6 chiffres.",
+    "saveFailed": "Échec de l'enregistrement du code."
   },
   "menu": {
     "intro": "Choisissez les catégories à afficher dans votre menu et classez-les.",

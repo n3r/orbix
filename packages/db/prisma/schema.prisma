@@ -19,14 +19,30 @@ model Account {
 }
 
 model Profile {
-  id          String   @id @default(cuid())
-  name        String
-  avatar      String?
-  kind        String   @default("standard") // "standard" | "kids"
-  pinHash     String?
-  maturityCap Int? // null = unrestricted
-  language    String   @default("en") // ISO 639-1 UI + metadata language
-  createdAt   DateTime @default(now())
+  id               String               @id @default(cuid())
+  name             String
+  avatar           String?
+  kind             String               @default("standard") // "standard" | "kids"
+  pinHash          String?
+  maturityCap      Int? // null = unrestricted
+  language         String               @default("en") // ISO 639-1 UI + metadata language
+  isGroup          Boolean              @default(false)
+  createdAt        DateTime             @default(now())
+  groupMembers     ProfileGroupMember[] @relation("GroupProfileMembers")
+  groupMemberships ProfileGroupMember[] @relation("ProfileMemberOfGroups")
+}
+
+model ProfileGroupMember {
+  id              String  @id @default(cuid())
+  groupProfileId  String
+  memberProfileId String
+  position        Int     @default(0)
+  group           Profile @relation("GroupProfileMembers", fields: [groupProfileId], references: [id], onDelete: Cascade)
+  member          Profile @relation("ProfileMemberOfGroups", fields: [memberProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([groupProfileId, memberProfileId])
+  @@index([groupProfileId])
+  @@index([memberProfileId])
 }
 
 model Session {

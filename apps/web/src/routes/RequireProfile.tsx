@@ -37,6 +37,10 @@ export default function RequireProfile() {
         avatar: me.data.avatar,
         kind: me.data.kind ?? "standard",
         maturityCap: me.data.maturityCap,
+        language: me.data.language,
+        isGroup: me.data.isGroup,
+        hasPin: me.data.hasPin,
+        members: me.data.members,
       }
     : null;
 

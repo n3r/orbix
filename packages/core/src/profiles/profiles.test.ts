@@ -8,8 +8,21 @@ describe("validateProfileInput", () => {
   it("requires maturityCap for kids profiles", () => {
     expect(() => validateProfileInput({ name: "Kids", kind: "kids" })).toThrow(ProfileValidationError);
   });
-  it("rejects a non-4-digit pin", () => {
+  it("accepts 4-6 digit pins", () => {
+    expect(validateProfileInput({ name: "P", kind: "standard", pin: "1234" }).pin).toBe("1234");
+    expect(validateProfileInput({ name: "P", kind: "standard", pin: "123456" }).pin).toBe("123456");
+  });
+  it("rejects a pin outside 4-6 digits", () => {
     expect(() => validateProfileInput({ name: "P", kind: "standard", pin: "12" })).toThrow(ProfileValidationError);
+    expect(() => validateProfileInput({ name: "P", kind: "standard", pin: "1234567" })).toThrow(ProfileValidationError);
+  });
+  it("accepts group metadata", () => {
+    expect(validateProfileInput({
+      name: "Together",
+      kind: "standard",
+      isGroup: true,
+      memberProfileIds: ["p1", "p2"],
+    }).isGroup).toBe(true);
   });
   it("defaults language to en and accepts a supported language", () => {
     expect(validateProfileInput({ name: "P", kind: "standard" }).language).toBe("en");

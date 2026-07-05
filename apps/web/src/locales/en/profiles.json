@@ -4,7 +4,23 @@
   "form": {
     "title": "New Profile",
     "nameLabel": "Name",
-    "namePlaceholder": "Profile name"
+    "namePlaceholder": "Profile name",
+    "mode": {
+      "personal": "Personal",
+      "group": "Together"
+    }
+  },
+  "group": {
+    "badge": "Together",
+    "membersLabel": "Watching with",
+    "notEnoughProfiles": "Create at least two personal profiles first."
+  },
+  "pin": {
+    "badge": "PIN",
+    "label": "Profile code",
+    "placeholder": "4-6 digits",
+    "dialogTitle": "Code for {{name}}",
+    "unlock": "Unlock"
   },
   "language": {
     "label": "Language",
@@ -13,7 +29,10 @@
   "errors": {
     "loadFailed": "Failed to load profiles.",
     "selectFailed": "Failed to select profile.",
-    "pinNotSupported": "This profile requires a PIN. PIN entry is not yet supported."
+    "pinNotSupported": "This profile requires a PIN. PIN entry is not yet supported.",
+    "pinRequired": "Enter the profile code.",
+    "invalidPin": "Use 4-6 digits.",
+    "groupMembersRequired": "Choose at least two profiles."
   },
   "emptyHint": "Create your first profile to start watching."
 }
