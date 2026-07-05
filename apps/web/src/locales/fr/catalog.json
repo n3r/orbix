@@ -13,12 +13,14 @@
   "browse": {
     "title": "Parcourir",
     "searchPlaceholder": "Rechercher des titres…",
-    "empty": "Aucun élément trouvé.",
-    "sort": {
-      "title": "Titre (A–Z)",
-      "added": "Ajoutés récemment",
-      "year": "Année"
-    }
+    "empty": "Aucun élément trouvé."
+  },
+  "library": {
+    "tabs": { "categories": "Catégories", "browse": "Parcourir" },
+    "viewSwitcher": "Vues de la bibliothèque",
+    "seeAll": "Tout afficher ({{total}})",
+    "back": "Retour aux catégories",
+    "emptyCategories": "Pas encore de catégories — les titres apparaissent ici dès qu'ils ont des informations de genre. L'onglet Parcourir montre tout."
   },
   "hero": {
     "play": "Lire",

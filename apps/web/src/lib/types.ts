@@ -112,6 +112,15 @@ export interface HomeRow {
   items: HomeCard[];
 }
 
+/** One genre rail on the library Categories tab. */
+export interface LibraryRow {
+  key: string;
+  genreId: number;
+  title: string;
+  total: number;
+  items: HomeCard[];
+}
+
 /** Ratings shown on the title hero. All optional — render only what's present. */
 export interface Ratings {
   imdbRating?: number | null;

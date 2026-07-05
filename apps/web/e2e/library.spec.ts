@@ -52,6 +52,16 @@ async function seedDb() {
     },
   });
 
+  // Genre rail seed: the Categories tab only rows items that carry a genre.
+  const genre = await prisma.genre.upsert({
+    where: { name: "Drama" },
+    update: {},
+    create: { tmdbId: 18, name: "Drama" },
+  });
+  await prisma.mediaItemGenre.create({
+    data: { mediaItemId: ITEM_ID, genreId: genre.id },
+  });
+
   // Write tiny poster JPEG so /api/images/poster/seed.jpg serves it
   await fs.promises.mkdir(path.dirname(POSTER_ABS), { recursive: true });
   await fs.promises.writeFile(POSTER_ABS, TINY_JPEG);
@@ -65,6 +75,7 @@ async function cleanDb() {
 
   await prisma.mediaItem.deleteMany({ where: { id: ITEM_ID } });
   await prisma.library.deleteMany({ where: { id: LIBRARY_ID } });
+  await prisma.genre.deleteMany({ where: { name: "Drama" } });
   // Remove the admin account created by this spec's onboarding
   await prisma.profile.deleteMany();
   await prisma.account.deleteMany({ where: { email: ADMIN_EMAIL } });
@@ -131,11 +142,20 @@ test.describe("Library browse + title detail", () => {
     await cleanDb();
   });
 
-  test("library grid shows seeded movie", async ({ page }) => {
+  test("categories tab shows a genre rail with the seeded movie", async ({ page }) => {
     await doOnboarding(page);
     await page.goto(`http://localhost:1060/library/${LIBRARY_ID}`);
-    // Each grid item is a single card <Link>; assert on the link role (the title
-    // text renders twice per card — poster overlay + caption — tripping strict mode).
+    await expect(page.getByRole("heading", { name: "Drama" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("link", { name: /Seeded Movie/ })).toBeVisible();
+    // See-all drill-in renders the genre grid
+    await page.getByRole("link", { name: /See all/ }).click();
+    await expect(page.getByRole("heading", { name: "Drama", level: 1 })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("link", { name: /Seeded Movie/ })).toBeVisible();
+  });
+
+  test("browse tab shows the seeded movie in the flat grid", async ({ page }) => {
+    await doOnboarding(page);
+    await page.goto(`http://localhost:1060/library/${LIBRARY_ID}?tab=browse`);
     await expect(page.getByRole("link", { name: /Seeded Movie/ })).toBeVisible({ timeout: 15_000 });
   });
 
