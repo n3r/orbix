@@ -64,9 +64,18 @@ final class AppModel {
     private(set) var discoveredServers: [DiscoveredServer] = []
     private(set) var didScan = false
 
+    /// An item id a Top Shelf deep link (`orbix://item/<id>`) asked to open,
+    /// awaiting consumption by `HomeView` once the app is `.ready`. Stashed
+    /// here (rather than pushed immediately) because a cold-launch deep link
+    /// arrives before onboarding has finished and the home stack exists.
+    private(set) var pendingDeepLinkItemId: String?
+
     private let tokenStore: TokenStore
 
-    init(tokenStore: TokenStore = TokenStore()) {
+    /// The default `TokenStore` is pointed at the shared Keychain access group
+    /// so the Top Shelf extension (a separate process) can read the paired
+    /// device token; tests inject their own store with no group.
+    init(tokenStore: TokenStore = TokenStore(accessGroup: OrbixSharedStore.keychainAccessGroup)) {
         self.tokenStore = tokenStore
 
         let resolvedBaseURL = Self.resolveBaseURLString()
@@ -128,6 +137,9 @@ final class AppModel {
         }
 
         baseURL = url
+        // Publish the reachable server address to the App Group so the Top
+        // Shelf extension can talk to the same server without re-onboarding.
+        OrbixSharedStore.saveBaseURL(url)
         let newClient = OrbixClient(baseURL: url)
         client = newClient
         reachable = nil
@@ -275,6 +287,22 @@ final class AppModel {
     /// succeeds: advances to the M3 home screen (`HomeView`).
     func profileSelected() {
         phase = .ready
+    }
+
+    /// Handles an `orbix://item/<id>` deep link opened from the Apple TV Top
+    /// Shelf (see `RootView`'s `.onOpenURL`). Records the target item id for
+    /// `HomeView` to push once it's on screen; a malformed link is ignored.
+    func handleDeepLink(_ url: URL) {
+        guard let itemId = orbixItemId(from: url) else { return }
+        pendingDeepLinkItemId = itemId
+    }
+
+    /// Returns and clears any pending deep-link item id — `HomeView` calls
+    /// this when it's ready to push the title page, so the link fires exactly
+    /// once rather than re-triggering on every re-render.
+    func consumePendingDeepLink() -> String? {
+        defer { pendingDeepLinkItemId = nil }
+        return pendingDeepLinkItemId
     }
 
     /// Scans the local subnet for Orbix servers (matching the `service:

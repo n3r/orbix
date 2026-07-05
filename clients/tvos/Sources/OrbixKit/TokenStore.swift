@@ -8,18 +8,31 @@ import Security
 public actor TokenStore {
     private let service: String
     private let account: String
+    private let accessGroup: String?
 
-    public init(service: String = "dev.orbix.tvos", account: String = "device-token") {
+    /// - Parameter accessGroup: an optional shared Keychain access group. The
+    ///   app and its Top Shelf extension both construct `TokenStore` with
+    ///   `OrbixSharedStore.keychainAccessGroup` so the extension (a separate
+    ///   process) can read the device token the app paired with; `nil` (the
+    ///   default, and what the tests use) keeps the item in the caller's own
+    ///   default group. On the Simulator there is no entitlement sandbox, so a
+    ///   non-nil group is effectively inert there (see `OrbixSharedStore`).
+    public init(service: String = "dev.orbix.tvos", account: String = "device-token", accessGroup: String? = nil) {
         self.service = service
         self.account = account
+        self.accessGroup = accessGroup
     }
 
     private var baseQuery: [String: Any] {
-        [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
         ]
+        if let accessGroup {
+            query[kSecAttrAccessGroup as String] = accessGroup
+        }
+        return query
     }
 
     /// Persists `token`, replacing any previously stored value.
