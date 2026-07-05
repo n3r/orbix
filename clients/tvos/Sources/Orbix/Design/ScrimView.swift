@@ -23,15 +23,16 @@ struct BottomScrim: View {
     }
 }
 
-/// Leading vignette behind the copy block: black 0.55 opacity at the
-/// leading edge, dissolved to clear by ~60% of the width.
+/// Leading vignette behind the copy block: full-width gradient matching web
+/// (apps/web/src/components/billboard/HomeBillboard.tsx line 43:
+/// `bg-gradient-to-r from-[var(--bg)]/85 via-[var(--bg)]/25 to-transparent`).
 struct LeftVignette: View {
     var body: some View {
         LinearGradient(
             stops: [
-                .init(color: .black.opacity(0.55), location: 0),
-                .init(color: .black.opacity(0.25), location: 0.3),
-                .init(color: .clear, location: 0.6),
+                .init(color: OrbixColor.bg.opacity(0.85), location: 0),
+                .init(color: OrbixColor.bg.opacity(0.25), location: 0.5),
+                .init(color: .clear, location: 1.0),
             ],
             startPoint: .leading,
             endPoint: .trailing
