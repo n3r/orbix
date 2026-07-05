@@ -1,8 +1,12 @@
 {
   "rows": {
     "continue": "Weiterschauen",
+    "wishlist": "Aus deiner Liste",
+    "recentlyAdded": "Kürzlich hinzugefügt",
     "hiddenGems": "Verborgene Schätze",
     "tonight": "Etwas für heute Abend",
+    "topRated": "Von der Kritik gefeiert",
+    "series": "Serien zum Bingen",
     "scrollLeft": "Nach links scrollen",
     "scrollRight": "Nach rechts scrollen"
   },

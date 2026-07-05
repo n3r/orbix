@@ -14,9 +14,18 @@ interface MediaRowProps {
 }
 
 // Home-row keys whose headings are static UI chrome and can be localized by
-// key. Data-bearing rows (e.g. "becauseYouWatched", whose heading embeds a
-// media title) are not listed and fall back to the server-provided `title`.
-const LOCALIZED_ROW_KEYS = new Set(["continue", "hiddenGems", "tonight"]);
+// key. Data-bearing rows (e.g. "becauseYouWatched" and "genre:*", whose
+// headings embed a media title / localized genre name) are not listed and
+// fall back to the server-provided `title`.
+const LOCALIZED_ROW_KEYS = new Set([
+  "continue",
+  "wishlist",
+  "recentlyAdded",
+  "hiddenGems",
+  "tonight",
+  "topRated",
+  "series",
+]);
 
 /**
  * Netflix-style row: tight strip of landscape cards, hidden scrollbar, and

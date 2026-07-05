@@ -1,8 +1,12 @@
 {
   "rows": {
     "continue": "Continuar assistindo",
+    "wishlist": "Da sua lista",
+    "recentlyAdded": "Adicionados recentemente",
     "hiddenGems": "Joias escondidas",
     "tonight": "Escolha algo para esta noite",
+    "topRated": "Aclamados pela crítica",
+    "series": "Séries para maratonar",
     "scrollLeft": "Rolar para a esquerda",
     "scrollRight": "Rolar para a direita"
   },
