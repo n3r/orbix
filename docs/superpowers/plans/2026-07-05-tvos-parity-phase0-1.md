@@ -515,11 +515,11 @@ Then the three SwiftUI files per the interface block.
 
 **Files:** none created (verification only)
 
-- [ ] **Step 1: Full gates** — `xcodegen generate`; app scheme builds; `OrbixKitTests` pass; server: `pnpm typecheck && pnpm lint && pnpm test` still green.
+- [x] **Step 1: Full gates** — `xcodegen generate`; app scheme builds; `OrbixKitTests` pass; server: `pnpm typecheck && pnpm lint && pnpm test` still green.
 
-- [ ] **Step 2: Visual record** — simulator against the NAS: screenshots of (a) server select, (b) pairing, (c) profile picker, (d) shell over Home, (e) Search. Compare against the web side-by-side; note deviations for the Phase 2 backlog rather than gold-plating now.
+- [x] **Step 2: Visual record** — simulator against the NAS: screenshots of (a) server select, (b) pairing, (c) profile picker, (d) shell over Home, (e) Search. Compare against the web side-by-side; note deviations for the Phase 2 backlog rather than gold-plating now.
 
-- [ ] **Step 3: Commit any fixes; update the plan checkboxes.**
+- [x] **Step 3: Commit any fixes; update the plan checkboxes.** No fixes needed (0 deviations found in the new Phase 1 surfaces). See `.superpowers/sdd/task-9-report.md` for full gate output + screenshot-by-screenshot notes.
 
 ---
 
