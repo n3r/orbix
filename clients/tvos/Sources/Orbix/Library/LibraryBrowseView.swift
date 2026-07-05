@@ -320,15 +320,20 @@ final class LibraryModel {
     }
 
     /// The view's initial `.task` and the error state's Retry button: fetches
-    /// immediately (no debounce), guarded against re-entrancy the same way
-    /// `HomeModel.load` is — a call arriving while one's already in flight is
-    /// a no-op rather than racing a second fetch.
+    /// immediately (no debounce), guarded against re-entrancy via the shared
+    /// `pendingTask` slot — a sort/filter change while initial load or a retry
+    /// is in flight will cancel the stale fetch and replace it with the newer
+    /// one, preventing stale responses from clobbering fresh state.
     func load(client: OrbixClient, libraryId: String, sort: LibrarySort, q: String) async {
-        guard !isLoading else { return }
         pendingTask?.cancel()
+        let task = Task { [weak self] in
+            guard let self, !Task.isCancelled else { return }
+            await self.performLoad(client: client, libraryId: libraryId, sort: sort, q: q)
+        }
         isLoading = true
         loadError = nil
-        await performLoad(client: client, libraryId: libraryId, sort: sort, q: q)
+        pendingTask = task
+        await task.value
     }
 
     /// Sort-chip selection.
