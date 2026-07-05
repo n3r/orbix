@@ -55,12 +55,12 @@ struct ShellView: View {
                 id: "section_tv"
             )
         case .category(let libraryId):
-            placeholder(
-                title: categoryName(for: libraryId),
-                systemImage: "square.stack",
-                message: "Browsing this library on tvOS is coming in a later phase.",
-                id: "section_category"
-            )
+            LibraryBrowseView(libraryId: libraryId, libraryName: categoryName(for: libraryId), model: model)
+                // Forces a fresh view + `LibraryModel` when switching between
+                // categories — same enum case, different associated
+                // `libraryId`, so SwiftUI would otherwise reuse the existing
+                // view/state rather than reloading for the new library.
+                .id(libraryId)
         case .wishlist:
             placeholder(
                 title: "My List",
@@ -78,8 +78,14 @@ struct ShellView: View {
         }
     }
 
+    /// The web `LibraryPage`'s `<h1>` is actually always the static
+    /// `t("catalog:browse.title")` ("Browse"), not the library's name — this
+    /// looks up the real name from the profile's menu instead (more useful
+    /// heading on TV, where the category is also named in the top bar), but
+    /// keeps "Browse" as the fallback for parity if a library ever isn't in
+    /// `menuItems` (e.g. a stale/removed category).
     private func categoryName(for libraryId: String) -> String {
-        model.menuItems.first { $0.libraryId == libraryId }?.name ?? "Library"
+        model.menuItems.first { $0.libraryId == libraryId }?.name ?? "Browse"
     }
 
     /// A section placeholder for the not-yet-built destinations. Wrapped in a
