@@ -72,6 +72,25 @@ public actor OrbixClient {
         try await send(method: "GET", url: baseURL.appending(path: "api/profiles"))
     }
 
+    /// `POST /api/profiles` — creates a new profile. `kind` is hardcoded to
+    /// `"standard"` on the wire (see `apps/web/src/pages/ProfilesPage.tsx`'s
+    /// `{name: newName, kind: "standard", language: newLanguage}` — parity
+    /// with the web client, which never lets a user create a kids profile
+    /// from this form). The route's `select` omits `avatar`/`maturityCap`
+    /// entirely (see `apps/api/src/routes/profiles.ts`'s
+    /// `select: { id: true, name: true, kind: true, language: true }`),
+    /// which decode to `nil` on the shared `Profile` DTO since both are
+    /// already `Optional` there.
+    public func createProfile(name: String, language: String) async throws -> Profile {
+        struct Body: Encodable {
+            let name: String
+            let kind: String
+            let language: String
+        }
+        let data = try encodeBody(Body(name: name, kind: "standard", language: language))
+        return try await send(method: "POST", url: baseURL.appending(path: "api/profiles"), body: data)
+    }
+
     /// `POST /api/profiles/:id/select`. The response body is `{ profileId }`;
     /// callers only need success/failure, hence `Void` rather than a decoded type.
     public func selectProfile(id: String) async throws {
@@ -80,6 +99,17 @@ public actor OrbixClient {
             url: baseURL.appending(path: "api/profiles/\(id)/select"),
             body: Data("{}".utf8)
         )
+    }
+
+    // MARK: - Menu
+
+    /// `GET /api/me/menu` (see `apps/api/src/routes/menu.ts`) — the active
+    /// profile's resolved nav categories, one per enabled library, in
+    /// display order. Unwrapped to the bare array from the `{items: [...]}`
+    /// envelope, same convention as `similar(id:)`/`search(query:)`.
+    public func menu() async throws -> [MenuItem] {
+        let response: MenuResponse = try await send(method: "GET", url: baseURL.appending(path: "api/me/menu"))
+        return response.items
     }
 
     // MARK: - Discovery

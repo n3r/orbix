@@ -456,4 +456,94 @@ final class DTOTests: XCTestCase {
         let episode = try XCTUnwrap(response.episodes.first)
         XCTAssertEqual(episode.progress?.finished, true)
     }
+
+    // MARK: - Menu (Task 5)
+
+    func testDecodeMenuResponseHappyPath() throws {
+        // GET /api/me/menu's real shape (see apps/api/src/routes/menu.ts's
+        // "/me/menu" handler + resolveProfileMenu in
+        // packages/core/src/menu/resolve.ts): {items: [{libraryId, name}]},
+        // one entry per enabled library in resolved order. Matches
+        // apps/web/src/lib/types.ts's MenuItem exactly (no "kind" on the
+        // wire).
+        let json = """
+        {"items":[{"libraryId":"lib-1","name":"Movies"},
+                   {"libraryId":"lib-2","name":"TV Shows"}]}
+        """.data(using: .utf8)!
+        let response = try JSONDecoder().decode(MenuResponse.self, from: json)
+        XCTAssertEqual(response.items.count, 2)
+        XCTAssertEqual(response.items.first?.libraryId, "lib-1")
+        XCTAssertEqual(response.items.first?.name, "Movies")
+        XCTAssertEqual(response.items.last?.libraryId, "lib-2")
+        XCTAssertEqual(response.items.last?.name, "TV Shows")
+    }
+
+    func testDecodeMenuResponseNoActiveProfileIsEmpty() throws {
+        // menu.ts: "if (!profile) return reply.send({ items: [] })" — no
+        // active profile must decode to an empty array, not throw.
+        let json = """
+        {"items":[]}
+        """.data(using: .utf8)!
+        let response = try JSONDecoder().decode(MenuResponse.self, from: json)
+        XCTAssertTrue(response.items.isEmpty)
+    }
+
+    func testDecodeMenuItemWithNullName() throws {
+        // Decode-safety parity with this file's other DTOs: name is
+        // Optional (this file's convention is every non-key field tolerates
+        // null/missing), even though resolveProfileMenu never actually nulls
+        // it today — libraryId is the entry's key and is always present.
+        let json = """
+        {"libraryId":"lib-3","name":null}
+        """.data(using: .utf8)!
+        let item = try JSONDecoder().decode(MenuItem.self, from: json)
+        XCTAssertEqual(item.libraryId, "lib-3")
+        XCTAssertNil(item.name)
+    }
+
+    // MARK: - Create profile (Task 5)
+
+    func testDecodeCreateProfileResponse() throws {
+        // POST /api/profiles's real select shape (see
+        // apps/api/src/routes/profiles.ts): {id, name, kind, language} only
+        // — no avatar/maturityCap key at all (not even null), which must
+        // still decode cleanly against the shared Profile DTO since both
+        // are already Optional there.
+        let json = """
+        {"id":"p2","name":"New Profile","kind":"standard","language":"en"}
+        """.data(using: .utf8)!
+        let profile = try JSONDecoder().decode(Profile.self, from: json)
+        XCTAssertEqual(profile.id, "p2")
+        XCTAssertEqual(profile.name, "New Profile")
+        XCTAssertEqual(profile.kind, "standard")
+        XCTAssertEqual(profile.language, "en")
+        XCTAssertNil(profile.avatar)
+        XCTAssertNil(profile.maturityCap)
+    }
+
+    // MARK: - MeProfile kind/language (Task 5)
+
+    func testDecodeMeProfileCarriesKindAndLanguage() throws {
+        // MeProfile already models kind/language (see activeProfile's select
+        // in apps/api/src/lib/catalog-filter.ts), but no existing test
+        // actually asserted `language` decodes — this closes that gap.
+        let json = """
+        {"id":"p1","name":"Alex","avatar":null,"kind":"standard","maturityCap":null,"language":"es"}
+        """.data(using: .utf8)!
+        let me = try JSONDecoder().decode(MeProfile.self, from: json)
+        XCTAssertEqual(me.kind, "standard")
+        XCTAssertEqual(me.language, "es")
+    }
+
+    func testDecodeMeProfileAllNullOmitsLanguageKeyEntirely() throws {
+        // profiles.ts's "no active profile" branch sends
+        // {id:null,name:null,avatar:null,kind:null,maturityCap:null} —
+        // notably the "language" key is omitted entirely (not even null).
+        // Must still decode language as nil rather than throwing.
+        let json = """
+        {"id":null,"name":null,"avatar":null,"kind":null,"maturityCap":null}
+        """.data(using: .utf8)!
+        let me = try JSONDecoder().decode(MeProfile.self, from: json)
+        XCTAssertNil(me.language)
+    }
 }

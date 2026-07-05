@@ -531,6 +531,38 @@ public struct Profile: Codable, Sendable, Equatable {
     }
 }
 
+// MARK: - Menu
+
+/// One catalog category in the profile's nav, one per enabled library (see
+/// `resolveProfileMenu` in `packages/core/src/menu/resolve.ts`, consumed by
+/// `apps/api/src/routes/menu.ts`'s `/me/menu` handler). Mirrors
+/// `apps/web/src/lib/types.ts`'s `MenuItem` exactly: no `kind` on the wire.
+/// `libraryId` is this entry's key (always present — it's the library's
+/// `cuid`); `name` is modeled `Optional` per this file's decode-safety
+/// stance even though `resolveProfileMenu` never actually nulls it today
+/// (`Library.name` is `NOT NULL`).
+public struct MenuItem: Decodable, Sendable, Equatable {
+    public var libraryId: String
+    public var name: String?
+
+    public init(libraryId: String, name: String? = nil) {
+        self.libraryId = libraryId
+        self.name = name
+    }
+}
+
+/// Response of `GET /api/me/menu`: `{items: [...]}`. When no profile is
+/// active yet, `menu.ts` sends `{items: []}` rather than erroring (see its
+/// `if (!profile) return reply.send({ items: [] })`), which decodes to an
+/// empty array here, not a decode failure.
+public struct MenuResponse: Decodable, Sendable, Equatable {
+    public var items: [MenuItem]
+
+    public init(items: [MenuItem]) {
+        self.items = items
+    }
+}
+
 /// Response of `GET /api/me/profile`: this session's (or bearer device's)
 /// currently-active profile. Unlike `Profile`, every field — including
 /// `id`/`name` — is optional: when no profile has been selected yet, the
