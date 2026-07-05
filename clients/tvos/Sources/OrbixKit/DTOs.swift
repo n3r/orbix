@@ -44,16 +44,30 @@ public struct Capabilities: Codable, Sendable, Equatable {
 
 // MARK: - Playback negotiation
 
-/// Body of `POST /api/playback/info`.
+/// Body of `POST /api/playback/info`. `quality`/`audioMode` are omitted from
+/// the wire when `nil` (Codable's synthesized `encode(to:)` uses
+/// `encodeIfPresent` for `Optional` stored properties) so the server applies
+/// its own defaults (`"source"` quality, `"standard"` audio mode) on initial
+/// negotiation; a later re-negotiation passes the user's picked values.
 public struct PlaybackInfoRequest: Codable, Sendable, Equatable {
     public var fileId: String
     public var capabilities: Capabilities
     public var audioTrackIndex: Int?
+    public var quality: String?
+    public var audioMode: String?
 
-    public init(fileId: String, capabilities: Capabilities, audioTrackIndex: Int? = nil) {
+    public init(
+        fileId: String,
+        capabilities: Capabilities,
+        audioTrackIndex: Int? = nil,
+        quality: String? = nil,
+        audioMode: String? = nil
+    ) {
         self.fileId = fileId
         self.capabilities = capabilities
         self.audioTrackIndex = audioTrackIndex
+        self.quality = quality
+        self.audioMode = audioMode
     }
 }
 
@@ -89,13 +103,57 @@ public struct SubtitleTrack: Codable, Sendable, Equatable {
     }
 }
 
-/// Response of `POST /api/playback/info`.
+/// One rung of the quality ladder `buildPlaybackQualities` (see
+/// `packages/core/src/playback/quality.ts`) derives from a file's probed
+/// dimensions/bitrate: the source resolution plus any downscale targets below
+/// it (1080p/720p/480p). `width`/`height` are `nil` for the `"source"` rung
+/// when the file's dimensions weren't probed; `bandwidth` is always a number.
+public struct QualityOption: Codable, Sendable, Equatable {
+    public var id: String
+    public var label: String
+    public var width: Int?
+    public var height: Int?
+    public var bandwidth: Int?
+
+    public init(id: String, label: String, width: Int? = nil, height: Int? = nil, bandwidth: Int? = nil) {
+        self.id = id
+        self.label = label
+        self.width = width
+        self.height = height
+        self.bandwidth = bandwidth
+    }
+}
+
+/// One entry of the server's fixed `AUDIO_MODES` const (`apps/api/src/routes/
+/// playback.ts`): `"standard"` (copy) or `"leveled"` (loudness-normalized,
+/// forces at least a remux).
+public struct AudioModeOption: Codable, Sendable, Equatable {
+    public var id: String
+    public var label: String
+
+    public init(id: String, label: String) {
+        self.id = id
+        self.label = label
+    }
+}
+
+/// Response of `POST /api/playback/info`. `quality`/`audioMode`/`qualities`/
+/// `audioModes` are the quality/audio-leveling ladder (Phase 3 Task 1): the
+/// quality/mode the server actually used for this session plus the full set
+/// of choices, driving the player's Quality / Audio-leveling menu (mirrors
+/// the web player's `PlaybackInfo` in `apps/web/src/components/Player.tsx`).
+/// Modeled `Optional` per this file's decode-safety stance even though the
+/// route currently always sends them.
 public struct PlaybackInfo: Codable, Sendable, Equatable {
     public var playSessionId: String
     public var mode: String
     public var streamUrl: String
     public var container: String?
     public var videoCodec: String?
+    public var quality: String?
+    public var audioMode: String?
+    public var qualities: [QualityOption]?
+    public var audioModes: [AudioModeOption]?
     public var audioTracks: [AudioTrack]
     public var subtitleTracks: [SubtitleTrack]
 
@@ -105,6 +163,10 @@ public struct PlaybackInfo: Codable, Sendable, Equatable {
         streamUrl: String,
         container: String? = nil,
         videoCodec: String? = nil,
+        quality: String? = nil,
+        audioMode: String? = nil,
+        qualities: [QualityOption]? = nil,
+        audioModes: [AudioModeOption]? = nil,
         audioTracks: [AudioTrack],
         subtitleTracks: [SubtitleTrack]
     ) {
@@ -113,6 +175,10 @@ public struct PlaybackInfo: Codable, Sendable, Equatable {
         self.streamUrl = streamUrl
         self.container = container
         self.videoCodec = videoCodec
+        self.quality = quality
+        self.audioMode = audioMode
+        self.qualities = qualities
+        self.audioModes = audioModes
         self.audioTracks = audioTracks
         self.subtitleTracks = subtitleTracks
     }
@@ -237,6 +303,15 @@ public struct HomeRows: Codable, Sendable, Equatable {
 /// and an explicit `null` both decode to `nil` without throwing, which keeps
 /// this type decode-safe against a server that omits or nulls out more than
 /// it does today.
+///
+/// `tmdbScore`/`imdbRating`/`imdbVotes`/`rtRating`/`metacritic` (Phase 3
+/// Task 1) are the ratings shown on the title hero (mirrors the web player's
+/// `Ratings` in `apps/web/src/lib/types.ts`) — every title carries the keys
+/// with explicit `null`s when unrated/unmatched, never an absent key,
+/// per `catalog.ts`'s response block. `matchState` (`"matched"` /
+/// `"unmatched"` / `"manual"`) is the same recognition-state string
+/// `MediaCard` already models; `ItemDetail` gains its own copy here since
+/// the route always sends it on the detail response too.
 public struct ItemDetail: Codable, Sendable, Equatable {
     public struct FileRef: Codable, Sendable, Equatable {
         public var id: String
@@ -301,6 +376,12 @@ public struct ItemDetail: Codable, Sendable, Equatable {
     public var logoPath: String?
     public var runtimeSec: Int?
     public var rating: String?
+    public var tmdbScore: Double?
+    public var imdbRating: Double?
+    public var imdbVotes: Int?
+    public var rtRating: Int?
+    public var metacritic: Int?
+    public var matchState: String?
     public var genres: [String]?
     public var cast: [CastMember]?
     public var director: Director?
@@ -326,6 +407,12 @@ public struct ItemDetail: Codable, Sendable, Equatable {
         logoPath: String? = nil,
         runtimeSec: Int? = nil,
         rating: String? = nil,
+        tmdbScore: Double? = nil,
+        imdbRating: Double? = nil,
+        imdbVotes: Int? = nil,
+        rtRating: Int? = nil,
+        metacritic: Int? = nil,
+        matchState: String? = nil,
         genres: [String]? = nil,
         cast: [CastMember]? = nil,
         director: Director? = nil,
@@ -342,6 +429,12 @@ public struct ItemDetail: Codable, Sendable, Equatable {
         self.logoPath = logoPath
         self.runtimeSec = runtimeSec
         self.rating = rating
+        self.tmdbScore = tmdbScore
+        self.imdbRating = imdbRating
+        self.imdbVotes = imdbVotes
+        self.rtRating = rtRating
+        self.metacritic = metacritic
+        self.matchState = matchState
         self.genres = genres
         self.cast = cast
         self.director = director

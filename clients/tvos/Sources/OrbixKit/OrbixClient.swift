@@ -234,13 +234,24 @@ public actor OrbixClient {
 
     // MARK: - Playback
 
-    /// `POST /api/playback/info`.
+    /// `POST /api/playback/info`. `quality`/`audioMode` are omitted from the wire
+    /// when nil (initial negotiation) so the server picks its defaults; a later
+    /// UI task wires the player's Quality / Audio-leveling menu to pass explicit
+    /// values here to re-negotiate (each choice mints a fresh play session —
+    /// see the web player's `renegotiate` in `apps/web/src/components/Player.tsx`
+    /// for the equivalent flow). `PlaybackController` doesn't call this with
+    /// non-nil values yet — no such menu exists in the tvOS app as of this task.
     public func playbackInfo(
         fileId: String,
         capabilities: Capabilities,
-        audioTrackIndex: Int? = nil
+        audioTrackIndex: Int? = nil,
+        quality: String? = nil,
+        audioMode: String? = nil
     ) async throws -> PlaybackInfo {
-        let body = PlaybackInfoRequest(fileId: fileId, capabilities: capabilities, audioTrackIndex: audioTrackIndex)
+        let body = PlaybackInfoRequest(
+            fileId: fileId, capabilities: capabilities,
+            audioTrackIndex: audioTrackIndex, quality: quality, audioMode: audioMode
+        )
         let data = try encodeBody(body)
         return try await send(method: "POST", url: baseURL.appending(path: "api/playback/info"), body: data)
     }

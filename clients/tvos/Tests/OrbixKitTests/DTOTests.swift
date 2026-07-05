@@ -37,6 +37,61 @@ final class DTOTests: XCTestCase {
         XCTAssertTrue(info.subtitleTracks.isEmpty)
     }
 
+    // MARK: - PlaybackInfo quality/audio ladder (Phase 3 Task 1)
+
+    func testDecodePlaybackInfoQualityLadder() throws {
+        // apps/api/src/routes/playback.ts:255-279 for a 2160p source: buildPlaybackQualities
+        // (quality.ts) yields source + 1080p/720p/480p; AUDIO_MODES yields standard/leveled.
+        let json = """
+        {"playSessionId":"sess-1","mode":"transcode",
+         "streamUrl":"/api/play/f1/master.m3u8?playSessionId=sess-1&token=orb_x",
+         "container":"matroska,webm","videoCodec":"h264",
+         "quality":"source","audioMode":"standard",
+         "qualities":[
+           {"id":"source","label":"Original (2160p)","width":3840,"height":2160,"bandwidth":24000000},
+           {"id":"1080p","label":"1080p","width":1920,"height":1080,"bandwidth":5500000},
+           {"id":"720p","label":"720p","width":1280,"height":720,"bandwidth":3000000},
+           {"id":"480p","label":"480p","width":854,"height":480,"bandwidth":1600000}],
+         "audioModes":[{"id":"standard","label":"Standard"},{"id":"leveled","label":"Leveling"}],
+         "audioTracks":[{"index":0,"codec":"ac3","channels":6,"language":"en","selected":true}],
+         "subtitleTracks":[]}
+        """.data(using: .utf8)!
+        let info = try JSONDecoder().decode(PlaybackInfo.self, from: json)
+        XCTAssertEqual(info.quality, "source")
+        XCTAssertEqual(info.audioMode, "standard")
+        XCTAssertEqual(info.qualities?.map(\.id), ["source", "1080p", "720p", "480p"])
+        XCTAssertEqual(info.qualities?.first?.label, "Original (2160p)")
+        XCTAssertEqual(info.qualities?.last?.height, 480)
+        XCTAssertEqual(info.audioModes?.map(\.id), ["standard", "leveled"])
+    }
+
+    func testDecodePlaybackInfoToleratesMissingQualityFields() throws {
+        // A response with no quality ladder at all (older/other shape) must still
+        // decode — every new field is Optional.
+        let json = """
+        {"playSessionId":"s2","mode":"direct","streamUrl":"/api/play/f2/direct",
+         "container":null,"videoCodec":null,"audioTracks":[],"subtitleTracks":[]}
+        """.data(using: .utf8)!
+        let info = try JSONDecoder().decode(PlaybackInfo.self, from: json)
+        XCTAssertNil(info.quality)
+        XCTAssertNil(info.qualities)
+        XCTAssertNil(info.audioMode)
+        XCTAssertNil(info.audioModes)
+    }
+
+    func testEncodePlaybackInfoRequestOmitsQualityAudioWhenNil() throws {
+        // nil quality/audioMode must NOT appear on the wire (server applies defaults).
+        let plain = PlaybackInfoRequest(fileId: "f1", capabilities: .appleTV)
+        let plainStr = String(data: try JSONEncoder().encode(plain), encoding: .utf8)!
+        XCTAssertFalse(plainStr.contains("quality"))
+        XCTAssertFalse(plainStr.contains("audioMode"))
+        // Set values round-trip through the wire.
+        let picked = PlaybackInfoRequest(fileId: "f1", capabilities: .appleTV, quality: "720p", audioMode: "leveled")
+        let pickedStr = String(data: try JSONEncoder().encode(picked), encoding: .utf8)!
+        XCTAssertTrue(pickedStr.contains("\"quality\":\"720p\""))
+        XCTAssertTrue(pickedStr.contains("\"audioMode\":\"leveled\""))
+    }
+
     func testAppleCapabilityProfile() {
         XCTAssertEqual(Capabilities.appleTV.subtitleDelivery, "hls")
         XCTAssertTrue(Capabilities.appleTV.videoCodecs.contains("hevc"))
@@ -265,6 +320,41 @@ final class DTOTests: XCTestCase {
         XCTAssertNil(detail.director)
         XCTAssertNil(detail.seasons)
         XCTAssertNil(detail.files)
+    }
+
+    // MARK: - ItemDetail ratings (Phase 3 Task 1)
+
+    func testDecodeItemDetailRatingsNowModeled() throws {
+        // apps/api/src/routes/catalog.ts:195-200 — ratings + matchState sent on every item.
+        // (Same shape the existing movie fixture already carries; now decoded.)
+        let json = """
+        {"id":"m1","kind":"movie","title":"Arrival","rating":"PG-13",
+         "tmdbScore":7.9,"imdbRating":7.9,"imdbVotes":700000,"rtRating":94,"metacritic":81,
+         "matchState":"matched"}
+        """.data(using: .utf8)!
+        let d = try JSONDecoder().decode(ItemDetail.self, from: json)
+        XCTAssertEqual(d.imdbRating, 7.9)
+        XCTAssertEqual(d.tmdbScore, 7.9)
+        XCTAssertEqual(d.imdbVotes, 700000)
+        XCTAssertEqual(d.rtRating, 94)
+        XCTAssertEqual(d.metacritic, 81)
+        XCTAssertEqual(d.rating, "PG-13")
+    }
+
+    func testDecodeItemDetailRatingsAllNull() throws {
+        // A movie missing every rating (catalog.ts sends explicit nulls) — must
+        // decode to nil, not throw; matchState still present.
+        let json = """
+        {"id":"m2","kind":"movie","title":"Untitled Import",
+         "tmdbScore":null,"imdbRating":null,"imdbVotes":null,"rtRating":null,"metacritic":null,
+         "rating":null,"matchState":"unmatched"}
+        """.data(using: .utf8)!
+        let d = try JSONDecoder().decode(ItemDetail.self, from: json)
+        XCTAssertNil(d.imdbRating)
+        XCTAssertNil(d.rtRating)
+        XCTAssertNil(d.metacritic)
+        XCTAssertNil(d.rating)
+        XCTAssertEqual(d.matchState, "unmatched")
     }
 
     // MARK: - Playback progress (M3 Task 3)
