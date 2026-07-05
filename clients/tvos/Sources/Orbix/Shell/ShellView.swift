@@ -118,12 +118,7 @@ struct ShellView: View {
                 .id(libraryId)
                 .onExitCommand { selection = .home }
         case .wishlist:
-            placeholder(
-                title: "My List",
-                systemImage: "heart",
-                message: "Your watch-later list is coming to the TV app in a later phase.",
-                id: "section_wishlist"
-            )
+            WishlistView(model: model)
         case .account:
             placeholder(
                 title: "Account",
