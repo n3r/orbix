@@ -14,5 +14,6 @@
     "loadFailed": "No se pudieron cargar los perfiles.",
     "selectFailed": "No se pudo seleccionar el perfil.",
     "pinNotSupported": "Este perfil requiere un PIN. La introducción de PIN aún no es compatible."
-  }
+  },
+  "emptyHint": "Crea tu primer perfil para empezar a ver."
 }

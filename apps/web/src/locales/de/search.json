@@ -13,5 +13,7 @@
   "empty": "Keine Ergebnisse gefunden.",
   "errors": {
     "failed": "Suche fehlgeschlagen. Bitte versuche es erneut."
-  }
+  },
+  "landing": "Durchsuche deine Mediathek",
+  "emptyHint": "Versuche einen anderen Titel oder eine breitere Suche."
 }

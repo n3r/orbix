@@ -1,5 +1,7 @@
 {
-  "app": { "name": "Orbix" },
+  "app": {
+    "name": "Orbix"
+  },
   "language": "Idioma",
   "actions": {
     "save": "Salvar",
@@ -17,5 +19,9 @@
     "loading": "Carregando…",
     "saving": "Salvando…",
     "empty": "Nada por aqui ainda."
+  },
+  "confirmDelete": {
+    "title": "Excluir “{{name}}”?",
+    "body": "Isso não pode ser desfeito."
   }
 }

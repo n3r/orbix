@@ -64,7 +64,7 @@ export default function HomeBillboard({ card }: { card: HomeCard }) {
           {(fresh || meta.length > 0) && (
             <p className="flex items-center gap-2 text-sm font-medium text-[var(--text)]/85 [text-shadow:0_1px_2px_rgba(0,0,0,0.7)] md:text-base">
               {fresh && (
-                <span className="rounded-sm bg-[var(--accent)] px-1.5 py-0.5 text-[11px] font-bold leading-none text-white">
+                <span className="rounded-sm bg-[var(--accent-strong)] px-1.5 py-0.5 text-[11px] font-bold leading-none text-white">
                   {t("catalog:spotlight.new")}
                 </span>
               )}
@@ -97,7 +97,7 @@ export default function HomeBillboard({ card }: { card: HomeCard }) {
         {/* Maturity cert plate pinned to the right edge, like the reference.
             Hidden on small screens where it would collide with the buttons. */}
         {detail?.rating && (
-          <div className="absolute bottom-32 right-0 z-10 hidden border-l-[3px] border-[var(--text-dim)] bg-[var(--surface)]/50 py-1 pl-3 pr-[3vw] text-base font-medium text-[var(--text)]/90 backdrop-blur-sm md:block">
+          <div className="absolute bottom-32 right-0 z-10 hidden border border-[var(--surface-2)] bg-[var(--surface)]/50 py-1 pl-3 pr-[3vw] text-base font-medium text-[var(--text)]/90 backdrop-blur-sm md:block">
             {detail.rating}
           </div>
         )}

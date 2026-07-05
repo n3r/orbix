@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { cn, Input } from "@orbix/ui";
+import { cn, focusRingInset, Input } from "@orbix/ui";
 import { useTvGuide } from "@/lib/queries";
 import type { TvChannelCard, TvGridChannel } from "@/lib/types";
 import LiveTvOverlay from "@/components/tv/LiveTvOverlay";
@@ -257,13 +257,13 @@ export default function TvGuidePage() {
                       type="button"
                       onClick={() => setPlaying({ channels, id: c.id })}
                       aria-label={t("tv:guidePage.play", { name: c.name })}
-                      className="absolute inset-0 hover:bg-white/5 focus-visible:bg-white/5 focus-visible:outline-none"
+                      className={cn("absolute inset-0 hover:bg-white/5", focusRingInset)}
                     />
                     {/* Channel-details affordance, painted above the row button. */}
                     <Link
                       to={`/tv/channel/${c.id}`}
                       aria-label={t("tv:guidePage.schedule")}
-                      className="relative shrink-0 rounded p-1 text-[var(--text-dim)] opacity-0 transition-opacity hover:text-[var(--text)] focus-visible:opacity-100 group-hover:opacity-100"
+                      className="relative shrink-0 rounded p-1 text-[var(--text-dim)] opacity-0 transition-opacity hover:text-[var(--text)] focus-visible:opacity-100 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100"
                     >
                       <InfoIcon className="h-4 w-4" />
                     </Link>

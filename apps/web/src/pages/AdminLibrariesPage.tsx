@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
-import { Button, Card, Input } from "@orbix/ui";
+import { Button, Card, ConfirmDialog, Input, Skeleton } from "@orbix/ui";
 import { apiFetch } from "@/lib/api";
 import { errorMessage } from "@/lib/i18n/tError";
 import { queryClient } from "@/lib/queryClient";
@@ -36,6 +36,12 @@ export default function AdminLibrariesPage() {
   const [libraries, setLibraries] = useState<Library[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Confirm gate for irreversible deletes (a library takes all its items with it).
+  const [pendingDelete, setPendingDelete] = useState<
+    { kind: "library" | "source"; id: string; name: string } | null
+  >(null);
+  const [deleting, setDeleting] = useState(false);
 
   const [newLibName, setNewLibName] = useState("");
   const [libSaving, setLibSaving] = useState(false);
@@ -149,9 +155,19 @@ export default function AdminLibrariesPage() {
     }
   }
 
-  async function handleDeleteLibrary(id: string) {
-    await apiFetch(`/libraries/${id}`, { method: "DELETE" });
-    await refresh();
+  async function confirmDelete() {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    try {
+      const path = pendingDelete.kind === "library" ? `/libraries/${pendingDelete.id}` : `/sources/${pendingDelete.id}`;
+      await apiFetch(path, { method: "DELETE" });
+      await refresh();
+      setPendingDelete(null);
+    } catch {
+      setError(t("errors:network"));
+    } finally {
+      setDeleting(false);
+    }
   }
 
   function startRename(lib: Library) {
@@ -217,11 +233,6 @@ export default function AdminLibrariesPage() {
     } finally {
       setSourceSaving((s) => ({ ...s, [libraryId]: false }));
     }
-  }
-
-  async function handleDeleteSource(id: string) {
-    await apiFetch(`/sources/${id}`, { method: "DELETE" });
-    await refresh();
   }
 
   async function handleScan(libraryId: string) {
@@ -295,7 +306,24 @@ export default function AdminLibrariesPage() {
   }
 
   if (loading) {
-    return <main><p className="text-[var(--text-dim)]">{t("common:status.loading")}</p></main>;
+    return (
+      <main className="flex flex-col gap-4">
+        <Skeleton rounded="sm" className="h-9 w-64" />
+        {[0, 1].map((i) => (
+          <Card key={i} className="p-3">
+            <div className="grid gap-3 xl:grid-cols-[minmax(220px,1.1fr)_minmax(480px,1.6fr)_auto] xl:items-center">
+              <Skeleton rounded="sm" className="h-6 w-40" />
+              <div className="grid grid-cols-3 gap-2 lg:grid-cols-6">
+                {Array.from({ length: 6 }).map((_, j) => (
+                  <Skeleton key={j} rounded="sm" className="h-12 w-full" />
+                ))}
+              </div>
+              <Skeleton rounded="sm" className="h-9 w-40 justify-self-end" />
+            </div>
+          </Card>
+        ))}
+      </main>
+    );
   }
 
   return (
@@ -303,7 +331,7 @@ export default function AdminLibrariesPage() {
       <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold text-[var(--text)]">{t("libraries:title")}</h1>
+            <h2 className="text-3xl font-bold text-[var(--text)]">{t("libraries:title")}</h2>
             <Link to="/account/settings" className="text-sm text-[var(--text-dim)] hover:text-[var(--text)]">{t("libraries:settingsLink")}</Link>
           </div>
           <p className="mt-1 text-sm text-[var(--text-dim)]">
@@ -321,8 +349,8 @@ export default function AdminLibrariesPage() {
         </form>
       </div>
 
-      {error && <p className="text-sm text-red-400">{error}</p>}
-      {libError && <p className="text-sm text-red-400">{libError}</p>}
+      {error && <p className="text-sm text-[var(--danger)]">{error}</p>}
+      {libError && <p className="text-sm text-[var(--danger)]">{libError}</p>}
 
       {/* Library list */}
       {libraries.length === 0 && (
@@ -363,7 +391,7 @@ export default function AdminLibrariesPage() {
                 </form>
               ) : (
                 <>
-                  <h2 className="truncate text-lg font-semibold text-[var(--text)]">{lib.name}</h2>
+                  <h3 className="truncate text-lg font-semibold text-[var(--text)]">{lib.name}</h3>
                   <p className="mt-0.5 truncate text-xs text-[var(--text-dim)]">
                     {t("libraries:stats.sources", { count: summary.enabledSourceCount, total: summary.sourceCount })}
                     {" · "}
@@ -372,7 +400,7 @@ export default function AdminLibrariesPage() {
                 </>
               )}
               {renameErrors[lib.id] && (
-                <p className="mt-1 text-sm text-red-400">{renameErrors[lib.id]}</p>
+                <p className="mt-1 text-sm text-[var(--danger)]">{renameErrors[lib.id]}</p>
               )}
             </div>
 
@@ -385,9 +413,9 @@ export default function AdminLibrariesPage() {
                 [t("libraries:stats.files"), summary.files],
                 [t("libraries:stats.sourceErrors"), summary.sourceErrorCount],
               ].map(([label, value]) => (
-                <div key={String(label)} className="rounded-[var(--radius-sm)] border border-[var(--surface-2)] bg-[var(--bg)]/35 px-2 py-1.5">
-                  <dt className="truncate text-[11px] uppercase text-[var(--text-dim)]">{label}</dt>
-                  <dd className="text-base font-semibold text-[var(--text)]">{value}</dd>
+                <div key={String(label)} className="flex flex-col-reverse rounded-[var(--radius-sm)] bg-[var(--surface-2)]/60 px-2.5 py-2">
+                  <dt className="mt-1.5 truncate text-[11px] font-medium tracking-wide text-[var(--text-dim)]">{label}</dt>
+                  <dd className="text-lg font-semibold leading-none tabular-nums text-[var(--text)]">{value}</dd>
                 </div>
               ))}
             </dl>
@@ -404,7 +432,7 @@ export default function AdminLibrariesPage() {
               <Button variant="ghost" onClick={() => setExpandedLibraryId(isExpanded ? null : lib.id)} className="px-3 py-1.5 text-sm">
                 {isExpanded ? t("libraries:actions.hideSources") : t("libraries:actions.manageSources")}
               </Button>
-              <Button variant="ghost" onClick={() => handleDeleteLibrary(lib.id)} className="px-3 py-1.5 text-sm">{t("common:actions.delete")}</Button>
+              <Button variant="ghost" onClick={() => setPendingDelete({ kind: "library", id: lib.id, name: lib.name })} className="px-3 py-1.5 text-sm">{t("common:actions.delete")}</Button>
             </div>
           </div>
 
@@ -425,7 +453,7 @@ export default function AdminLibrariesPage() {
           {isExpanded && (
             <div className="mt-4 grid gap-4 border-t border-[var(--surface-2)] pt-4 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.8fr)]">
               <div>
-                <h3 className="mb-2 text-sm font-medium text-[var(--text)]">{t("libraries:source.heading")}</h3>
+                <h4 className="mb-2 text-sm font-medium text-[var(--text)]">{t("libraries:source.heading")}</h4>
                 {lib.sources.length === 0 ? (
                   <p className="text-sm text-[var(--text-dim)]">{t("libraries:source.empty")}</p>
                 ) : (
@@ -434,9 +462,9 @@ export default function AdminLibrariesPage() {
                       <li key={src.id} className="flex items-center justify-between gap-3 rounded-[var(--radius-sm)] bg-[var(--bg)]/30 px-2 py-1.5 text-sm text-[var(--text-dim)]">
                         <span className="min-w-0 truncate font-mono">
                           {sourceLabel(src)}
-                          {src.status === "error" && <span className="ml-2 text-red-400">({t("libraries:source.errorLabel")}: {src.statusMessage})</span>}
+                          {src.status === "error" && <span className="ml-2 text-[var(--danger)]">({t("libraries:source.errorLabel")}: {src.statusMessage})</span>}
                         </span>
-                        <Button variant="ghost" onClick={() => handleDeleteSource(src.id)} className="shrink-0 px-2 py-1 text-xs">{t("common:actions.remove")}</Button>
+                        <Button variant="ghost" onClick={() => setPendingDelete({ kind: "source", id: src.id, name: sourceLabel(src) })} className="shrink-0 px-2 py-1 text-xs">{t("common:actions.remove")}</Button>
                       </li>
                     ))}
                   </ul>
@@ -469,13 +497,31 @@ export default function AdminLibrariesPage() {
                     <Input value={d.domain} onChange={(e) => setDraft(lib.id, { domain: e.target.value })} placeholder={t("libraries:source.smbDomainPlaceholder")} />
                   </div>
                 )}
-                {sourceErrors[lib.id] && <p className="text-sm text-red-400">{sourceErrors[lib.id]}</p>}
+                {sourceErrors[lib.id] && <p className="text-sm text-[var(--danger)]">{sourceErrors[lib.id]}</p>}
               </form>
               </div>
           )}
         </Card>
         );
       })}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title={pendingDelete ? t("common:confirmDelete.title", { name: pendingDelete.name }) : ""}
+        description={
+          pendingDelete?.kind === "library"
+            ? t("libraries:deleteLibraryConfirm", { name: pendingDelete.name })
+            : pendingDelete
+              ? t("libraries:deleteSourceConfirm")
+              : undefined
+        }
+        confirmLabel={t("common:actions.delete")}
+        cancelLabel={t("common:actions.cancel")}
+        destructive
+        busy={deleting}
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
     </main>
   );
 }

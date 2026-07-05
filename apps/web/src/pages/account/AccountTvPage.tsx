@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
-import { Button, Card, Input, cn } from "@orbix/ui";
+import { Button, Card, ConfirmDialog, Input, Skeleton, cn } from "@orbix/ui";
 import { apiFetch } from "@/lib/api";
 import type { TvSource } from "@/lib/types";
 import { regionName } from "@/lib/tv";
@@ -39,6 +39,10 @@ export default function AccountTvPage() {
   const [sources, setSources] = useState<TvSource[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Delete is gated behind ConfirmDialog: this holds the source pending
+  // deletion (id + display name), and `deleting` drives the dialog's busy state.
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const [m3uName, setM3uName] = useState("");
   const [m3uUrl, setM3uUrl] = useState("");
@@ -156,8 +160,13 @@ export default function AccountTvPage() {
   }
 
   async function deleteSource(id: string) {
-    await apiFetch(`/tv/sources/${id}`, { method: "DELETE" });
-    await load();
+    setDeleting(true);
+    try {
+      await apiFetch(`/tv/sources/${id}`, { method: "DELETE" });
+      await load();
+    } finally {
+      setDeleting(false);
+    }
   }
 
   async function addM3uByUrl(e: React.FormEvent) {
@@ -358,7 +367,7 @@ export default function AccountTvPage() {
         <Button variant="ghost" onClick={() => void syncNow(s.id)} disabled={syncLoading[s.id]}>
           {syncLoading[s.id] ? t("tv:admin.source.syncing") : t("tv:admin.source.syncNow")}
         </Button>
-        <Button variant="ghost" onClick={() => void deleteSource(s.id)}>
+        <Button variant="ghost" onClick={() => setPendingDelete({ id: s.id, name: s.name })}>
           {t("common:actions.delete")}
         </Button>
       </div>
@@ -368,10 +377,45 @@ export default function AccountTvPage() {
     </div>
   );
 
+  // One dialog instance for the page, driven by `pendingDelete`. Rendered in
+  // both the wizard and the default layout so either can trigger a delete.
+  const deleteDialog = (
+    <ConfirmDialog
+      open={pendingDelete !== null}
+      title={t("common:confirmDelete.title", { name: pendingDelete?.name ?? "" })}
+      description={t("common:confirmDelete.body")}
+      confirmLabel={t("common:actions.delete")}
+      cancelLabel={t("common:actions.cancel")}
+      destructive
+      busy={deleting}
+      onConfirm={() => {
+        if (!pendingDelete) return;
+        void (async () => {
+          await deleteSource(pendingDelete.id);
+          setPendingDelete(null);
+        })();
+      }}
+      onCancel={() => setPendingDelete(null)}
+    />
+  );
+
   if (loading) {
     return (
-      <main>
-        <p className="text-[var(--text-dim)]">{t("common:status.loading")}</p>
+      <main className="flex flex-col gap-6">
+        <Skeleton className="h-8 w-48" />
+        <Card>
+          <Skeleton className="mb-2 h-5 w-40" />
+          <Skeleton className="mb-4 h-3 w-64" />
+          <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 md:grid-cols-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <Skeleton key={i} className="h-7" />
+            ))}
+          </div>
+        </Card>
+        <Card>
+          <Skeleton className="mb-4 h-5 w-40" />
+          <Skeleton className="h-9 w-full" />
+        </Card>
       </main>
     );
   }
@@ -433,6 +477,7 @@ export default function AccountTvPage() {
         </Card>
 
         <p className="text-xs text-[var(--text-dim)]">{t("tv:admin.legal")}</p>
+        {deleteDialog}
       </main>
     );
   }
@@ -471,6 +516,7 @@ export default function AccountTvPage() {
 
       <TvEpgSourcesCard />
       <TvChannelManagerCard />
+      {deleteDialog}
     </main>
   );
 }

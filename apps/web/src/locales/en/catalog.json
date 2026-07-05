@@ -25,5 +25,11 @@
     "seasons": "{{count}} Seasons",
     "timeLeftMinutes": "{{m}}m left",
     "timeLeftHours": "{{h}}h {{m}}m left"
+  },
+  "home": {
+    "emptyTitle": "Your library is empty",
+    "emptyBody": "Add a library and run a scan to fill your home with something to watch.",
+    "errorTitle": "Couldn't load your home",
+    "errorBody": "Something went wrong loading your rows. Check your connection and try again."
   }
 }

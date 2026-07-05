@@ -13,5 +13,7 @@
   "empty": "Nenhum resultado encontrado.",
   "errors": {
     "failed": "Falha na busca. Tente novamente."
-  }
+  },
+  "landing": "Pesquise sua biblioteca",
+  "emptyHint": "Tente outro título ou uma busca mais ampla."
 }

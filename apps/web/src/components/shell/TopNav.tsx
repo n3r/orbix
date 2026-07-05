@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router";
 import { useTranslation } from "react-i18next";
-import { Avatar, cn } from "@orbix/ui";
+import { Avatar, cn, focusRing } from "@orbix/ui";
 import { useMenu } from "@/lib/queries";
 import type { Profile } from "@/lib/types";
 import NavCategories from "./NavCategories";
@@ -47,7 +47,7 @@ export default function TopNav({ profile }: { profile: Profile | null }) {
       <nav className="flex h-14 items-center justify-between gap-6 px-[4vw]">
         {/* Left cluster: wordmark + browse links (Netflix layout — mobile uses BottomNav). */}
         <div className="flex min-w-0 items-center gap-6 md:gap-8">
-          <Link to="/" className="shrink-0 text-lg font-extrabold uppercase tracking-[0.25em] text-[var(--accent)]">
+          <Link to="/" className={cn("shrink-0 text-lg font-extrabold uppercase tracking-[0.25em] text-[var(--accent)]", focusRing)}>
             {t("common:app.name")}
           </Link>
           <div className="hidden md:flex items-center gap-4">
@@ -57,6 +57,7 @@ export default function TopNav({ profile }: { profile: Profile | null }) {
               className={cn(
                 "flex items-center gap-1.5 text-sm transition-colors",
                 pathname === "/" ? "text-[var(--text)] font-medium" : "text-[var(--text-dim)] hover:text-[var(--text)]",
+                focusRing,
               )}
             >
               <HomeIcon className="h-4 w-4" /> {t("nav:home")}
@@ -70,6 +71,7 @@ export default function TopNav({ profile }: { profile: Profile | null }) {
                   pathname.startsWith("/tv")
                     ? "text-[var(--text)] font-medium"
                     : "text-[var(--text-dim)] hover:text-[var(--text)]",
+                  focusRing,
                 )}
               >
                 <TvIcon className="h-4 w-4" /> {t("nav:tv")}
@@ -79,23 +81,24 @@ export default function TopNav({ profile }: { profile: Profile | null }) {
           </div>
         </div>
 
-        {/* Right: heart · search · avatar */}
-        <div className="flex shrink-0 items-center gap-4">
+        {/* Right: heart · search · avatar — each a 44px tap target for touch. */}
+        <div className="-mr-2 flex shrink-0 items-center gap-1">
           <Link
             to="/wishlist"
             aria-label={t("nav:wishlist")}
             aria-current={pathname === "/wishlist" ? "page" : undefined}
             className={cn(
-              "transition-colors",
+              "grid h-11 w-11 place-items-center rounded-full transition-colors",
               pathname === "/wishlist" ? "text-[var(--accent)]" : "text-[var(--text)] hover:text-[var(--text-dim)]",
+              focusRing,
             )}
           >
-            <HeartIcon />
+            <HeartIcon className="h-5 w-5" />
           </Link>
-          <Link to="/search" aria-label={t("nav:search")} className="text-[var(--text)] hover:text-[var(--text-dim)] transition-colors">
-            <SearchIcon />
+          <Link to="/search" aria-label={t("nav:search")} className={cn("grid h-11 w-11 place-items-center rounded-full text-[var(--text)] transition-colors hover:text-[var(--text-dim)]", focusRing)}>
+            <SearchIcon className="h-5 w-5" />
           </Link>
-          <Link to="/account" aria-label={t("nav:account")} className="rounded-full focus:outline-none focus:ring-2 focus:ring-[var(--accent)]">
+          <Link to="/account" aria-label={t("nav:account")} className={cn("grid h-11 w-11 place-items-center rounded-full", focusRing)}>
             <Avatar name={profile?.name ?? "?"} src={profile?.avatar ?? undefined} size={32} />
           </Link>
         </div>

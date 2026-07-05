@@ -25,5 +25,11 @@
     "seasons": "{{count}} Staffeln",
     "timeLeftMinutes": "noch {{m}} Min.",
     "timeLeftHours": "noch {{h}} Std. {{m}} Min."
+  },
+  "home": {
+    "emptyTitle": "Deine Mediathek ist leer",
+    "emptyBody": "Füge eine Mediathek hinzu und starte einen Scan, um deine Startseite zu füllen.",
+    "errorTitle": "Startseite konnte nicht geladen werden",
+    "errorBody": "Beim Laden ist etwas schiefgelaufen. Prüfe deine Verbindung und versuche es erneut."
   }
 }

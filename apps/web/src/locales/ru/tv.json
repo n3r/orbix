@@ -97,7 +97,8 @@
     "tryingSource": "Пробуем следующий источник ({{n}}/{{total}})…",
     "source": "Источник {{n}}/{{total}}",
     "miniGuide": "Каналы",
-    "next": "Далее"
+    "next": "Далее",
+    "previousChannel": "Предыдущий канал"
   },
   "admin": {
     "title": "Прямой эфир",

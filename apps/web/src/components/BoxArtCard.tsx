@@ -27,8 +27,8 @@ export default function BoxArtCard({
     <Link
       to={`/title/${item.id}`}
       className={cn(
-        "relative block shrink-0 snap-start overflow-hidden rounded-md bg-[var(--surface)]",
-        "transition-transform delay-75 duration-200 hover:z-10 hover:scale-[1.06] hover:shadow-xl hover:shadow-black/50",
+        "relative block shrink-0 snap-start overflow-hidden rounded-[var(--radius)] bg-[var(--surface)]",
+        "transition-transform delay-75 duration-200 hover:z-10 hover:scale-[1.04] hover:shadow-lg hover:shadow-black/40",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]",
         "motion-reduce:transition-none motion-reduce:hover:transform-none",
         className,
@@ -47,15 +47,15 @@ export default function BoxArtCard({
         )}
       </div>
 
-      <div className="absolute inset-x-0 bottom-0 flex flex-col gap-0.5 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-2.5 pb-2 pt-8">
+      <div className="absolute inset-x-0 bottom-0 flex flex-col gap-0.5 bg-gradient-to-t from-black/80 via-black/55 to-transparent px-2.5 pb-2 pt-8">
         <span className="line-clamp-1 text-[13px] font-medium leading-tight text-white">
           {item.title}
         </span>
-        {sub && <span className="text-[11px] leading-tight text-white/60">{sub}</span>}
+        {sub && <span className="text-[11px] leading-tight text-white/80">{sub}</span>}
       </div>
 
       {isNew(item.addedAt, new Date()) && (
-        <span className="absolute left-1.5 top-1.5 rounded-sm bg-[var(--accent)] px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+        <span className="absolute left-1.5 top-1.5 rounded-sm bg-[var(--accent-strong)] px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
           {t("catalog:spotlight.new")}
         </span>
       )}

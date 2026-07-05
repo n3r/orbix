@@ -1,4 +1,5 @@
 import { Navigate, Outlet } from "react-router";
+import { Skeleton } from "@orbix/ui";
 import { ApiError } from "@/lib/api";
 import { useSetupStatus, useMyProfile } from "@/lib/queries";
 import { decideRedirect } from "./decideRedirect";
@@ -13,7 +14,12 @@ export default function RequireProfile() {
   useSyncProfileLanguage(me.data?.language);
 
   if (setup.isLoading || me.isLoading) {
-    return <div className="p-8 text-[var(--text-dim)]">Loading…</div>;
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 p-8">
+        <Skeleton className="h-8 w-48" rounded="sm" />
+        <Skeleton className="h-4 w-64" rounded="sm" />
+      </div>
+    );
   }
 
   const authError401 = me.error instanceof ApiError && me.error.status === 401;

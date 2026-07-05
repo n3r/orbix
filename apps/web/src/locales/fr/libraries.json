@@ -63,5 +63,7 @@
     "createFailed": "Échec de la création de la bibliothèque",
     "renameFailed": "Échec du renommage de la bibliothèque",
     "addSourceFailed": "Échec de l'ajout de la source"
-  }
+  },
+  "deleteLibraryConfirm": "Cela supprime définitivement « {{name}} » et tous ses éléments. Cette action est irréversible.",
+  "deleteSourceConfirm": "Supprimer cette source ? Ses éléments ne seront plus suivis."
 }

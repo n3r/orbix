@@ -95,7 +95,8 @@
     "tryingSource": "Trying next source ({{n}}/{{total}})…",
     "source": "Source {{n}}/{{total}}",
     "miniGuide": "Channels",
-    "next": "Next"
+    "next": "Next",
+    "previousChannel": "Previous channel"
   },
   "admin": {
     "title": "Live TV",

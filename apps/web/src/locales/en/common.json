@@ -1,5 +1,7 @@
 {
-  "app": { "name": "Orbix" },
+  "app": {
+    "name": "Orbix"
+  },
   "language": "Language",
   "actions": {
     "save": "Save",
@@ -17,5 +19,9 @@
     "loading": "Loading…",
     "saving": "Saving…",
     "empty": "Nothing here yet."
+  },
+  "confirmDelete": {
+    "title": "Delete “{{name}}”?",
+    "body": "This can't be undone."
   }
 }

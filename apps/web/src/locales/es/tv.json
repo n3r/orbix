@@ -95,7 +95,8 @@
     "tryingSource": "Probando la siguiente fuente ({{n}}/{{total}})…",
     "source": "Fuente {{n}}/{{total}}",
     "miniGuide": "Canales",
-    "next": "Después"
+    "next": "Después",
+    "previousChannel": "Canal anterior"
   },
   "admin": {
     "title": "TV en directo",

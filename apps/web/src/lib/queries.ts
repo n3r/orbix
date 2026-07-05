@@ -42,6 +42,9 @@ export function useSearch(q: string) {
   return useQuery({
     queryKey: ["search", q],
     enabled: q.trim().length > 0,
+    // Keep the previous query's results visible while a re-search loads so the
+    // grid dims rather than flashing empty between keystroke-submits.
+    placeholderData: keepPreviousData,
     queryFn: () => apiJson<SearchResponse>(`/search?q=${encodeURIComponent(q.trim())}`),
   });
 }

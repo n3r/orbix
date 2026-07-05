@@ -63,5 +63,7 @@
     "createFailed": "Failed to create library",
     "renameFailed": "Failed to rename library",
     "addSourceFailed": "Failed to add source"
-  }
+  },
+  "deleteLibraryConfirm": "This permanently deletes “{{name}}” and all of its items. This can't be undone.",
+  "deleteSourceConfirm": "Remove this source? Its items will no longer be tracked."
 }

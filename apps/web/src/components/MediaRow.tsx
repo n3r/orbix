@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { cn } from "@orbix/ui";
+import { cn, focusRing } from "@orbix/ui";
 import BoxArtCard from "./BoxArtCard";
+import { scrollBehavior } from "@/lib/motion";
 import type { HomeCard } from "@/lib/types";
 import { ChevronLeftIcon, ChevronRightIcon } from "./shell/icons";
 
@@ -44,7 +45,7 @@ export default function MediaRow({ title, rowKey, items }: MediaRowProps) {
   const page = (dir: 1 | -1) => {
     const el = scroller.current;
     if (!el) return;
-    el.scrollBy({ left: dir * el.clientWidth * 0.9, behavior: "smooth" });
+    el.scrollBy({ left: dir * el.clientWidth * 0.9, behavior: scrollBehavior() });
   };
 
   if (items.length === 0) return null;
@@ -76,12 +77,12 @@ export default function MediaRow({ title, rowKey, items }: MediaRowProps) {
           ))}
         </div>
         {canScroll.left && (
-          <button type="button" aria-label={t("catalog:rows.scrollLeft")} onClick={() => page(-1)} className={cn(paddle, "left-0")}>
+          <button type="button" aria-label={t("catalog:rows.scrollLeft")} onClick={() => page(-1)} className={cn(paddle, "left-0", focusRing)}>
             <ChevronLeftIcon className="h-8 w-8" />
           </button>
         )}
         {canScroll.right && (
-          <button type="button" aria-label={t("catalog:rows.scrollRight")} onClick={() => page(1)} className={cn(paddle, "right-0")}>
+          <button type="button" aria-label={t("catalog:rows.scrollRight")} onClick={() => page(1)} className={cn(paddle, "right-0", focusRing)}>
             <ChevronRightIcon className="h-8 w-8" />
           </button>
         )}

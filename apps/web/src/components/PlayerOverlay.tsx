@@ -1,6 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
+import { cn, focusRing, useFocusTrap } from "@orbix/ui";
 import Player from "./Player";
 
 function ChevronDownIcon({ className }: { className?: string }) {
@@ -36,6 +37,11 @@ interface Props {
  */
 export default function PlayerOverlay({ fileId, mediaItemId, title, episodeId, onClose }: Props) {
   const { t } = useTranslation();
+  const closeRef = useRef<HTMLButtonElement>(null);
+  // Trap focus inside the cinema overlay and restore it to the trigger on close.
+  // Escape is handled by the dedicated effect below (it respects fullscreen), so
+  // the trap only manages focus, not Escape.
+  const containerRef = useFocusTrap<HTMLDivElement>(true, { initialFocus: closeRef });
 
   // Lock background scroll while the overlay is open.
   useEffect(() => {
@@ -60,15 +66,26 @@ export default function PlayerOverlay({ fileId, mediaItemId, title, episodeId, o
   }, [onClose]);
 
   return createPortal(
-    <div className="fixed inset-0 z-50 bg-black">
+    <div
+      ref={containerRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      className="fixed inset-0 z-[var(--z-overlay)] bg-black"
+    >
       <Player fileId={fileId} mediaItemId={mediaItemId} title={title} episodeId={episodeId} />
 
       {/* Back / close affordance — always visible, top-left, above the player. */}
       <button
+        ref={closeRef}
         type="button"
         onClick={onClose}
         aria-label={t("player:close")}
-        className="absolute left-3 top-3 z-10 grid h-10 w-10 place-items-center rounded-full bg-black/40 text-white/90 transition-colors hover:bg-black/70 hover:text-white"
+        className={cn(
+          "absolute left-3 top-3 z-10 grid h-11 w-11 place-items-center rounded-full",
+          "bg-black/40 text-white/90 transition-colors hover:bg-black/70 hover:text-white",
+          focusRing,
+        )}
       >
         <ChevronDownIcon className="h-6 w-6" />
       </button>

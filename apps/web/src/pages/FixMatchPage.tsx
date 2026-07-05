@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
-import { Button, Input } from "@orbix/ui";
+import { Button, Input, Skeleton } from "@orbix/ui";
 import { apiFetch } from "@/lib/api";
 
 interface Candidate {
@@ -153,6 +153,23 @@ export default function FixMatchPage() {
 
         {searchError && <p className="text-sm text-red-400">{searchError}</p>}
         {matchError && <p className="text-sm text-red-400">{matchError}</p>}
+
+        {/* Searching — placeholder cards shaped like the candidate results */}
+        {searching && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div
+                key={i}
+                className="bg-[var(--surface)] rounded-[var(--radius)] p-3 flex flex-col gap-2"
+              >
+                <Skeleton className="w-full aspect-[2/3]" rounded="sm" />
+                <Skeleton className="h-4 w-3/4" rounded="sm" />
+                <Skeleton className="h-3 w-1/3" rounded="sm" />
+                <Skeleton className="h-7 w-full" rounded="sm" />
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Candidate list */}
         {candidates.length > 0 && (

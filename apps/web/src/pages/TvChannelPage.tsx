@@ -70,7 +70,7 @@ export default function TvChannelPage() {
           onClick={() => toggleFavorite.mutate({ channelId: c.id, isFavorite: c.favorite })}
           aria-label={c.favorite ? t("tv:card.unfavorite") : t("tv:card.favorite")}
           className={cn(
-            "grid h-10 w-10 shrink-0 place-items-center rounded-full border border-[var(--surface-2)] transition-colors",
+            "grid min-h-11 min-w-11 shrink-0 place-items-center rounded-full border border-[var(--surface-2)] transition-colors",
             c.favorite ? "text-[var(--accent)]" : "text-[var(--text-dim)] hover:text-[var(--text)]",
           )}
         >

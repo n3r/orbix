@@ -63,5 +63,7 @@
     "createFailed": "Bibliothek konnte nicht erstellt werden",
     "renameFailed": "Bibliothek konnte nicht umbenannt werden",
     "addSourceFailed": "Quelle konnte nicht hinzugefügt werden"
-  }
+  },
+  "deleteLibraryConfirm": "Dadurch werden „{{name}}“ und alle zugehörigen Titel dauerhaft gelöscht. Dies kann nicht rückgängig gemacht werden.",
+  "deleteSourceConfirm": "Diese Quelle entfernen? Ihre Titel werden nicht mehr verfolgt."
 }

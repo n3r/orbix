@@ -63,5 +63,7 @@
     "createFailed": "No se pudo crear la biblioteca",
     "renameFailed": "No se pudo renombrar la biblioteca",
     "addSourceFailed": "No se pudo añadir el origen"
-  }
+  },
+  "deleteLibraryConfirm": "Esto elimina permanentemente «{{name}}» y todos sus elementos. No se puede deshacer.",
+  "deleteSourceConfirm": "¿Quitar esta fuente? Sus elementos dejarán de rastrearse."
 }

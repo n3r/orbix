@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { Button } from "@orbix/ui";
 import RatingBadges from "@/components/RatingBadges";
+import { PlayIcon } from "@/components/shell/icons";
 import type { TitleDetail } from "@/lib/types";
 
 function formatRuntime(seconds: number | null, t: TFunction): string | null {
@@ -69,7 +70,7 @@ export default function TitleHero({
           </h1>
         )}
 
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-[var(--text-dim)]">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-[var(--text-muted)]">
           <RatingBadges
             imdbRating={item.imdbRating}
             rtRating={item.rtRating}
@@ -100,9 +101,10 @@ export default function TitleHero({
         <div className="mt-2 flex items-center gap-3">
           <Button onClick={onPlay} disabled={!canPlay}>
             {canPlay ? (
-              <>
-                <span aria-hidden="true">▶</span> {playLabel}
-              </>
+              <span className="inline-flex items-center gap-2">
+                <PlayIcon className="h-5 w-5" />
+                {playLabel}
+              </span>
             ) : (
               t("title:noMedia")
             )}

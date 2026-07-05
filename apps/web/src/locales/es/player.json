@@ -25,6 +25,7 @@
   "error": {
     "decision": "No se pudo obtener la decisión de reproducción",
     "network": "Error de red al cargar el reproductor",
-    "generic": "No se pudo cargar el reproductor"
+    "generic": "No se pudo cargar el reproductor",
+    "playback": "La reproducción se detuvo inesperadamente."
   }
 }

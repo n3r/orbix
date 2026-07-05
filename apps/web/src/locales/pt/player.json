@@ -25,6 +25,7 @@
   "error": {
     "decision": "Não foi possível obter a decisão de reprodução",
     "network": "Erro de rede ao carregar o player",
-    "generic": "Falha ao carregar o player"
+    "generic": "Falha ao carregar o player",
+    "playback": "A reprodução parou inesperadamente."
   }
 }

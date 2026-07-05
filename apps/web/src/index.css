@@ -1,6 +1,28 @@
 @import "tailwindcss";
 @source "../../../packages/ui/src";
 
+/* Expose the design tokens (packages/ui/src/tokens.css) as Tailwind color
+   utilities so new code can write `text-danger` / `ring-accent` / `bg-surface`
+   instead of arbitrary `[var(--x)]` values. `inline` keeps tokens.css the single
+   source of truth (utilities resolve to the live vars, no duplicate declarations). */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-text: var(--text);
+  --color-text-dim: var(--text-dim);
+  --color-text-muted: var(--text-muted);
+  --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
+  --color-accent-strong: var(--accent-strong);
+  --color-danger: var(--danger);
+  --color-danger-strong: var(--danger-strong);
+  --color-live: var(--live);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+}
+
 /* Netflix-style rows scroll without a visible scrollbar. */
 @utility scrollbar-none {
   scrollbar-width: none;
@@ -15,5 +37,19 @@
   }
   to {
     opacity: 1;
+  }
+}
+
+/* Reduced-motion is a hard requirement: neutralise animation, transition, and
+   smooth-scroll globally so every surface has a safe fallback without each one
+   re-implementing it. Individual components can still add richer alternatives. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

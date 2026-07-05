@@ -25,6 +25,7 @@
   "error": {
     "decision": "Could not get playback decision",
     "network": "Network error loading player",
-    "generic": "Failed to load player"
+    "generic": "Failed to load player",
+    "playback": "Playback stopped unexpectedly."
   }
 }

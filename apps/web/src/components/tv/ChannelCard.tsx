@@ -92,8 +92,8 @@ export default function ChannelCard({
         onClick={() => toggleFavorite.mutate({ channelId: channel.id, isFavorite: channel.favorite })}
         aria-label={channel.favorite ? t("tv:card.unfavorite") : t("tv:card.favorite")}
         className={cn(
-          "absolute right-1.5 top-1.5 grid h-7 w-7 place-items-center rounded-full bg-black/50 text-white",
-          "opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100",
+          "absolute right-1.5 top-1.5 grid min-h-11 min-w-11 place-items-center rounded-full bg-black/50 text-white",
+          "opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100",
           channel.favorite && "opacity-100 text-[var(--accent)]",
         )}
       >

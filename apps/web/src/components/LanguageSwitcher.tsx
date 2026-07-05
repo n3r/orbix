@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { Select } from "@orbix/ui";
 import { apiFetch } from "@/lib/api";
 import {
   SUPPORTED_LANGUAGES,
@@ -37,20 +38,17 @@ export default function LanguageSwitcher({
   }
 
   return (
-    <select
+    <Select
       aria-label={t("common:language")}
       value={current}
       onChange={(e) => void onChange(e.target.value)}
-      className={
-        className ??
-        "rounded-[var(--radius)] bg-[var(--surface)] px-2 py-1 text-sm text-[var(--text)]"
-      }
+      className={className}
     >
       {SUPPORTED_LANGUAGES.map((l) => (
         <option key={l} value={l}>
           {LANGUAGE_LABELS[l]}
         </option>
       ))}
-    </select>
+    </Select>
   );
 }

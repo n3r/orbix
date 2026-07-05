@@ -14,6 +14,7 @@ import { DefaultVideoLayout, defaultLayoutIcons } from "@vidstack/react/player/l
 import "@vidstack/react/player/styles/default/theme.css";
 import "@vidstack/react/player/styles/default/layouts/video.css";
 import Hls from "hls.js";
+import { Button } from "@orbix/ui";
 import { apiFetch } from "@/lib/api";
 
 type AudioMode = "standard" | "leveled";
@@ -126,6 +127,8 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
   const [selectedSubtitle, setSelectedSubtitle] = useState("off");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Bumped by "Try again": re-runs negotiation and remounts the player.
+  const [attempt, setAttempt] = useState(0);
 
   const playerRef = useRef<MediaPlayerInstance>(null);
   const resumedRef = useRef(false);
@@ -155,8 +158,10 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
   );
 
   // Initial negotiation (source quality, standard audio) + saved progress, in
-  // parallel on mount.
+  // parallel on mount / retry.
   useEffect(() => {
+    setLoading(true);
+    setError(null);
     void (async () => {
       try {
         const [data, progressRes] = await Promise.all([
@@ -178,7 +183,7 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
         setLoading(false);
       }
     })();
-  }, [fileId, mediaItemId, progressQuery, t, negotiate]);
+  }, [fileId, mediaItemId, progressQuery, t, negotiate, attempt]);
 
   // Drop a selected subtitle that the current session no longer offers (e.g.
   // after a re-negotiation returns a different track list).
@@ -279,6 +284,19 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
     pendingSeekRef.current = player.state.currentTime;
   }, []);
 
+  // A runtime playback failure (codec/append/segment error mid-play) would
+  // otherwise leave a black frame forever. Surface it and let the user retry
+  // from where it stopped.
+  const handlePlaybackError = useCallback(() => {
+    rememberPlaybackTime();
+    setError(t("player:error.playback"));
+  }, [rememberPlaybackTime, t]);
+
+  const handleRetry = useCallback(() => {
+    resumedRef.current = false;
+    setAttempt((n) => n + 1);
+  }, []);
+
   // Re-negotiate for a new quality / audio mode. Remembers the current time so
   // the fresh session (a new streamUrl → key remount) resumes where we left
   // off, and releases the previous session's ffmpeg.
@@ -323,8 +341,13 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
 
   if (error || !info) {
     return (
-      <div className="grid h-full w-full place-items-center text-sm text-red-400">
-        {error ?? t("player:error.generic")}
+      <div className="grid h-full w-full place-items-center p-6">
+        <div className="flex max-w-sm flex-col items-center gap-4 text-center">
+          <p className="text-base font-medium text-[var(--text)]">
+            {error ?? t("player:error.generic")}
+          </p>
+          <Button onClick={handleRetry}>{t("common:actions.retry")}</Button>
+        </div>
       </div>
     );
   }
@@ -340,7 +363,7 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
 
   return (
     <MediaPlayer
-      key={info.streamUrl}
+      key={`${info.streamUrl}#${attempt}`}
       ref={playerRef}
       title={title}
       src={{ src: info.streamUrl, type: info.mode === "direct" ? "video/mp4" : "application/x-mpegurl" }}
@@ -352,6 +375,7 @@ export default function Player({ fileId, mediaItemId, title, episodeId }: Props)
       onProviderChange={onProviderChange}
       onCanPlay={handleCanPlay}
       onPause={handlePause}
+      onError={handlePlaybackError}
     >
       <MediaProvider>
         {selectedTrack && (

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
-import { Button, Card, Input } from "@orbix/ui";
+import { Button, Card, Input, Select, Skeleton } from "@orbix/ui";
 import { apiFetch } from "@/lib/api";
 import { errorMessage } from "@/lib/i18n/tError";
 import type { CapabilityReport } from "@orbix/core";
@@ -19,6 +19,63 @@ interface SettingsResponse {
 }
 
 const ENCODER_VALUES: EncoderValue[] = ["software", "vaapi", "qsv", "nvenc"];
+
+// Inline, offline-safe stroke icons (no icon dependency) — one accent-tinted
+// glyph per settings section so the cards read as distinct areas, not a stack
+// of identical gray surfaces.
+const sectionIcon = (children: React.ReactNode) => (
+  <svg
+    className="h-[18px] w-[18px]"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden
+  >
+    {children}
+  </svg>
+);
+
+const ICON_PROVIDERS = sectionIcon(
+  <>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M3 12h18" />
+    <path d="M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18" />
+  </>,
+);
+const ICON_TRANSCODE = sectionIcon(
+  <>
+    <rect x="7" y="7" width="10" height="10" rx="1.5" />
+    <path d="M9 3v2M15 3v2M9 19v2M15 19v2M3 9h2M3 15h2M19 9h2M19 15h2" />
+  </>,
+);
+const ICON_LIBRARY = sectionIcon(
+  <>
+    <path d="M21 12a9 9 0 1 1-3-6.7" />
+    <path d="M21 4v4h-4" />
+  </>,
+);
+const ICON_MAINTENANCE = sectionIcon(
+  <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.3 2.3-2.5-.7-.7-2.5 2.2-2.1Z" />,
+);
+
+/**
+ * Consistent section header: an accent-tinted icon chip + an h3 title. Gives
+ * each settings card an intentional, cinematic anchor (accent used sparingly)
+ * instead of four undifferentiated surfaces.
+ */
+function SectionHeader({ icon, title }: { icon: React.ReactNode; title: string }) {
+  return (
+    <header className="mb-4 flex items-center gap-3">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--accent)]/10 text-[var(--accent)]">
+        {icon}
+      </span>
+      <h3 className="text-lg font-semibold text-[var(--text)]">{title}</h3>
+    </header>
+  );
+}
 
 export default function AdminSettingsPage() {
   const { t } = useTranslation();
@@ -165,8 +222,25 @@ export default function AdminSettingsPage() {
 
   if (loading) {
     return (
-      <main>
-        <p className="text-[var(--text-dim)]">{t("common:status.loading")}</p>
+      <main className="flex flex-col gap-8">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-8 w-40" rounded="sm" />
+          <Skeleton className="h-4 w-28" rounded="sm" />
+        </div>
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Card key={i}>
+            <Skeleton className="mb-4 h-6 w-48" rounded="sm" />
+            <div className="flex flex-col gap-4">
+              {Array.from({ length: 2 }).map((__, j) => (
+                <div key={j} className="flex flex-col gap-2">
+                  <Skeleton className="h-4 w-32" rounded="sm" />
+                  <Skeleton className="h-10 w-full" rounded="sm" />
+                </div>
+              ))}
+            </div>
+          </Card>
+        ))}
+        <Skeleton className="h-10 w-32" rounded="sm" />
       </main>
     );
   }
@@ -186,7 +260,7 @@ export default function AdminSettingsPage() {
       <form onSubmit={handleSave} className="flex flex-col gap-6">
         {/* Metadata providers */}
         <Card>
-          <h2 className="mb-4 text-lg font-semibold text-[var(--text)]">{t("settings:providers.heading")}</h2>
+          <SectionHeader icon={ICON_PROVIDERS} title={t("settings:providers.heading")} />
 
           <div className="flex flex-col gap-4">
             {/* TMDB */}
@@ -196,7 +270,7 @@ export default function AdminSettingsPage() {
               </label>
               <p className="mb-2 text-xs text-[var(--text-dim)]">
                 {t("settings:providers.statusLabel")}{" "}
-                <span className={tmdbConfigured ? "text-green-400" : "text-yellow-400"}>
+                <span className={tmdbConfigured ? "text-[var(--success)]" : "text-[var(--warning)]"}>
                   {tmdbConfigured ? t("settings:providers.status.configured") : t("settings:providers.status.notConfigured")}
                 </span>
               </p>
@@ -217,7 +291,7 @@ export default function AdminSettingsPage() {
               </label>
               <p className="mb-2 text-xs text-[var(--text-dim)]">
                 {t("settings:providers.statusLabel")}{" "}
-                <span className={omdbConfigured ? "text-green-400" : "text-[var(--text-dim)]"}>
+                <span className={omdbConfigured ? "text-[var(--success)]" : "text-[var(--text-dim)]"}>
                   {omdbConfigured ? t("settings:providers.status.configured") : t("settings:providers.status.notSet")}
                 </span>
               </p>
@@ -238,7 +312,7 @@ export default function AdminSettingsPage() {
               </label>
               <p className="mb-2 text-xs text-[var(--text-dim)]">
                 {t("settings:providers.statusLabel")}{" "}
-                <span className={fanartConfigured ? "text-green-400" : "text-[var(--text-dim)]"}>
+                <span className={fanartConfigured ? "text-[var(--success)]" : "text-[var(--text-dim)]"}>
                   {fanartConfigured ? t("settings:providers.status.configured") : t("settings:providers.status.notSet")}
                 </span>
               </p>
@@ -259,7 +333,7 @@ export default function AdminSettingsPage() {
               </label>
               <p className="mb-2 text-xs text-[var(--text-dim)]">
                 {t("settings:providers.statusLabel")}{" "}
-                <span className={tvdbConfigured ? "text-green-400" : "text-[var(--text-dim)]"}>
+                <span className={tvdbConfigured ? "text-[var(--success)]" : "text-[var(--text-dim)]"}>
                   {tvdbConfigured ? t("settings:providers.status.configured") : t("settings:providers.status.notSet")}
                 </span>
               </p>
@@ -287,7 +361,7 @@ export default function AdminSettingsPage() {
 
         {/* Transcode settings */}
         <Card>
-          <h2 className="mb-4 text-lg font-semibold text-[var(--text)]">{t("settings:transcode.heading")}</h2>
+          <SectionHeader icon={ICON_TRANSCODE} title={t("settings:transcode.heading")} />
 
           <div>
             <label className="block mb-1 text-sm font-medium text-[var(--text)]">
@@ -296,17 +370,17 @@ export default function AdminSettingsPage() {
             <p className="mb-2 text-xs text-[var(--text-dim)]">
               {t("settings:transcode.encoderHelp")}
             </p>
-            <select
+            <Select
               value={encoder}
               onChange={(e) => setEncoder(e.target.value as EncoderValue)}
-              className="w-full rounded border border-[var(--border,#333)] bg-[var(--surface,#1a1a1a)] px-3 py-2 text-sm text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent,#6366f1)]"
+              className="w-full text-sm"
             >
               {ENCODER_VALUES.map((val) => (
                 <option key={val} value={val}>
                   {t(`settings:transcode.encoders.${val}`)}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
           <div className="mt-4">
@@ -320,7 +394,7 @@ export default function AdminSettingsPage() {
                 ? t("settings:transcode.capabilities.testing")
                 : t("settings:transcode.capabilities.testButton")}
             </Button>
-            {testError && <p className="mt-2 text-sm text-red-400">{testError}</p>}
+            {testError && <p className="mt-2 text-sm text-[var(--danger)]">{testError}</p>}
             {capabilities && (
               <EncoderCapabilityList report={capabilities} current={encoder} />
             )}
@@ -329,7 +403,7 @@ export default function AdminSettingsPage() {
 
         {/* Library refresh */}
         <Card>
-          <h2 className="mb-4 text-lg font-semibold text-[var(--text)]">{t("settings:library.heading")}</h2>
+          <SectionHeader icon={ICON_LIBRARY} title={t("settings:library.heading")} />
 
           <div>
             <label className="block mb-1 text-sm font-medium text-[var(--text)]">
@@ -347,8 +421,8 @@ export default function AdminSettingsPage() {
           </div>
         </Card>
 
-        {error && <p className="text-sm text-red-400">{error}</p>}
-        {success && <p className="text-sm text-green-400">{t("settings:saveSuccess")}</p>}
+        {error && <p className="text-sm text-[var(--danger)]">{error}</p>}
+        {success && <p className="text-sm text-[var(--success)]">{t("settings:saveSuccess")}</p>}
 
         <Button type="submit" disabled={saving}>
           {saving ? t("common:status.saving") : t("settings:saveButton")}
@@ -357,7 +431,7 @@ export default function AdminSettingsPage() {
 
       {/* Maintenance — re-enrich the whole library on demand */}
       <Card>
-        <h2 className="mb-4 text-lg font-semibold text-[var(--text)]">{t("settings:maintenance.heading")}</h2>
+        <SectionHeader icon={ICON_MAINTENANCE} title={t("settings:maintenance.heading")} />
         <p className="mb-3 text-xs text-[var(--text-dim)]">
           {t("settings:maintenance.help")}
         </p>

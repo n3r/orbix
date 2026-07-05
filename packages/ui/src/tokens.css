@@ -1,7 +1,24 @@
 :root {
-  --bg: #0b0d12; --surface: #14171f; --surface-2: #1c212b;
-  --text: #e8eaf0; --text-dim: #9aa3b2; --accent: #6d7bff; --accent-2: #a06dff;
-  --radius: 12px; --radius-sm: 8px;
+  /* Surfaces — layered darks, coolest at the back */
+  --bg: #0b0d12; --surface: #14171f; --surface-2: #1c212b; --surface-3: #232936;
+
+  /* Ink */
+  --text: #e8eaf0; --text-dim: #9aa3b2; --text-muted: #c2c8d4;
+
+  /* Orbit accent (indigo → violet). --accent-strong passes AA for small white text. */
+  --accent: #6d7bff; --accent-2: #a06dff; --accent-strong: #4b57d6; --focus: var(--accent);
+
+  /* Semantic status — red is reserved for these + live only */
+  --danger: #ef4444; --danger-strong: #dc2626; --live: #ef4444;
+  --success: #34d399; --warning: #fbbf24;
+
+  /* Scrim for text over artwork */
+  --scrim: rgba(0, 0, 0, 0.62);
+
+  --radius: 12px; --radius-sm: 8px; --radius-lg: 16px;
+
+  /* Semantic z-index scale (nav < overlay < modal < toast < tooltip) */
+  --z-nav: 40; --z-overlay: 50; --z-modal: 60; --z-toast: 70; --z-tooltip: 80;
 }
 * { box-sizing: border-box; }
 body { background: var(--bg); color: var(--text); }
