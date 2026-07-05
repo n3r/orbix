@@ -169,6 +169,11 @@ struct ProfilePickerView: View {
                                 ProgressView()
                             }
                         }
+                        .overlay {
+                            // Web-parity focus ring in place of the (removed)
+                            // system platter — see `ProfileTileButtonStyle`.
+                            Circle().stroke(OrbixColor.text.opacity(0.9), lineWidth: isFocused ? 4 : 0)
+                        }
 
                     if profile.kind == "kids" {
                         Text("KIDS")
@@ -189,9 +194,8 @@ struct ProfilePickerView: View {
                     .frame(maxWidth: 220)
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ProfileTileButtonStyle())
         .focused($focusedTarget, equals: .profile(profile.id))
-        .focusPromote(isFocused)
         .disabled(isSelecting)
         .accessibilityIdentifier("profileButton_\(profile.id)")
     }
@@ -211,22 +215,26 @@ struct ProfilePickerView: View {
                 ZStack {
                     Circle()
                         .fill(Color.white.opacity(isFocused ? 0.3 : 0.15))
+                    Circle()
+                        .stroke(OrbixColor.text.opacity(0.9), lineWidth: isFocused ? 4 : 0)
                     Image(systemName: "plus")
                         .font(.system(size: 56, weight: .semibold))
                         .foregroundStyle(OrbixColor.text)
                 }
                 .frame(width: Self.avatarSize, height: Self.avatarSize)
 
+                // Fixed-size (rather than the profile tiles' `frame(maxWidth:
+                // 220)`) so "Add Profile" — longer than any real profile name
+                // — never truncates to "Add Prof…" (finding 3).
                 Text("Add Profile")
                     .font(.title3)
                     .foregroundStyle(OrbixColor.textDim)
                     .lineLimit(1)
-                    .frame(maxWidth: 220)
+                    .fixedSize()
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ProfileTileButtonStyle())
         .focused($focusedTarget, equals: .add)
-        .focusPromote(isFocused)
         .accessibilityIdentifier("addProfileTile")
     }
 
@@ -353,6 +361,25 @@ struct ProfilePickerView: View {
     private func closeAddForm() {
         showAddForm = false
         newProfileName = ""
+    }
+}
+
+/// tvOS's automatic focus effect draws a bright rounded platter behind any
+/// focusable content by default — fine for system chrome, but wrong here:
+/// it breaks the dark web design and makes the (light-on-dark) profile name
+/// illegible against it (see phase1-c-profilepicker.png). `focusEffectDisabled()`
+/// (tvOS 17+) turns that off; the web-parity treatment substituted in its
+/// place is just `focusPromote`'s scale (the focus *ring* itself is drawn by
+/// each tile around its avatar/plus circle specifically, not the whole label,
+/// since the label also includes the name text below it). Same
+/// environment-reading pattern as `OrbixTopBar`'s `NavItemStyle`/`AvatarItemStyle`.
+private struct ProfileTileButtonStyle: ButtonStyle {
+    @Environment(\.isFocused) private var isFocused
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .focusPromote(isFocused)
+            .focusEffectDisabled()
     }
 }
 

@@ -4,6 +4,7 @@ struct OrbixButtonStyle: ButtonStyle {
     enum Variant { case primary, ghost, danger }
     let variant: Variant
     @Environment(\.isFocused) private var isFocused
+    @Environment(\.isEnabled) private var isEnabled
 
     init(_ variant: Variant) { self.variant = variant }
 
@@ -15,6 +16,10 @@ struct OrbixButtonStyle: ButtonStyle {
             .background(background)
             .foregroundStyle(foreground)
             .clipShape(RoundedRectangle(cornerRadius: OrbixRadius.sm, style: .continuous))
+            // `.disabled(true)` (e.g. Connect with an empty field, Create with
+            // an empty name) previously looked identical to enabled — dim the
+            // whole label+background so disabled reads as disabled at a glance.
+            .opacity(isEnabled ? 1.0 : 0.4)
             .scaleEffect(isFocused ? 1.05 : 1.0)
             .animation(.easeOut(duration: 0.2), value: isFocused)
     }
