@@ -64,6 +64,20 @@ final class AppModel {
     private(set) var discoveredServers: [DiscoveredServer] = []
     private(set) var didScan = false
 
+    /// The device's currently-active profile, as last returned by
+    /// `meProfile()` — captured on the `checkActiveProfile` success path and
+    /// (for the `profileSelected()` path) by `loadShellData()`. Drives the
+    /// shell's kids gating (`kind == "kids"` hides the TV item) and the top
+    /// bar's avatar; `nil` until a profile is resolved. Distinct from `phase`
+    /// so the shell can read the profile without re-deriving it.
+    private(set) var activeProfile: MeProfile?
+
+    /// The active profile's resolved nav categories (`GET /api/me/menu`), one
+    /// per enabled library, in display order — the source for the top bar's
+    /// category items. Empty until `loadShellData()` populates it (and left
+    /// empty on fetch failure, so the bar simply renders without categories).
+    private(set) var menuItems: [MenuItem] = []
+
     private let tokenStore: TokenStore
 
     init(tokenStore: TokenStore = TokenStore()) {
@@ -222,7 +236,15 @@ final class AppModel {
             do {
                 let me = try await client.meProfile()
                 guard self.client === client else { return }
+                // Capture the resolved profile for the shell (kids gating,
+                // avatar). This is the only addition to this method's success
+                // path — the `.ready`/`.needsProfile` decision and all of the
+                // retry/401 handling below are unchanged.
+                activeProfile = me
                 phase = (me.id != nil) ? .ready : .needsProfile
+                if phase == .ready {
+                    Task { await self.loadShellData() }
+                }
                 return
             } catch {
                 guard self.client === client else { return }
@@ -272,9 +294,36 @@ final class AppModel {
     }
 
     /// Called by `ProfilePickerView` once `ProfilePickerModel.select`
-    /// succeeds: advances to the M3 home screen (`HomeView`).
+    /// succeeds: advances to the shell (`ShellView`) and loads the shell's
+    /// nav data (menu + the now-active profile) for the top bar.
     func profileSelected() {
         phase = .ready
+        Task { await loadShellData() }
+    }
+
+    /// Loads the data the shell's top bar needs: the profile's nav
+    /// categories (`menu()`) and — only when not already known — the active
+    /// profile (`meProfile()`). Called on both `.ready` entry paths (the
+    /// `checkActiveProfile` success path, which has already captured
+    /// `activeProfile`, so the profile fetch is skipped there; and
+    /// `profileSelected()`, which hasn't). Tolerant of failure by design:
+    /// either fetch failing simply leaves that piece empty (the bar renders
+    /// without categories / with a placeholder avatar) rather than blocking
+    /// the shell — nav chrome is not worth failing the whole screen over.
+    func loadShellData() async {
+        guard let client else { return }
+
+        if let items = try? await client.menu() {
+            guard self.client === client else { return }
+            menuItems = items
+        }
+
+        if activeProfile?.id == nil {
+            if let me = try? await client.meProfile() {
+                guard self.client === client else { return }
+                activeProfile = me
+            }
+        }
     }
 
     /// Scans the local subnet for Orbix servers (matching the `service:

@@ -7,8 +7,9 @@ import OrbixKit
 ///   falls back to a manual address field (with `http://` made optional).
 /// - `.needsPairing` — the M2 pairing screen (`PairingView`).
 /// - `.needsProfile` — the M2 profile picker (`ProfilePickerView`).
-/// - `.ready` — the tvOS top tab bar: "Home" (`HomeView`) and "Search"
-///   (`SearchView`), each owning its own `NavigationStack`.
+/// - `.ready` — the custom web-parity shell (`ShellView`): a top bar
+///   (`OrbixTopBar`) overlaid on the selected section (Home / Search /
+///   placeholders), replacing the stock `TabView`.
 struct RootView: View {
     @State private var model = AppModel()
     @State private var baseURLText = ""
@@ -24,14 +25,7 @@ struct RootView: View {
         case .needsProfile:
             profilePickerOrFallback
         case .ready:
-            TabView {
-                HomeView(model: model)
-                    .tabItem { Label("Home", systemImage: "house.fill") }
-                    .accessibilityIdentifier("tab_home")
-                SearchView(model: model)
-                    .tabItem { Label("Search", systemImage: "magnifyingglass") }
-                    .accessibilityIdentifier("tab_search")
-            }
+            ShellView(model: model)
         }
     }
 
