@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { localizeItem, localizeGenres, localizeName } from "@orbix/core";
+import { localizeItem, localizeGenres, localizeName, buildLibraryGenreRows } from "@orbix/core";
 import { requireAuth } from "../lib/auth";
 import { activeProfile, kidsRatingWhere, profileAllowsItem } from "../lib/catalog-filter";
 
@@ -58,6 +58,78 @@ export default async function catalogRoute(app: FastifyInstance) {
         ...rest,
         title: localizeItem({ title: rest.title }, translations[0]).title,
       }));
+    },
+  );
+
+  // GET /libraries/:id/rows — genre-grouped rails for the Categories tab.
+  // Every genre in the library gets a row (count desc); each rail is the
+  // genre's top-rated slice, with `total` sizing the "See all" grid.
+  app.get<{ Params: { id: string } }>(
+    "/libraries/:id/rows",
+    { preHandler: requireAuth(app) },
+    async (req) => {
+      const profile = await activeProfile(app, req);
+      const ratingFilter = kidsRatingWhere(profile);
+      const lang = profile?.language ?? "en";
+
+      const items = await app.prisma.mediaItem.findMany({
+        where: { libraryId: req.params.id, ...(ratingFilter ?? {}) },
+        select: {
+          id: true, title: true, sortTitle: true, year: true,
+          posterPath: true, backdropPath: true, matchState: true, addedAt: true,
+          imdbRating: true, tmdbScore: true,
+          translations: { where: { language: lang }, select: { title: true } },
+          genres: { select: { genre: { select: { id: true, name: true } } } },
+        },
+        orderBy: [{ sortTitle: "asc" }, { id: "asc" }],
+        take: 2000,
+      });
+
+      const rows = buildLibraryGenreRows(
+        items.map((it) => ({
+          id: it.id, sortTitle: it.sortTitle,
+          imdbRating: it.imdbRating, tmdbScore: it.tmdbScore,
+          genres: it.genres.map((g) => g.genre),
+        })),
+      );
+
+      // Genre headings are data-bearing (like home's genre:* rows), so the
+      // server owns their localization; base Genre.name is the en fallback.
+      let headingByGenreId = new Map<number, string>();
+      if (lang !== "en" && rows.length > 0) {
+        const trs = await app.prisma.genreTranslation.findMany({
+          where: { language: lang, genreId: { in: rows.map((r) => r.genreId) } },
+          select: { genreId: true, name: true },
+        });
+        headingByGenreId = new Map(
+          trs.filter((t) => t.name.trim()).map((t) => [t.genreId, t.name]),
+        );
+      }
+
+      const cardById = new Map(
+        items.map((it) => [
+          it.id,
+          {
+            id: it.id,
+            title: localizeItem({ title: it.title }, it.translations[0]).title,
+            year: it.year,
+            posterPath: it.posterPath,
+            backdropPath: it.backdropPath,
+            matchState: it.matchState,
+            addedAt: it.addedAt.toISOString(),
+          },
+        ]),
+      );
+
+      return {
+        rows: rows.map((row) => ({
+          key: `genre:${row.genreId}`,
+          genreId: row.genreId,
+          title: headingByGenreId.get(row.genreId) ?? row.name,
+          total: row.total,
+          items: row.itemIds.map((id) => cardById.get(id)!),
+        })),
+      };
     },
   );
 
