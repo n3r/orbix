@@ -151,13 +151,13 @@ struct TitlePage: View {
     /// Web parity (`TitlePage.tsx` `startPlayback`): a movie plays its first
     /// file directly through the existing `presentPlayer`/`fullScreenCover`
     /// plumbing. **Task-4 bridge:** a series has no inline first-episode
-    /// playback yet, so the hero's Play instead pushes the default (first)
+    /// playback yet, so the hero's Play instead pushes the first non-specials
     /// season via the existing `SeasonRoute` — the same destination a season
     /// chip in `seasonStrip` pushes. Task 4 replaces the season strip with
     /// inline tabs + a grid and wires true first-episode play here.
     private func onHeroPlay(_ detail: ItemDetail, client: OrbixClient) {
         if isSeries(detail) {
-            guard let firstSeason = detail.seasons?.first else { return }
+            guard let firstSeason = detail.seasons?.first(where: { $0.seasonNumber > 0 }) ?? detail.seasons?.first else { return }
             path.append(SeasonRoute(seriesId: itemId, seasonNumber: firstSeason.seasonNumber))
         } else if let fileId = detail.files?.first?.id {
             presentPlayer(fileId: fileId, title: detail.title, client: client)
