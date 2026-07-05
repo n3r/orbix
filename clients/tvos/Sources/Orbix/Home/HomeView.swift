@@ -42,6 +42,19 @@ struct HomeView: View {
             .navigationDestination(for: SeasonRoute.self) { route in
                 SeasonEpisodeView(seriesId: route.seriesId, seasonNumber: route.seasonNumber, model: model)
             }
+            // Replay a Top Shelf deep link (`orbix://item/<id>`): `onAppear`
+            // covers a cold-launch link stashed during onboarding, `onChange`
+            // a warm one arriving while Home is already on screen. Consuming
+            // clears it so it pushes exactly once.
+            .onAppear { pushPendingDeepLinkIfNeeded() }
+            .onChange(of: model.pendingDeepLinkItemId) { _, _ in pushPendingDeepLinkIfNeeded() }
+        }
+    }
+
+    /// Pushes the title page for a pending Top Shelf deep-link item id, if any.
+    private func pushPendingDeepLinkIfNeeded() {
+        if let itemId = model.consumePendingDeepLink() {
+            path.append(TitleRoute(itemId: itemId))
         }
     }
 

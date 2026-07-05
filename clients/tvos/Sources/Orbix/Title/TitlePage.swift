@@ -162,12 +162,13 @@ struct TitlePage: View {
     }
 
     /// `3720` → `"1h 2m"`; `600` → `"10m"`; `nil`/non-positive → `nil` (the
-    /// metadata row simply omits runtime rather than showing "0m").
+    /// metadata row simply omits runtime rather than showing "0m"). Localized
+    /// (`%lldh %lldm` / `%lldm`) so a Russian profile reads "1ч 2м".
     private static func formattedRuntime(_ seconds: Int?) -> String? {
         guard let seconds, seconds > 0 else { return nil }
         let hours = seconds / 3600
         let minutes = (seconds % 3600) / 60
-        return hours > 0 ? "\(hours)h \(minutes)m" : "\(minutes)m"
+        return hours > 0 ? String(localized: "\(hours)h \(minutes)m") : String(localized: "\(minutes)m")
     }
 
     @ViewBuilder
@@ -284,7 +285,10 @@ struct TitlePage: View {
                     .font(.headline)
                     .lineLimit(1)
                 if let episodeCount = season.episodeCount {
-                    Text("\(episodeCount) episode\(episodeCount == 1 ? "" : "s")")
+                    // Localized plural (`%lld episodes`) — the catalog carries
+                    // the one/other forms for English and the one/few/many
+                    // forms Russian needs, replacing the hand-rolled "s".
+                    Text("\(episodeCount) episodes")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -300,7 +304,7 @@ struct TitlePage: View {
         if let name = season.name, !name.isEmpty {
             return name
         }
-        return "Season \(season.seasonNumber)"
+        return String(localized: "Season \(season.seasonNumber)")
     }
 
     // MARK: - More like this

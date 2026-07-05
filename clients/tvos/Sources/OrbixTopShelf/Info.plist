@@ -10,13 +10,13 @@
         <string>ru</string>
     </array>
     <key>CFBundleDisplayName</key>
-    <string>Orbix</string>
+    <string>Orbix Top Shelf</string>
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleIdentifier</key>
     <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
     <key>CFBundleName</key>
-    <string>Orbix</string>
+    <string>OrbixTopShelf</string>
     <key>CFBundlePackageType</key>
     <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
     <key>CFBundleShortVersionString</key>
@@ -30,20 +30,12 @@
         <key>NSAllowsLocalNetworking</key>
         <true/>
     </dict>
-    <key>NSLocalNetworkUsageDescription</key>
-    <string>Orbix connects to your media server on the local network.</string>
-    <key>CFBundleURLTypes</key>
-    <array>
-        <dict>
-            <key>CFBundleURLName</key>
-            <string>dev.orbix.tvos.deeplink</string>
-            <key>CFBundleURLSchemes</key>
-            <array>
-                <string>orbix</string>
-            </array>
-        </dict>
-    </array>
-    <key>UILaunchScreen</key>
-    <dict/>
+    <key>NSExtension</key>
+    <dict>
+        <key>NSExtensionPointIdentifier</key>
+        <string>com.apple.tv-top-shelf</string>
+        <key>NSExtensionPrincipalClass</key>
+        <string>TopShelfContentProvider</string>
+    </dict>
 </dict>
 </plist>

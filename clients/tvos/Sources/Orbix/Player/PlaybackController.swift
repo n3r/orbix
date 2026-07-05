@@ -71,7 +71,7 @@ final class PlaybackController {
             playSessionId = info.playSessionId
 
             guard let streamURL = URL(string: info.streamUrl, relativeTo: baseURL)?.absoluteURL else {
-                loadState = .error("Couldn't resolve the stream URL.")
+                loadState = .error(String(localized: "Couldn't resolve the stream URL."))
                 return
             }
 

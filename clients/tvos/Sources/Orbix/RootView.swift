@@ -10,12 +10,34 @@ import OrbixKit
 /// - `.ready` — the tvOS top tab bar: "Home" (`HomeView`) and "Search"
 ///   (`SearchView`), each owning its own `NavigationStack`.
 struct RootView: View {
+    /// The `.ready`-state top tabs. A binding lets a Top Shelf deep link snap
+    /// the app back to Home (where the title page pushes) regardless of which
+    /// tab was last focused.
+    private enum Tab: Hashable {
+        case home
+        case search
+    }
+
     @State private var model = AppModel()
     @State private var baseURLText = ""
     @State private var showManualEntry = false
+    @State private var selectedTab: Tab = .home
     @FocusState private var isTextFieldFocused: Bool
 
     var body: some View {
+        content
+            // A Top Shelf item opens `orbix://item/<id>`; stash the target for
+            // `HomeView` to push and make sure Home is the visible tab. Handled
+            // at the root so a cold-launch deep link (arriving mid-onboarding)
+            // is still captured and replayed once the app reaches `.ready`.
+            .onOpenURL { url in
+                model.handleDeepLink(url)
+                selectedTab = .home
+            }
+    }
+
+    @ViewBuilder
+    private var content: some View {
         switch model.phase {
         case .needsServer:
             serverSelectionView
@@ -24,11 +46,13 @@ struct RootView: View {
         case .needsProfile:
             profilePickerOrFallback
         case .ready:
-            TabView {
+            TabView(selection: $selectedTab) {
                 HomeView(model: model)
+                    .tag(Tab.home)
                     .tabItem { Label("Home", systemImage: "house.fill") }
                     .accessibilityIdentifier("tab_home")
                 SearchView(model: model)
+                    .tag(Tab.search)
                     .tabItem { Label("Search", systemImage: "magnifyingglass") }
                     .accessibilityIdentifier("tab_search")
             }

@@ -155,7 +155,7 @@ struct SeasonEpisodeView: View {
     }
 
     private var seasonHeading: String {
-        "Season \(seasonNumber)"
+        String(localized: "Season \(seasonNumber)")
     }
 
     // MARK: - Episode row
@@ -224,7 +224,7 @@ struct SeasonEpisodeView: View {
     /// `"Pilot"` when titled, `"Episode 3"` otherwise.
     private func episodeDisplayTitle(_ episode: Episode) -> String {
         if let title = episode.title, !title.isEmpty { return title }
-        return "Episode \(episode.episodeNumber)"
+        return String(localized: "Episode \(episode.episodeNumber)")
     }
 
     /// `"3. Pilot"` when titled, `"Episode 3"` otherwise.
@@ -251,7 +251,7 @@ struct SeasonEpisodeView: View {
         guard let seconds, seconds > 0 else { return nil }
         let hours = seconds / 3600
         let minutes = (seconds % 3600) / 60
-        return hours > 0 ? "\(hours)h \(minutes)m" : "\(minutes)m"
+        return hours > 0 ? String(localized: "\(hours)h \(minutes)m") : String(localized: "\(minutes)m")
     }
 
     /// `positionSec / durationSec` clamped to `0...1`; `nil` (no bar drawn)

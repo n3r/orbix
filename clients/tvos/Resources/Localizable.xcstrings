@@ -1,0 +1,346 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "%lld episodes" : {
+      "comment" : "Episode count on a season chip (TitlePage).",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : { "stringUnit" : { "state" : "translated", "value" : "%lld episode" } },
+              "other" : { "stringUnit" : { "state" : "translated", "value" : "%lld episodes" } }
+            }
+          }
+        },
+        "ru" : {
+          "variations" : {
+            "plural" : {
+              "one" : { "stringUnit" : { "state" : "translated", "value" : "%lld серия" } },
+              "few" : { "stringUnit" : { "state" : "translated", "value" : "%lld серии" } },
+              "many" : { "stringUnit" : { "state" : "translated", "value" : "%lld серий" } },
+              "other" : { "stringUnit" : { "state" : "translated", "value" : "%lld серии" } }
+            }
+          }
+        }
+      }
+    },
+    "%lldh %lldm" : {
+      "comment" : "Runtime with hours and minutes, e.g. 1h 2m.",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%1$lldh %2$lldm" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "%1$lldч %2$lldм" } }
+      }
+    },
+    "%lldm" : {
+      "comment" : "Runtime in minutes only, e.g. 10m.",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%lldm" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "%lldм" } }
+      }
+    },
+    "Back to list" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Back to list" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Назад к списку" } }
+      }
+    },
+    "Checking…" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Checking…" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Проверка…" } }
+      }
+    },
+    "Close" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Close" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Закрыть" } }
+      }
+    },
+    "Connect" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Connect" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Подключиться" } }
+      }
+    },
+    "Couldn't load episodes" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Couldn't load episodes" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Не удалось загрузить серии" } }
+      }
+    },
+    "Couldn't load title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Couldn't load title" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Не удалось загрузить" } }
+      }
+    },
+    "Couldn't load titles" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Couldn't load titles" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Не удалось загрузить" } }
+      }
+    },
+    "Couldn't play title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Couldn't play title" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Не удалось воспроизвести" } }
+      }
+    },
+    "Couldn't reach that server" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Couldn't reach that server" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Не удалось подключиться к серверу" } }
+      }
+    },
+    "Couldn't resolve the stream URL." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Couldn't resolve the stream URL." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Не удалось определить URL потока." } }
+      }
+    },
+    "Couldn't search" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Couldn't search" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Не удалось выполнить поиск" } }
+      }
+    },
+    "Enter address manually" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Enter address manually" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Ввести адрес вручную" } }
+      }
+    },
+    "Episode %lld" : {
+      "comment" : "Fallback episode label when the episode has no title.",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Episode %lld" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Серия %lld" } }
+      }
+    },
+    "Find movies and shows by title, genre, or mood." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Find movies and shows by title, genre, or mood." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Ищите фильмы и сериалы по названию, жанру или настроению." } }
+      }
+    },
+    "Home" : {
+      "comment" : "Home tab.",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Home" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Главная" } }
+      }
+    },
+    "KIDS" : {
+      "comment" : "Badge on a kids profile.",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "KIDS" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "ДЕТИ" } }
+      }
+    },
+    "Loading profiles…" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Loading profiles…" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Загрузка профилей…" } }
+      }
+    },
+    "Loading…" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Loading…" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Загрузка…" } }
+      }
+    },
+    "More Like This" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "More Like This" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Похожее" } }
+      }
+    },
+    "Movies, shows, genres…" : {
+      "comment" : "Search field prompt.",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Movies, shows, genres…" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Фильмы, сериалы, жанры…" } }
+      }
+    },
+    "No episodes yet" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No episodes yet" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Пока нет серий" } }
+      }
+    },
+    "No need to type http:// — it's added for you." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No need to type http:// — it's added for you." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "http:// вводить не нужно — он добавится автоматически." } }
+      }
+    },
+    "No Orbix servers found on your network" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No Orbix servers found on your network" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Серверы Orbix в сети не найдены" } }
+      }
+    },
+    "No results for \"%@\"" : {
+      "comment" : "Empty search results; %@ is the query.",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No results for \"%@\"" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Нет результатов для «%@»" } }
+      }
+    },
+    "No seasons available yet" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No seasons available yet" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сезоны пока недоступны" } }
+      }
+    },
+    "No titles yet" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No titles yet" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Пока ничего нет" } }
+      }
+    },
+    "Not available" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Not available" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Недоступно" } }
+      }
+    },
+    "Not in library" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Not in library" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Нет в библиотеке" } }
+      }
+    },
+    "On another device, open Orbix → Account → Devices and enter this code" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "On another device, open Orbix → Account → Devices and enter this code" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "На другом устройстве откройте Orbix → Аккаунт → Устройства и введите этот код" } }
+      }
+    },
+    "Pair This Apple TV" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Pair This Apple TV" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Свяжите этот Apple TV" } }
+      }
+    },
+    "Play" : {
+      "comment" : "Play button on a movie title page.",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Play" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Смотреть" } }
+      }
+    },
+    "Requesting pairing code…" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Requesting pairing code…" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Запрос кода сопряжения…" } }
+      }
+    },
+    "Resume" : {
+      "comment" : "Resume button on a movie title page.",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Resume" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Продолжить" } }
+      }
+    },
+    "Retry" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Retry" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Повторить" } }
+      }
+    },
+    "Scan a library on the server to see titles here." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Scan a library on the server to see titles here." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Отсканируйте библиотеку на сервере, чтобы увидеть здесь фильмы и сериалы." } }
+      }
+    },
+    "Scan again" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Scan again" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Искать снова" } }
+      }
+    },
+    "Search" : {
+      "comment" : "Search tab / navigation title.",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Search" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Поиск" } }
+      }
+    },
+    "Search Orbix" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Search Orbix" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Поиск в Orbix" } }
+      }
+    },
+    "Searching your network for Orbix…" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Searching your network for Orbix…" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Поиск Orbix в вашей сети…" } }
+      }
+    },
+    "Searching…" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Searching…" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Поиск…" } }
+      }
+    },
+    "Season %lld" : {
+      "comment" : "Fallback season label / heading when the season has no name.",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Season %lld" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сезон %lld" } }
+      }
+    },
+    "Seasons" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Seasons" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сезоны" } }
+      }
+    },
+    "Select your server" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Select your server" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Выберите сервер" } }
+      }
+    },
+    "Server reachable" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Server reachable" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сервер доступен" } }
+      }
+    },
+    "This season doesn't have any episodes yet." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "This season doesn't have any episodes yet." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "В этом сезоне пока нет серий." } }
+      }
+    },
+    "This season isn't available right now." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "This season isn't available right now." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Этот сезон сейчас недоступен." } }
+      }
+    },
+    "This title isn't available right now." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "This title isn't available right now." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Этот материал сейчас недоступен." } }
+      }
+    },
+    "Try a different title, genre, or mood." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Try a different title, genre, or mood." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Попробуйте другое название, жанр или настроение." } }
+      }
+    },
+    "Who's Watching?" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Who's Watching?" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Кто смотрит?" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}

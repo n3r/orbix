@@ -35,4 +35,20 @@ final class TokenStoreTests: XCTestCase {
         let loaded = await store.load()
         XCTAssertNil(loaded)
     }
+
+    /// Exercises the shared-access-group query path (added so the Top Shelf
+    /// extension can read the app's paired token). The Simulator has no
+    /// entitlement for the group, so a read simply finds nothing rather than
+    /// crashing — the point here is that constructing/querying with an access
+    /// group is well-formed, not that persistence works (it can't in the
+    /// Simulator, same as the un-grouped `errSecMissingEntitlement` case).
+    func testAccessGroupQueryDegradesGracefully() async {
+        let store = TokenStore(
+            service: "dev.orbix.tvos.tests",
+            account: "device-token-grouped",
+            accessGroup: OrbixSharedStore.keychainAccessGroup
+        )
+        let loaded = await store.load()
+        XCTAssertNil(loaded)
+    }
 }
