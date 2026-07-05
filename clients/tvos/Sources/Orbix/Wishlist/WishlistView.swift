@@ -24,10 +24,10 @@ import SwiftUI
 /// unlike `LibraryBrowseView` there is no client-side sort to apply or chip
 /// row to drive it.
 ///
-/// Owns its own `NavigationStack` + both `TitleRoute`/`SeasonRoute`
-/// destinations, identical wiring to `LibraryBrowseView`'s, so selecting a
-/// card or a season chip three pages deep behaves identically everywhere in
-/// the app.
+/// Owns its own `NavigationStack` + `TitleRoute` destination, identical
+/// wiring to `LibraryBrowseView`'s, so selecting a card three pages deep
+/// behaves identically everywhere in the app (a series' seasons/episodes
+/// render inline on the title page — no separate pushed destination).
 struct WishlistView: View {
     let model: AppModel
 
@@ -74,9 +74,6 @@ struct WishlistView: View {
             }
             .navigationDestination(for: TitleRoute.self) { route in
                 TitlePage(itemId: route.itemId, model: model, path: $path, autoplay: route.autoplay)
-            }
-            .navigationDestination(for: SeasonRoute.self) { route in
-                SeasonEpisodeView(seriesId: route.seriesId, seasonNumber: route.seasonNumber, model: model)
             }
         }
     }

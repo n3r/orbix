@@ -512,8 +512,8 @@ public struct SearchResponse: Codable, Sendable, Equatable {
 /// page's data source. `fileId` is the episode's single owned `MediaFile`
 /// id (the route's `files: {select: {id: true}, take: 1}`) or `nil` when
 /// the episode isn't in the library yet — the row still renders (still art,
-/// title, runtime) but there's nothing to play, so `SeasonEpisodeView`
-/// disables that row rather than hiding it. `progress` reuses
+/// title, runtime) but there's nothing to play, so `SeasonEpisodeListView`
+/// disables that card rather than hiding it. `progress` reuses
 /// `ProgressState` rather than a bespoke nested type: the route's
 /// per-episode progress hydration (`progressByEpisode`/`states` in
 /// series.ts) reads the same `PlaybackState` row `GET .../progress` does,

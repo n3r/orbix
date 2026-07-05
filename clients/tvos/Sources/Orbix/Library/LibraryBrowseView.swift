@@ -78,9 +78,6 @@ struct LibraryBrowseView: View {
             .navigationDestination(for: TitleRoute.self) { route in
                 TitlePage(itemId: route.itemId, model: model, path: $path, autoplay: route.autoplay)
             }
-            .navigationDestination(for: SeasonRoute.self) { route in
-                SeasonEpisodeView(seriesId: route.seriesId, seasonNumber: route.seasonNumber, model: model)
-            }
         }
     }
 

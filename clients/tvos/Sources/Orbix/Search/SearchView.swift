@@ -20,10 +20,10 @@ import SwiftUI
 /// focus; no hand-rolled `TextField`/keyboard handling needed). Owns its own
 /// `NavigationStack` + `path`, entirely independent from `HomeView`'s: each
 /// tab in a tvOS `TabView` conventionally keeps its own navigation state, and
-/// nothing about search's `TitleRoute`/`SeasonRoute` push destinations
-/// (identical registrations to `HomeView`'s — a series result's season chip
-/// must be able to push a `SeasonRoute` here exactly as it does from Home)
-/// needs to share a stack with Home to work correctly.
+/// nothing about search's `TitleRoute` push destination (an identical
+/// registration to `HomeView`'s — a series result opens its title page, whose
+/// seasons/episodes render inline) needs to share a stack with Home to work
+/// correctly.
 ///
 /// The system `.searchable` chrome (title + search field + on-screen
 /// keyboard grid) renders at the top of the screen, the same place
@@ -65,9 +65,6 @@ struct SearchView: View {
             }
             .navigationDestination(for: TitleRoute.self) { route in
                 TitlePage(itemId: route.itemId, model: model, path: $path, autoplay: route.autoplay)
-            }
-            .navigationDestination(for: SeasonRoute.self) { route in
-                SeasonEpisodeView(seriesId: route.seriesId, seasonNumber: route.seasonNumber, model: model)
             }
         }
     }

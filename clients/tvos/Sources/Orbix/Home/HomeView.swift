@@ -9,17 +9,15 @@ import SwiftUI
 /// analogue of web's `-mt-12 md:-mt-20`), and scrolling the whole thing flips
 /// the shell's transparent top bar to solid via `isScrolled`.
 ///
-/// Owns the `NavigationStack` for the whole home→title→season flow: selecting
-/// a card pushes a `TitleRoute` (M3 Task 2); the billboard's **Play** pushes a
+/// Owns the `NavigationStack` for the whole home→title flow: selecting a card
+/// pushes a `TitleRoute` (M3 Task 2); the billboard's **Play** pushes a
 /// `TitleRoute(autoplay: true)` (the web `?play=1` direct-play deep-link),
 /// **More info** a plain `TitleRoute`. `TitlePage`'s own "More Like This" rail
 /// is handed the same `path` binding, so selecting a similar title there
-/// pushes another `TitlePage` onto this same stack; a series' season chip
-/// likewise pushes a `SeasonRoute` (M3 Task 4). `path` is a type-erased
-/// `NavigationPath` (rather than `[TitleRoute]`) specifically so it can carry
-/// both route types — each route is still a distinct `Hashable` type with its
-/// own `.navigationDestination(for:)` below, so `TitleRoute` and `SeasonRoute`
-/// can never collide with each other on the same stack.
+/// pushes another `TitlePage` onto this same stack; a series' seasons and
+/// episodes render inline on the title page (no separate pushed destination).
+/// `path` is a type-erased `NavigationPath` so it can arbitrarily deep-stack
+/// `TitleRoute`s via its `.navigationDestination(for:)` below.
 struct HomeView: View {
     let model: AppModel
     /// Driven from this view's scroll offset; `ShellView` owns the state and
@@ -49,9 +47,6 @@ struct HomeView: View {
             }
             .navigationDestination(for: TitleRoute.self) { route in
                 TitlePage(itemId: route.itemId, model: model, path: $path, autoplay: route.autoplay)
-            }
-            .navigationDestination(for: SeasonRoute.self) { route in
-                SeasonEpisodeView(seriesId: route.seriesId, seasonNumber: route.seasonNumber, model: model)
             }
         }
     }

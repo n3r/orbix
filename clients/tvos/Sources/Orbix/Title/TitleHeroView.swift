@@ -189,7 +189,7 @@ struct TitleHeroView: View {
     }
 
     /// `3720` → `"1h 2m"`; `600` → `"10m"`; `nil`/non-positive → `nil` — same
-    /// helper `TitlePage`/`HomeBillboardView`/`SeasonEpisodeView` each keep
+    /// helper `TitlePage`/`HomeBillboardView`/`SeasonEpisodeListView` each keep
     /// their own private copy of (no shared symbol exists yet; Task 3 may
     /// consolidate).
     private static func formattedRuntime(_ seconds: Int?) -> String? {

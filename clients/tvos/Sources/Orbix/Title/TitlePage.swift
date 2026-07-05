@@ -2,19 +2,18 @@ import OrbixKit
 import SwiftUI
 
 /// A pushed title/detail-page destination on the shared `NavigationStack`
-/// path `HomeView` owns (see `HomeView.path`, a type-erased `NavigationPath`
-/// specifically so it can also carry `SeasonRoute` — see that type in
-/// `SeasonEpisodeView.swift`). A dedicated wrapper type (rather than pushing
-/// a bare `String`) so `.navigationDestination(for:)` can't collide with
-/// some unrelated `String`-valued destination a future task pushes onto the
-/// same stack (e.g. a search query) — `TitleRoute` is specifically "go to
-/// the title page for this item id."
+/// path `HomeView` owns (see `HomeView.path`, a type-erased `NavigationPath`).
+/// A dedicated wrapper type (rather than pushing a bare `String`) so
+/// `.navigationDestination(for:)` can't collide with some unrelated
+/// `String`-valued destination a future task pushes onto the same stack
+/// (e.g. a search query) — `TitleRoute` is specifically "go to the title
+/// page for this item id."
 struct TitleRoute: Hashable {
     let itemId: String
     /// Direct-play deep-link (the web `?play=1`): when set, `TitlePage`
-    /// presents the player once on load for a **movie** with a playable file.
-    /// A series `autoplay` route just shows the title page — resolving the
-    /// first owned episode is the Phase-3 title/episode rebuild's job.
+    /// presents the player once on load — for a **movie** it plays the first
+    /// file; for a **series** it starts the first owned episode of the first
+    /// non-specials season (via the embedded `SeasonEpisodeListView`).
     /// Still `Hashable` (String + Bool) so it can ride the `NavigationPath`.
     var autoplay: Bool = false
 }
@@ -27,12 +26,12 @@ struct TitleRoute: Hashable {
 /// cinematic `TitleHeroView` (backdrop/logo, `RatingBadges`, meta row,
 /// overview, Play/Resume + optimistic Wishlist toggle — tvOS port of the
 /// web's `apps/web/src/components/TitleHero.tsx`), then a page body mirroring
-/// `apps/web/src/pages/TitlePage.tsx`'s section order: hero → (series: season
-/// strip, unchanged this task) → unmatched notice → Cast rail → More Like
-/// This → Details. A season chip pushes a `SeasonRoute` onto `path`; see
-/// `SeasonEpisodeView.swift` for the Task 4 episode list + per-episode
-/// playback + next-episode (which also retires the season strip in favor of
-/// inline tabs + grid).
+/// `apps/web/src/pages/TitlePage.tsx`'s section order: hero → (series: inline
+/// season tabs + episode grid via `SeasonEpisodeListView`) → unmatched notice
+/// → Cast rail → More Like This → Details. The series' episode list, its
+/// per-episode playback + next-episode autoplay, and the hero's first-episode
+/// Play all live inline now (no pushed season destination) — see
+/// `SeasonEpisodeListView.swift`.
 struct TitlePage: View {
     let itemId: String
     let model: AppModel
@@ -46,10 +45,16 @@ struct TitlePage: View {
     @State private var imageLoader = ImageLoader()
     @State private var playbackTarget: PlaybackTarget?
 
-    /// One-shot latch so the movie autoplay fires exactly once — not again
-    /// when `detailView` re-appears after the player is dismissed (which
+    /// One-shot latch so autoplay fires exactly once — not again when
+    /// `detailView` re-appears after the player is dismissed (which
     /// `refreshAfterPlayback` triggers) or on any other re-render.
     @State private var didAutoplay = false
+
+    /// Bumped to drive the embedded `SeasonEpisodeListView` to play the first
+    /// owned episode of its selected season — by the hero's series **Play**
+    /// (`onHeroPlay`) and by a series `autoplay` deep-link (`autoplayIfNeeded`).
+    /// A movie ignores this (it plays through `presentPlayer` directly).
+    @State private var seriesPlayToken = 0
 
     var body: some View {
         Group {
@@ -93,15 +98,21 @@ struct TitlePage: View {
     }
 
     /// Fires the direct-play deep-link once: only when `autoplay` was
-    /// requested, only for a **movie** (web parity: movie → first file), and
-    /// only when there's a playable file. Reuses the same `presentPlayer`
-    /// path the hero's Play button uses. A series `autoplay` route is a
-    /// no-op here (documented Phase-2 decision — it just shows the page).
+    /// requested. A **movie** (web parity: movie → first file) plays its
+    /// first file directly through the same `presentPlayer` path the hero's
+    /// Play uses. A **series** bumps `seriesPlayToken`, which drives the
+    /// embedded `SeasonEpisodeListView` to start the first owned episode of
+    /// its selected season once that season's episodes are loaded — the
+    /// deferred-from-Phase-2 series-autoplay behavior.
     private func autoplayIfNeeded(_ detail: ItemDetail, client: OrbixClient) {
-        guard autoplay, !didAutoplay, detail.kind == "movie",
-              let fileId = detail.files?.first?.id else { return }
-        didAutoplay = true
-        presentPlayer(fileId: fileId, title: detail.title, client: client)
+        guard autoplay, !didAutoplay else { return }
+        if detail.kind == "movie", let fileId = detail.files?.first?.id {
+            didAutoplay = true
+            presentPlayer(fileId: fileId, title: detail.title, client: client)
+        } else if detail.kind == "series", (detail.seasons?.count ?? 0) > 0 {
+            didAutoplay = true
+            seriesPlayToken += 1
+        }
     }
 
     private func detailView(_ detail: ItemDetail, similar: [MediaCard], client: OrbixClient) -> some View {
@@ -119,7 +130,12 @@ struct TitlePage: View {
                 )
 
                 if isSeries(detail) {
-                    seasonStrip(detail)
+                    SeasonEpisodeListView(
+                        seriesId: itemId,
+                        seasons: detail.seasons ?? [],
+                        model: model,
+                        playFirstToken: seriesPlayToken
+                    )
                 }
 
                 unmatchedNotice(detail)
@@ -150,15 +166,12 @@ struct TitlePage: View {
 
     /// Web parity (`TitlePage.tsx` `startPlayback`): a movie plays its first
     /// file directly through the existing `presentPlayer`/`fullScreenCover`
-    /// plumbing. **Task-4 bridge:** a series has no inline first-episode
-    /// playback yet, so the hero's Play instead pushes the first non-specials
-    /// season via the existing `SeasonRoute` — the same destination a season
-    /// chip in `seasonStrip` pushes. Task 4 replaces the season strip with
-    /// inline tabs + a grid and wires true first-episode play here.
+    /// plumbing. A **series** bumps `seriesPlayToken`, which the embedded
+    /// `SeasonEpisodeListView` observes to start the first owned episode of
+    /// its currently-selected season (web's hero Play → `playFirstToken`).
     private func onHeroPlay(_ detail: ItemDetail, client: OrbixClient) {
         if isSeries(detail) {
-            guard let firstSeason = detail.seasons?.first(where: { $0.seasonNumber > 0 }) ?? detail.seasons?.first else { return }
-            path.append(SeasonRoute(seriesId: itemId, seasonNumber: firstSeason.seasonNumber))
+            seriesPlayToken += 1
         } else if let fileId = detail.files?.first?.id {
             presentPlayer(fileId: fileId, title: detail.title, client: client)
         }
@@ -271,70 +284,13 @@ struct TitlePage: View {
         .accessibilityIdentifier("castCard_\(index)")
     }
 
-    // MARK: - Seasons (series — unchanged this task; Task 4 replaces this
-    // strip with inline season tabs + an episode grid and retires
-    // `SeasonRoute`)
+    // MARK: - Seasons (series)
 
+    /// The inline season tabs + episode grid for a series render via
+    /// `SeasonEpisodeListView` (embedded in `detailView`); there is no longer
+    /// a separate season strip or pushed season destination.
     private func isSeries(_ detail: ItemDetail) -> Bool {
         detail.kind == "series"
-    }
-
-    private func seasonStrip(_ detail: ItemDetail) -> some View {
-        let seasons = detail.seasons ?? []
-        return VStack(alignment: .leading, spacing: 20) {
-            Text("Seasons")
-                .font(.title3.bold())
-                .padding(.leading, 4)
-
-            if seasons.isEmpty {
-                Text("No seasons available yet")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .padding(.leading, 4)
-                    .accessibilityIdentifier("titlePageNoSeasonsState")
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 24) {
-                        ForEach(seasons, id: \.seasonNumber) { season in
-                            seasonChip(season)
-                        }
-                    }
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 16)
-                }
-                .focusSection()
-            }
-        }
-        .padding(.horizontal, 64)
-        .accessibilityIdentifier("titlePageSeasonStrip")
-    }
-
-    private func seasonChip(_ season: ItemDetail.SeasonSummary) -> some View {
-        Button {
-            path.append(SeasonRoute(seriesId: itemId, seasonNumber: season.seasonNumber))
-        } label: {
-            VStack(spacing: 8) {
-                Text(seasonLabel(season))
-                    .font(.headline)
-                    .lineLimit(1)
-                if let episodeCount = season.episodeCount {
-                    Text("\(episodeCount) episode\(episodeCount == 1 ? "" : "s")")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .frame(width: 200, height: 110)
-            .background(.secondary.opacity(0.2), in: RoundedRectangle(cornerRadius: 12))
-        }
-        .buttonStyle(.card)
-        .accessibilityIdentifier("seasonChip_\(season.seasonNumber)")
-    }
-
-    private func seasonLabel(_ season: ItemDetail.SeasonSummary) -> String {
-        if let name = season.name, !name.isEmpty {
-            return name
-        }
-        return "Season \(season.seasonNumber)"
     }
 
     // MARK: - More like this

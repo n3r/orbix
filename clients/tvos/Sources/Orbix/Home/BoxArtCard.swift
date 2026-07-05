@@ -9,8 +9,7 @@ import UIKit
 /// names the card since the art has no baked-in title text (web line 50);
 /// a top-leading `NewBadge` for recently-added titles (web lines 57-61); and
 /// a thin `ProgressBarView` pinned to the bottom edge for in-progress titles
-/// (web lines 63-67, using the Task-4 accent bar, not `PosterCard`'s legacy
-/// hardcoded-red `ResumeProgressBar`).
+/// (web lines 63-67, the shared accent progress bar).
 ///
 /// Unlike `PosterCard` (Apple's `.card` button style), this needs a *specific*
 /// 1.04 hover-scale to match the web's `hover:scale-[1.04]` — `.card`'s
