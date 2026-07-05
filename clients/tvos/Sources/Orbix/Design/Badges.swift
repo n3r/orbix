@@ -13,7 +13,7 @@ struct NewBadge: View {
             .foregroundStyle(.white)
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
-            .background(OrbixColor.accentStrong, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .background(OrbixColor.accentStrong, in: RoundedRectangle(cornerRadius: OrbixRadius.chip, style: .continuous))
             .accessibilityLabel(Text("New"))
     }
 }
@@ -31,7 +31,7 @@ struct QualityChip: View {
             .foregroundStyle(.white)
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
-            .background(.white.opacity(0.15), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .background(.white.opacity(0.15), in: RoundedRectangle(cornerRadius: OrbixRadius.chip, style: .continuous))
     }
 }
 

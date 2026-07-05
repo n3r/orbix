@@ -38,6 +38,8 @@ enum OrbixRadius {
     static let sm: CGFloat = 12
     static let md: CGFloat = 18
     static let lg: CGFloat = 24
+    /// Chip/badge radius (web Tailwind `rounded` 4px × 1.5).
+    static let chip: CGFloat = 6
 }
 
 enum OrbixSpacing {
