@@ -12,10 +12,21 @@ import SwiftUI
 /// ported 1:1:
 /// - the web `<select>` (sort) → a row of three focusable **chip** buttons
 ///   (`LibrarySort.allCases`), since tvOS has no native picker control;
-/// - the web `<Input>` (title filter) → SwiftUI `.searchable(text:)` (the
-///   system search field + keyboard), debounced in `LibraryModel` so the
-///   on-screen keyboard's keystrokes don't each fire a request (mirrors
-///   `SearchView`/`SearchModel`'s idiom exactly).
+/// - the web `<Input>` (title filter) → an on-page `TextField` (`filterField`)
+///   sitting in the controls row next to the sort chips, exactly where the
+///   web renders its `<Input>` beside the `<select>` (`LibraryPage.tsx`).
+///   **Not** `.searchable(text:)`: that system chrome renders at the same
+///   top-of-screen position as `ShellView`'s `OrbixTopBar` and visibly
+///   collided with it (`.superpowers/sdd/phase2-library.png`) — an on-page
+///   field avoids a second top-of-screen surface entirely, and doubles as
+///   truer web parity (the web filter is an inline `<Input>`, not a modal
+///   search overlay). Selecting it still opens the system on-screen keyboard
+///   like any tvOS `TextField` (see the manual-entry field in
+///   `RootView.swift` for the same pattern); debounced in `LibraryModel` so
+///   the keyboard's keystrokes don't each fire a request (mirrors
+///   `SearchView`/`SearchModel`'s idiom exactly) — `queryChanged` is
+///   unchanged, only what feeds `query` moved from `.searchable` to this
+///   field.
 ///
 /// Owns its own `NavigationStack` — `ShellView` gives this view `.id(libraryId)`
 /// so switching categories in the top bar (same `.category` `AppSection`
@@ -52,8 +63,10 @@ struct LibraryBrowseView: View {
                     ProgressView()
                 }
             }
-            .navigationTitle(libraryName)
-            .searchable(text: $query, prompt: "Search titles…")
+            // No `.navigationTitle`/`.searchable` here — both were system
+            // top-of-screen chrome that collided with `OrbixTopBar` (see the
+            // type doc comment); the in-content `heading` below already
+            // shows `libraryName`, and `filterField` replaces `.searchable`.
             .onChange(of: query) { _, newValue in
                 guard let client = model.client else { return }
                 libraryModel.queryChanged(newValue, client: client, libraryId: libraryId, sort: sort)
@@ -73,16 +86,27 @@ struct LibraryBrowseView: View {
 
     // MARK: - Content
 
-    /// Heading + sort chips stay mounted across every `loadState` (web always
-    /// renders its `<h1>` and controls row regardless of loading/error/empty),
-    /// so only the region below them switches on loading/error/empty/loaded.
+    /// `OrbixTopBar` renders again for `.category` (see `ShellView`'s doc
+    /// comment on `showsTopBar`) — unlike Home's billboard, this page has no
+    /// hero art meant to bleed under it, so its `ScrollView` does *not*
+    /// `.ignoresSafeArea`, and this top padding must clear the bar's full
+    /// rendered height rather than deliberately underlap it. The bar itself
+    /// (`OrbixTopBar.body`) adds 24pt vertical padding above and below a
+    /// ~41pt-tall content row (its tallest label is 34pt tracked text) beyond
+    /// the safe area, i.e. ~90pt; 140 leaves a clean ~50pt gap below it
+    /// instead of the heading brushing up against it.
+    private static let contentTopPadding: CGFloat = 140
+
+    /// Heading + controls row (filter field + sort chips) stay mounted across
+    /// every `loadState` (web always renders its `<h1>` and controls row
+    /// regardless of loading/error/empty), so only the region below them
+    /// switches on loading/error/empty/loaded.
     @ViewBuilder
     private func content(client: OrbixClient) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 32) {
                 heading
-                sortChips
-                    .focusSection()
+                controlsRow
 
                 switch libraryModel.loadState {
                 case .loading:
@@ -96,7 +120,7 @@ struct LibraryBrowseView: View {
                 }
             }
             .padding(.horizontal, 64)
-            .padding(.top, 48)
+            .padding(.top, Self.contentTopPadding)
             .padding(.bottom, 80)
         }
         .accessibilityIdentifier("libraryScroll")
@@ -107,6 +131,46 @@ struct LibraryBrowseView: View {
             .font(OrbixType.rowHeading)
             .foregroundStyle(OrbixColor.text)
             .accessibilityIdentifier("libraryHeading")
+    }
+
+    // MARK: - Controls row (web `<Input>` filter + `<select>` sort)
+
+    /// Filter field + sort chips, side by side, matching the web controls
+    /// row's `<Input>` then `<select>` order (`LibraryPage.tsx`). Both are
+    /// one `.focusSection()` — the filter field joins the sort chips' focus
+    /// row rather than getting its own adjacent section, since visually
+    /// they're one horizontal row and this reads as a single left↔right
+    /// sweep for the remote (verified live: focus moves cleanly field→chips
+    /// and back, same as any other single-row `.focusSection()` in this app).
+    private var controlsRow: some View {
+        HStack(spacing: 16) {
+            filterField
+            sortChips
+        }
+        .focusSection()
+        .accessibilityIdentifier("libraryControlsRow")
+    }
+
+    /// The web `<Input>` title filter, ported as an on-page `TextField`
+    /// rather than `.searchable` — see the type doc comment for why. Bound to
+    /// the same `query` state `.searchable` used to be, so
+    /// `LibraryModel.queryChanged`'s debounce (wired via `.onChange(of: query)`
+    /// in `body`) keeps working untouched; only the source of `query` moved.
+    /// Selecting it opens the system on-screen keyboard like any tvOS
+    /// `TextField` (the `RootView.swift` manual-entry field is the same
+    /// pattern). Prompt copy is the web's actual placeholder string
+    /// (`catalog:browse.searchPlaceholder` in `apps/web/src/locales/en/catalog.json`),
+    /// not a generic "Filter" — reused verbatim for parity.
+    private var filterField: some View {
+        TextField("", text: $query, prompt: Text("Search titles…").foregroundStyle(OrbixColor.textDim))
+            .textFieldStyle(.plain)
+            .font(.system(size: 24))
+            .foregroundStyle(OrbixColor.text)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+            .frame(width: 360)
+            .background(OrbixColor.surface2, in: RoundedRectangle(cornerRadius: OrbixRadius.sm, style: .continuous))
+            .accessibilityIdentifier("libraryFilterField")
     }
 
     // MARK: - Sort chips (web `<select>` → segmented chip row)
@@ -347,7 +411,7 @@ final class LibraryModel {
         }
     }
 
-    /// `.searchable` text change (one call per keystroke on the system
+    /// `filterField` text change (one call per keystroke on the system
     /// keyboard). Mirrors `SearchModel.queryChanged` exactly: cancel
     /// whatever's pending, then restart a fresh `debounceNanoseconds` timer
     /// before actually calling `libraryItems`. Unlike `SearchModel`, an empty

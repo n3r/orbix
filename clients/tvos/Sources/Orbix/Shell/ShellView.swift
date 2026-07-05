@@ -22,24 +22,40 @@ import SwiftUI
 /// bar, so leaving Home resets it to `false` — a non-Home section never leaves
 /// the bar stuck solid.
 ///
-/// **Bar suppression for `.searchable` sections:** `SearchView` and
-/// `LibraryBrowseView` (`.category`) each use SwiftUI's `.searchable`, whose
-/// system chrome (title + search field + on-screen keyboard grid) renders at
-/// the same top-of-screen position as this `OrbixTopBar` overlay — the two
-/// visibly collide (`.superpowers/sdd/phase2-library.png` is the recorded
-/// artifact). Padding the section's own content down would not fix this: the
-/// collision is between two independent top-of-screen chromes, not between
-/// the bar and scrollable content. So `showsTopBar` simply omits the overlay
-/// for those sections instead — search reads as its own full-screen surface,
-/// the way a modal would on the web, rather than a page under a fixed nav.
+/// **Bar suppression is `.search`-only.** `SearchView` uses SwiftUI's
+/// `.searchable`, whose system chrome (title + search field + on-screen
+/// keyboard grid) renders at the same top-of-screen position as this
+/// `OrbixTopBar` overlay — the two visibly collide
+/// (`.superpowers/sdd/phase2-library.png` is the recorded artifact of the
+/// same collision when `LibraryBrowseView` also used `.searchable`). Padding
+/// the section's own content down would not fix this: the collision is
+/// between two independent top-of-screen chromes, not between the bar and
+/// scrollable content. So `showsTopBar` simply omits the overlay for
+/// `.search` — it reads as its own full-screen surface, the way a modal
+/// would on the web, rather than a page under a fixed nav.
 ///
-/// Hiding the bar removes it (and the "down press drops from bar into
-/// content" focus handoff) from the hierarchy entirely, so those sections'
-/// content gets an explicit `.onExitCommand` that sends `selection` back to
-/// `.home` — the tvOS Menu/Back button's fallback once a `NavigationStack`
-/// has nothing left of its own to pop. Without this, Menu at a suppressed
-/// section's stack root would fall through to the system default (exit to
-/// the Home Screen) since there is no bar left to hand focus back to.
+/// **`.category` (library) keeps the bar.** On the web, `LibraryPage` renders
+/// under the persistent `TopNav` — the nav *is* the category switcher, and
+/// hiding it on a library page would be a parity regression (a user could
+/// switch Movies → Series from Home but not from within a library itself).
+/// The `.searchable` collision that used to justify hiding it here too is
+/// gone: `LibraryBrowseView` no longer uses `.searchable` at all — the web's
+/// on-page filter `<Input>` (next to the sort `<select>`) is ported as an
+/// ordinary in-content `TextField` in its controls row, so there is no
+/// second top-of-screen chrome left to collide with the bar.
+///
+/// Hiding the bar for `.search` removes it (and the "down press drops from
+/// bar into content" focus handoff) from the hierarchy entirely, so that
+/// section's content gets an explicit `.onExitCommand` that sends
+/// `selection` back to `.home` — the tvOS Menu/Back button's fallback once a
+/// `NavigationStack` has nothing left of its own to pop. Without this, Menu
+/// at `.search`'s stack root would fall through to the system default (exit
+/// to the Home Screen) since there is no bar left to hand focus back to.
+/// `.category` keeps its own `.onExitCommand { selection = .home }` as a
+/// harmless defensive leftover from the bar-hidden era rather than something
+/// newly required — its bar is back, so (like `.tv`/`.wishlist`/`.account`,
+/// which have never had one) Menu at its stack root should already have
+/// somewhere to hand focus back to without it.
 /// Verified live: Menu from the Search landing state returns to the bar (on
 /// Home) rather than backgrounding the app; a `NavigationStack` push (e.g. a
 /// search result's `TitlePage`) still pops one level per Menu press first, as
@@ -65,11 +81,13 @@ struct ShellView: View {
         }
     }
 
-    /// `false` for `.search`/`.category` — see the type's doc comment on why
-    /// the bar is suppressed for `.searchable` sections specifically.
+    /// `false` for `.search` only — see the type's doc comment on why the bar
+    /// is suppressed there and *not* for `.category`, which renders it like
+    /// every other hub section (web parity: the nav stays visible, and
+    /// doubles as the category switcher, on library pages).
     private var showsTopBar: Bool {
         switch selection {
-        case .search, .category:
+        case .search:
             return false
         default:
             return true
