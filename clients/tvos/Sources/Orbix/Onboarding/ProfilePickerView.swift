@@ -100,7 +100,7 @@ struct ProfilePickerView: View {
             // first loaded profile, but only while the user hasn't already
             // moved focus elsewhere — avoids hijacking a deliberate remote
             // press while the list happens to refresh (e.g. after add).
-            if let first = profiles.first, focusedTarget == .add {
+            if let first = profiles.first, focusedTarget == nil || focusedTarget == .add {
                 focusedTarget = .profile(first.id)
             }
         }
