@@ -1,4 +1,6 @@
 import { execFile } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 import { promisify } from "node:util";
 import type { FastifyInstance } from "fastify";
 import { srtToVtt, buildSubtitleMediaPlaylist } from "@orbix/core";
@@ -113,24 +115,45 @@ export default async function subtitlesRoute(app: FastifyInstance) {
         return reply.code(415).send({ error: "image_subtitle_burn_in_required" });
       }
 
-      // Extract subtitle stream to WebVTT via ffmpeg piped to stdout
-      let stdout: string;
-      try {
-        const result = await execFileAsync(
-          "ffmpeg",
-          ["-v", "quiet", "-i", file.path, "-map", `0:${trackIndex}`, "-f", "webvtt", "-"],
-          { maxBuffer: 10 * 1024 * 1024 },
-        );
-        stdout = result.stdout;
-      } catch {
-        return reply.code(500).send({ error: "extract_failed" });
-      }
+      // Extracting a full-length subtitle is slow — ffmpeg demuxes the whole
+      // container (tens of seconds for a feature film). Cache the raw VTT on
+      // disk keyed by file+track so only the first request pays that cost;
+      // every later one (and re-fetches) is instant. This is what keeps a
+      // selected subtitle from re-triggering a 30s+ extraction on each request.
+      const cacheDir = path.join(process.env.TRANSCODE_DIR || "/tmp", "subcache");
+      const cachePath = path.join(cacheDir, `${fileId}_${trackIndex}.vtt`);
 
-      // ffmpeg emits native WebVTT when codec is already webvtt; for subrip it
-      // outputs WebVTT format directly (ffmpeg's webvtt muxer handles the
-      // comma→dot conversion). But if somehow it comes back as SRT-like text
-      // (no WEBVTT header), run our converter as a fallback.
-      const vtt = stdout.trimStart().startsWith("WEBVTT") ? stdout : srtToVtt(stdout);
+      let vtt: string;
+      try {
+        vtt = await fs.promises.readFile(cachePath, "utf8");
+      } catch {
+        // Not cached — extract subtitle stream to WebVTT via ffmpeg.
+        let stdout: string;
+        try {
+          const result = await execFileAsync(
+            "ffmpeg",
+            ["-v", "quiet", "-i", file.path, "-map", `0:${trackIndex}`, "-f", "webvtt", "-"],
+            { maxBuffer: 10 * 1024 * 1024 },
+          );
+          stdout = result.stdout;
+        } catch {
+          return reply.code(500).send({ error: "extract_failed" });
+        }
+
+        // ffmpeg emits native WebVTT when codec is already webvtt; for subrip it
+        // outputs WebVTT directly (its webvtt muxer handles comma→dot). If it
+        // ever comes back SRT-like (no WEBVTT header), convert as a fallback.
+        vtt = stdout.trimStart().startsWith("WEBVTT") ? stdout : srtToVtt(stdout);
+
+        // Persist for next time (best-effort — a cache write failure just means
+        // the next request re-extracts).
+        try {
+          await fs.promises.mkdir(cacheDir, { recursive: true });
+          await fs.promises.writeFile(cachePath, vtt, "utf8");
+        } catch {
+          /* ignore */
+        }
+      }
 
       // The Apple subtitle-rendition playlist fetches this same VTT with
       // ?hls=1 and needs the X-TIMESTAMP-MAP header AVPlayer requires for

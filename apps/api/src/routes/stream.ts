@@ -239,6 +239,15 @@ export default function streamRoute(
                 name: t.language ?? `Track ${t.index}`,
                 language: t.language,
                 uri: `subs/${t.index}/index.m3u8?playSessionId=${playSessionId}${tokenSuffix(req)}`,
+                // AUTOSELECT=NO: never let a subtitle rendition auto-load. The
+                // WebVTT is extracted live by ffmpeg (`subtitles.ts`), which for
+                // a feature-length file takes tens of seconds; if AVPlayer
+                // auto-selects it, it blocks .readyToPlay on that fetch — the
+                // item hangs at status=unknown (black screen + spinner) and
+                // re-requests the VTT forever. Off by default → video plays
+                // immediately; subtitles stay available for manual selection
+                // (and are cached after first extraction, see subtitles.ts).
+                autoselect: false,
               }))
           : [];
 
