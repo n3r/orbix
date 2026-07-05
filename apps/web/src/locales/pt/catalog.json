@@ -13,12 +13,13 @@
   "browse": {
     "title": "Explorar",
     "searchPlaceholder": "Buscar títulos…",
-    "empty": "Nenhum item encontrado.",
-    "sort": {
-      "title": "Título (A–Z)",
-      "added": "Adicionados recentemente",
-      "year": "Ano"
-    }
+    "empty": "Nenhum item encontrado."
+  },
+  "library": {
+    "tabs": { "categories": "Categorias", "browse": "Explorar" },
+    "seeAll": "Ver tudo ({{total}})",
+    "back": "Voltar às categorias",
+    "emptyCategories": "Ainda sem categorias — os títulos aparecem aqui quando tiverem informação de gênero. Veja a aba Explorar para ver tudo."
   },
   "hero": {
     "play": "Reproduzir",
