@@ -13,14 +13,14 @@ import SwiftUI
 /// down press.
 ///
 /// Each section hosts its own `NavigationStack`: `HomeView` and `SearchView`
-/// already do internally (unchanged here — Phase 2 restyles them); the
-/// placeholder sections wrap their `ContentUnavailableView` in one so a
-/// later phase can push detail routes onto it without restructuring the
-/// shell.
+/// already do internally; the placeholder sections wrap their
+/// `ContentUnavailableView` in one so a later phase can push detail routes
+/// onto it without restructuring the shell.
 ///
-/// `isScrolled` is plumbed but inert this phase — it stays `false` until Home
-/// wires real scroll geometry in Phase 2; the bar already reacts to it
-/// (transparent → near-solid), so no further shell changes are needed then.
+/// `isScrolled` is owned here and driven by `HomeView`'s scroll offset (the
+/// bar goes transparent → near-solid). Only Home scrolls its content under the
+/// bar, so leaving Home resets it to `false` — a non-Home section never leaves
+/// the bar stuck solid.
 struct ShellView: View {
     let model: AppModel
 
@@ -35,13 +35,16 @@ struct ShellView: View {
 
             OrbixTopBar(model: model, selection: $selection, isScrolled: isScrolled)
         }
+        .onChange(of: selection) { _, newValue in
+            if newValue != .home { isScrolled = false }
+        }
     }
 
     @ViewBuilder
     private var content: some View {
         switch selection {
         case .home:
-            HomeView(model: model)
+            HomeView(model: model, isScrolled: $isScrolled)
         case .search:
             SearchView(model: model)
         case .tv:

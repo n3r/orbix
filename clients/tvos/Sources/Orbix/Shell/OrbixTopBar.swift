@@ -99,19 +99,20 @@ struct OrbixTopBar: View {
     }
 
     /// Web `NavCategories`' `<details>` overflow dropdown, as a tvOS `Menu`.
+    /// Its label gets the same focus emphasis as the bar's other items via
+    /// `MoreMenuLabel` — a `Menu` can't take a `ButtonStyle` on tvOS
+    /// (`.menuStyle(.button)` / `ButtonMenuStyle` is unavailable there), so
+    /// the label reads `@Environment(\.isFocused)` directly, the same signal
+    /// `NavItemStyle` uses.
     private var moreMenu: some View {
         Menu {
             ForEach(overflowCategories, id: \.libraryId) { item in
                 Button(item.name ?? "Library") { selection = .category(item.libraryId) }
             }
         } label: {
-            HStack(spacing: 6) {
-                Text("More").font(.system(size: 26))
-                Image(systemName: "chevron.down").font(.system(size: 18))
-            }
+            MoreMenuLabel()
         }
         .menuStyle(.automatic)
-        .foregroundStyle(OrbixColor.textDim)
         .accessibilityIdentifier("nav_more")
     }
 
@@ -215,6 +216,26 @@ private struct NavItemStyle: ButtonStyle {
             .foregroundStyle(color)
             .scaleEffect(isFocused ? 1.12 : 1.0)
             .animation(.easeOut(duration: 0.15), value: isFocused)
+    }
+}
+
+/// The "More" overflow menu's label, given the same focus emphasis as the
+/// bar's other items (white + scaled on focus, dim otherwise) — the exact
+/// treatment `NavItemStyle`'s unselected path applies. A `Menu` can't take a
+/// `ButtonStyle` on tvOS, so this reads `@Environment(\.isFocused)` (the same
+/// signal `NavItemStyle` reads) on the label subtree, which is `true` while
+/// the focusable `Menu` ancestor holds focus.
+private struct MoreMenuLabel: View {
+    @Environment(\.isFocused) private var isFocused
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text("More").font(.system(size: 26))
+            Image(systemName: "chevron.down").font(.system(size: 18))
+        }
+        .foregroundStyle(isFocused ? Color.white : OrbixColor.textDim)
+        .scaleEffect(isFocused ? 1.12 : 1.0)
+        .animation(.easeOut(duration: 0.15), value: isFocused)
     }
 }
 

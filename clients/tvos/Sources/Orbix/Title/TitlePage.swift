@@ -12,6 +12,12 @@ import UIKit
 /// the title page for this item id."
 struct TitleRoute: Hashable {
     let itemId: String
+    /// Direct-play deep-link (the web `?play=1`): when set, `TitlePage`
+    /// presents the player once on load for a **movie** with a playable file.
+    /// A series `autoplay` route just shows the title page — resolving the
+    /// first owned episode is the Phase-3 title/episode rebuild's job.
+    /// Still `Hashable` (String + Bool) so it can ride the `NavigationPath`.
+    var autoplay: Bool = false
 }
 
 /// SP2 M3 title/detail page for a single item (movie or series), reached by
@@ -27,10 +33,19 @@ struct TitlePage: View {
     let itemId: String
     let model: AppModel
     @Binding var path: NavigationPath
+    /// Direct-play deep-link from a `TitleRoute(autoplay: true)` push (the
+    /// billboard's **Play** — web `?play=1`). Presents the player once, for a
+    /// movie only; see `autoplayIfNeeded`.
+    var autoplay: Bool = false
 
     @State private var titleModel = TitleModel()
     @State private var imageLoader = ImageLoader()
     @State private var playbackTarget: PlaybackTarget?
+
+    /// One-shot latch so the movie autoplay fires exactly once — not again
+    /// when `detailView` re-appears after the player is dismissed (which
+    /// `refreshAfterPlayback` triggers) or on any other re-render.
+    @State private var didAutoplay = false
 
     /// Fixed height of the hero backdrop; large enough to read as
     /// "full-bleed" on a 1080pt-tall tvOS screen while still leaving the
@@ -74,7 +89,20 @@ struct TitlePage: View {
             errorView(message: message, client: client)
         case .loaded(let detail, let similar):
             detailView(detail, similar: similar, client: client)
+                .onAppear { autoplayIfNeeded(detail, client: client) }
         }
+    }
+
+    /// Fires the direct-play deep-link once: only when `autoplay` was
+    /// requested, only for a **movie** (web parity: movie → first file), and
+    /// only when there's a playable file. Reuses the same `presentPlayer`
+    /// path the on-page Play button uses. A series `autoplay` route is a
+    /// no-op here (documented Phase-2 decision — it just shows the page).
+    private func autoplayIfNeeded(_ detail: ItemDetail, client: OrbixClient) {
+        guard autoplay, !didAutoplay, detail.kind == "movie",
+              let fileId = detail.files?.first?.id else { return }
+        didAutoplay = true
+        presentPlayer(fileId: fileId, title: detail.title, client: client)
     }
 
     private func detailView(_ detail: ItemDetail, similar: [MediaCard], client: OrbixClient) -> some View {
