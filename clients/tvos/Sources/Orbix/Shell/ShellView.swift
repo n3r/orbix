@@ -21,6 +21,29 @@ import SwiftUI
 /// bar goes transparent → near-solid). Only Home scrolls its content under the
 /// bar, so leaving Home resets it to `false` — a non-Home section never leaves
 /// the bar stuck solid.
+///
+/// **Bar suppression for `.searchable` sections:** `SearchView` and
+/// `LibraryBrowseView` (`.category`) each use SwiftUI's `.searchable`, whose
+/// system chrome (title + search field + on-screen keyboard grid) renders at
+/// the same top-of-screen position as this `OrbixTopBar` overlay — the two
+/// visibly collide (`.superpowers/sdd/phase2-library.png` is the recorded
+/// artifact). Padding the section's own content down would not fix this: the
+/// collision is between two independent top-of-screen chromes, not between
+/// the bar and scrollable content. So `showsTopBar` simply omits the overlay
+/// for those sections instead — search reads as its own full-screen surface,
+/// the way a modal would on the web, rather than a page under a fixed nav.
+///
+/// Hiding the bar removes it (and the "down press drops from bar into
+/// content" focus handoff) from the hierarchy entirely, so those sections'
+/// content gets an explicit `.onExitCommand` that sends `selection` back to
+/// `.home` — the tvOS Menu/Back button's fallback once a `NavigationStack`
+/// has nothing left of its own to pop. Without this, Menu at a suppressed
+/// section's stack root would fall through to the system default (exit to
+/// the Home Screen) since there is no bar left to hand focus back to.
+/// Verified live: Menu from the Search landing state returns to the bar (on
+/// Home) rather than backgrounding the app; a `NavigationStack` push (e.g. a
+/// search result's `TitlePage`) still pops one level per Menu press first, as
+/// normal, before this fallback ever fires.
 struct ShellView: View {
     let model: AppModel
 
@@ -33,10 +56,23 @@ struct ShellView: View {
 
             content
 
-            OrbixTopBar(model: model, selection: $selection, isScrolled: isScrolled)
+            if showsTopBar {
+                OrbixTopBar(model: model, selection: $selection, isScrolled: isScrolled)
+            }
         }
         .onChange(of: selection) { _, newValue in
             if newValue != .home { isScrolled = false }
+        }
+    }
+
+    /// `false` for `.search`/`.category` — see the type's doc comment on why
+    /// the bar is suppressed for `.searchable` sections specifically.
+    private var showsTopBar: Bool {
+        switch selection {
+        case .search, .category:
+            return false
+        default:
+            return true
         }
     }
 
@@ -47,6 +83,7 @@ struct ShellView: View {
             HomeView(model: model, isScrolled: $isScrolled)
         case .search:
             SearchView(model: model)
+                .onExitCommand { selection = .home }
         case .tv:
             placeholder(
                 title: "Live TV",
@@ -61,6 +98,7 @@ struct ShellView: View {
                 // `libraryId`, so SwiftUI would otherwise reuse the existing
                 // view/state rather than reloading for the new library.
                 .id(libraryId)
+                .onExitCommand { selection = .home }
         case .wishlist:
             placeholder(
                 title: "My List",
