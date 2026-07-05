@@ -19,7 +19,7 @@
     "tabs": { "categories": "Kategorien", "browse": "Durchsuchen" },
     "seeAll": "Alle anzeigen ({{total}})",
     "back": "Zurück zu den Kategorien",
-    "emptyCategories": "Noch keine Kategorien — Titel erscheinen hier, sobald sie Genre-Informationen haben. Im Tab „Durchsuchen” sehen Sie alles."
+    "emptyCategories": "Noch keine Kategorien — Titel erscheinen hier, sobald sie Genre-Informationen haben. Im Tab „Durchsuchen“ sehen Sie alles."
   },
   "hero": {
     "play": "Abspielen",
