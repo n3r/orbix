@@ -1144,6 +1144,7 @@ git commit -m "feat(web): library rows/items data hooks + tab i18n keys"
 ### Task 8: Web — LibraryPage rework (Categories / Browse / GenreGrid)
 
 **Files:**
+- Create: `apps/web/src/components/library/PosterGrid.tsx` (shared grid + loading/error/empty states)
 - Create: `apps/web/src/components/library/CategoriesTab.tsx`
 - Create: `apps/web/src/components/library/BrowseTab.tsx`
 - Create: `apps/web/src/components/library/GenreGridView.tsx`
@@ -1236,7 +1237,52 @@ describe("LibraryPage", () => {
 Run: `pnpm --filter @orbix/web exec vitest run src/pages/LibraryPage.test.tsx`
 Expected: FAIL (no tabs/rails in the old page).
 
-- [ ] **Step 3: Create the three tab components**
+- [ ] **Step 3: Create the shared grid + three tab components**
+
+```tsx
+// apps/web/src/components/library/PosterGrid.tsx
+import { useTranslation } from "react-i18next";
+import { Skeleton } from "@orbix/ui";
+import PosterCard from "@/components/PosterCard";
+import { ApiError } from "@/lib/api";
+import { errorMessage } from "@/lib/i18n/tError";
+import type { MediaCard } from "@/lib/types";
+
+/** Poster grid with loading skeletons, error and empty states (Browse + genre See-all). */
+export default function PosterGrid({
+  items,
+  isLoading,
+  error,
+}: {
+  items: MediaCard[];
+  isLoading: boolean;
+  error: unknown;
+}) {
+  const { t } = useTranslation();
+  return (
+    <>
+      {error != null && (
+        <p className="mb-4 text-sm text-red-400">
+          {errorMessage(error instanceof ApiError ? error.code : undefined, t)}
+        </p>
+      )}
+      {!isLoading && error == null && items.length === 0 && (
+        <p className="text-[var(--text-dim)]">{t("catalog:browse.empty")}</p>
+      )}
+      <div className="grid grid-cols-3 gap-4 sm:grid-cols-4 md:grid-cols-5 md:gap-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8">
+        {isLoading
+          ? Array.from({ length: 21 }).map((_, i) => (
+              <div key={i} className="flex flex-col gap-2">
+                <Skeleton className="aspect-[2/3] w-full" />
+                <Skeleton className="h-4 w-3/4" rounded="sm" />
+              </div>
+            ))
+          : items.map((item) => <PosterCard key={item.id} item={item} />)}
+      </div>
+    </>
+  );
+}
+```
 
 ```tsx
 // apps/web/src/components/library/CategoriesTab.tsx
@@ -1312,10 +1358,8 @@ export default function CategoriesTab({ libraryId }: { libraryId: string }) {
 // apps/web/src/components/library/BrowseTab.tsx
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Input, Skeleton } from "@orbix/ui";
-import PosterCard from "@/components/PosterCard";
-import { ApiError } from "@/lib/api";
-import { errorMessage } from "@/lib/i18n/tError";
+import { Input } from "@orbix/ui";
+import PosterGrid from "./PosterGrid";
 import { useLibraryItems } from "@/lib/queries";
 
 /** Flat A→Z/А→Я poster grid over the whole library, with title search. */
@@ -1332,26 +1376,7 @@ export default function BrowseTab({ libraryId }: { libraryId: string }) {
         placeholder={t("catalog:browse.searchPlaceholder")}
         className="mb-6 max-w-xs"
       />
-
-      {error && (
-        <p className="mb-4 text-sm text-red-400">
-          {errorMessage(error instanceof ApiError ? error.code : undefined, t)}
-        </p>
-      )}
-      {!isLoading && items.length === 0 && (
-        <p className="text-[var(--text-dim)]">{t("catalog:browse.empty")}</p>
-      )}
-
-      <div className="grid grid-cols-3 gap-4 sm:grid-cols-4 md:grid-cols-5 md:gap-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8">
-        {isLoading
-          ? Array.from({ length: 21 }).map((_, i) => (
-              <div key={i} className="flex flex-col gap-2">
-                <Skeleton className="aspect-[2/3] w-full" />
-                <Skeleton className="h-4 w-3/4" rounded="sm" />
-              </div>
-            ))
-          : items.map((item) => <PosterCard key={item.id} item={item} />)}
-      </div>
+      <PosterGrid items={items} isLoading={isLoading} error={error} />
     </div>
   );
 }
@@ -1361,10 +1386,8 @@ export default function BrowseTab({ libraryId }: { libraryId: string }) {
 // apps/web/src/components/library/GenreGridView.tsx
 import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
-import { cn, focusRing, Skeleton } from "@orbix/ui";
-import PosterCard from "@/components/PosterCard";
-import { ApiError } from "@/lib/api";
-import { errorMessage } from "@/lib/i18n/tError";
+import { cn, focusRing } from "@orbix/ui";
+import PosterGrid from "./PosterGrid";
 import { useLibraryItems, useLibraryRows } from "@/lib/queries";
 
 /** "See all" drill-in for one genre: full grid, rail order (top-rated first). */
@@ -1388,26 +1411,7 @@ export default function GenreGridView({ libraryId, genreId }: { libraryId: strin
         ← {t("catalog:library.back")}
       </Link>
       <h1 className="mb-6 text-3xl font-bold text-[var(--text)]">{row?.title ?? ""}</h1>
-
-      {error && (
-        <p className="mb-4 text-sm text-red-400">
-          {errorMessage(error instanceof ApiError ? error.code : undefined, t)}
-        </p>
-      )}
-      {!isLoading && items.length === 0 && (
-        <p className="text-[var(--text-dim)]">{t("catalog:browse.empty")}</p>
-      )}
-
-      <div className="grid grid-cols-3 gap-4 sm:grid-cols-4 md:grid-cols-5 md:gap-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8">
-        {isLoading
-          ? Array.from({ length: 14 }).map((_, i) => (
-              <div key={i} className="flex flex-col gap-2">
-                <Skeleton className="aspect-[2/3] w-full" />
-                <Skeleton className="h-4 w-3/4" rounded="sm" />
-              </div>
-            ))
-          : items.map((item) => <PosterCard key={item.id} item={item} />)}
-      </div>
+      <PosterGrid items={items} isLoading={isLoading} error={error} />
     </main>
   );
 }
