@@ -706,4 +706,114 @@ final class DTOTests: XCTestCase {
         XCTAssertEqual(card.backdropPath, "/b1.jpg")
         XCTAssertNil(card.matchState)
     }
+
+    // MARK: - TV (Phase 4 Task 1)
+
+    func testDecodeTvHomeRailsAndNowNext() throws {
+        // tv-catalog.ts:167-172 — rails of toCard()+dec() cards; now/next present-or-null.
+        let json = """
+        {"recents":[
+           {"id":"ch1","number":5,"name":"BBC One","country":"UK","categories":["news","general"],
+            "quality":"1080p","logo":"/api/images/channel/ch1.png","healthy":true,"favorite":true,
+            "now":{"title":"News at Six","start":"2026-07-06T17:00:00.000Z","stop":"2026-07-06T17:30:00.000Z"},
+            "next":{"title":"Weather","start":"2026-07-06T17:30:00.000Z","stop":"2026-07-06T17:35:00.000Z"}}],
+         "favorites":[],
+         "countries":[{"code":"UK","channels":[
+           {"id":"ch2","number":6,"name":"ITV","country":"UK","categories":[],"quality":null,
+            "logo":null,"healthy":false,"favorite":false,"now":null,"next":null}]}],
+         "categories":[{"id":"news","channels":[]}]}
+        """.data(using: .utf8)!
+        let home = try JSONDecoder().decode(TvHome.self, from: json)
+        XCTAssertEqual(home.recents.first?.id, "ch1")
+        XCTAssertEqual(home.recents.first?.now?.title, "News at Six")
+        XCTAssertEqual(home.countries.first?.code, "UK")
+        XCTAssertEqual(home.countries.first?.channels.first?.healthy, false)
+        XCTAssertNil(home.countries.first?.channels.first?.now)
+        XCTAssertEqual(home.categories.first?.id, "news")
+    }
+
+    func testDecodeTvGuidePage() throws {
+        // tv-catalog.ts:227 — {total, offset, limit, channels}.
+        let json = """
+        {"total":342,"offset":0,"limit":100,"channels":[
+          {"id":"ch1","number":1,"name":"One","country":"RU","categories":["general"],"quality":"HD",
+           "logo":null,"healthy":true,"favorite":false,"now":null,"next":null}]}
+        """.data(using: .utf8)!
+        let page = try JSONDecoder().decode(TvGuideResponse.self, from: json)
+        XCTAssertEqual(page.total, 342)
+        XCTAssertEqual(page.channels.count, 1)
+    }
+
+    func testDecodeTvGridWindowAndProgrammes() throws {
+        // tv-catalog.ts:301 — {start, hours, total, offset, limit, channels:[{…,programmes}]}.
+        let json = """
+        {"start":"2026-07-06T14:00:00.000Z","hours":4,"total":2,"offset":0,"limit":50,"channels":[
+          {"id":"ch1","number":1,"name":"One","country":"RU","categories":["general"],"quality":null,
+           "logo":null,"healthy":true,"favorite":false,
+           "programmes":[{"id":"p1","title":"Show","start":"2026-07-06T14:30:00.000Z",
+                          "stop":"2026-07-06T15:30:00.000Z","category":"series"}]},
+          {"id":"ch2","number":2,"name":"Two","country":"RU","categories":[],"quality":null,
+           "logo":null,"healthy":true,"favorite":false,"programmes":[]}]}
+        """.data(using: .utf8)!
+        let grid = try JSONDecoder().decode(TvGridResponse.self, from: json)
+        XCTAssertEqual(grid.hours, 4)
+        XCTAssertEqual(grid.channels.first?.programmes.first?.title, "Show")
+        XCTAssertEqual(grid.channels.last?.programmes.count, 0)
+    }
+
+    func testDecodeTvChannelDetailStreamsProtocolKeyword() throws {
+        // tv-catalog.ts:339-363 — note the `protocol` JSON key → backticked Swift prop.
+        let json = """
+        {"id":"ch1","number":5,"name":"BBC One","rawName":"BBC ONE HD","country":"UK",
+         "languages":["eng"],"categories":["news"],"website":"https://bbc.co.uk","epgId":"bbc1",
+         "quality":"1080p","logo":"/api/images/channel/ch1.png","healthy":true,"favorite":true,
+         "streams":[{"id":"st1","quality":"1080p","label":"Main","protocol":"hls","status":"ok","priority":0},
+                    {"id":"st2","quality":null,"label":null,"protocol":"hls","status":"degraded","priority":1}]}
+        """.data(using: .utf8)!
+        let ch = try JSONDecoder().decode(TvChannelDetail.self, from: json)
+        XCTAssertEqual(ch.languages, ["eng"])
+        XCTAssertEqual(ch.streams.first?.`protocol`, "hls")
+        XCTAssertEqual(ch.streams.last?.status, "degraded")
+        XCTAssertEqual(ch.streams.first?.priority, 0)
+    }
+
+    func testDecodeTvProgrammesDaySchedule() throws {
+        let json = """
+        {"programmes":[
+          {"id":"p1","start":"2026-07-06T06:00:00.000Z","stop":"2026-07-06T07:00:00.000Z",
+           "title":"Breakfast","description":"Morning news","category":"news"},
+          {"id":"p2","start":"2026-07-06T07:00:00.000Z","stop":"2026-07-06T08:00:00.000Z",
+           "title":"Cartoons","description":null,"category":null}]}
+        """.data(using: .utf8)!
+        let res = try JSONDecoder().decode(TvProgrammesResponse.self, from: json)
+        XCTAssertEqual(res.programmes.count, 2)
+        XCTAssertNil(res.programmes.last?.description)
+    }
+
+    func testDecodeTvPlayResponseTokenedSources() throws {
+        // tv-play.ts:137-153 — bearer request carries ?token= on each src.
+        let json = """
+        {"channel":{"id":"ch1","number":5,"name":"One","logo":null,"country":"RU","quality":"1080p"},
+         "nowNext":{"now":{"title":"Live","start":"2026-07-06T17:00:00.000Z","stop":"2026-07-06T18:00:00.000Z"},"next":null},
+         "sources":[
+           {"streamId":"st1","src":"/api/tv/proxy/st1/index.m3u8?token=orb_x","quality":"1080p","label":"Main"},
+           {"streamId":"st2","src":"/api/tv/proxy/st2/index.m3u8?token=orb_x","quality":"720p","label":null}]}
+        """.data(using: .utf8)!
+        let play = try JSONDecoder().decode(TvPlayResponse.self, from: json)
+        XCTAssertEqual(play.channel.number, 5)
+        XCTAssertEqual(play.sources.count, 2)
+        XCTAssertTrue(play.sources[0].src.contains("token=orb_x"))
+        XCTAssertEqual(play.nowNext.now?.title, "Live")
+    }
+
+    func testDecodeTvFavoritesEnvelopeWithoutNowNext() throws {
+        // tv-catalog.ts:447-449 — plain toCard(), no now/next keys at all → decode to nil.
+        let json = """
+        {"favorites":[{"id":"ch1","number":5,"name":"One","country":"UK","categories":["news"],
+          "quality":"HD","logo":null,"healthy":true,"favorite":true}]}
+        """.data(using: .utf8)!
+        let res = try JSONDecoder().decode(TvFavoritesResponse.self, from: json)
+        XCTAssertEqual(res.favorites.first?.id, "ch1")
+        XCTAssertNil(res.favorites.first?.now) // absent key decodes to nil (decode-safe)
+    }
 }

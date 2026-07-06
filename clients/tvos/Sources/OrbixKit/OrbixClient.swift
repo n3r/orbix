@@ -307,6 +307,143 @@ public actor OrbixClient {
         _ = try? await perform(method: "POST", url: baseURL.appending(path: "api/playback/\(playSessionId)/stop"))
     }
 
+    // MARK: - Live TV
+
+    /// `GET /api/tv/home` (see `apps/api/src/routes/tv-catalog.ts:74-173`) —
+    /// recents/favorites/country/category rails, each card decorated with
+    /// now/next.
+    public func tvHome() async throws -> TvHome {
+        try await send(method: "GET", url: baseURL.appending(path: "api/tv/home"))
+    }
+
+    /// `GET /api/tv/guide` (see `tv-catalog.ts:185-227`) — an offset-paged
+    /// channel list. Every query param is omitted from the wire when absent
+    /// (`nil`/`false`/empty), matching the route's own optional-querystring
+    /// handling; `favorites` is only ever sent as `"true"` (never `"false"`),
+    /// same convention as the web client's guide query builder.
+    public func tvGuide(
+        country: String? = nil,
+        category: String? = nil,
+        favorites: Bool = false,
+        q: String? = nil,
+        offset: Int? = nil,
+        limit: Int? = nil
+    ) async throws -> TvGuideResponse {
+        var queryItems: [URLQueryItem] = []
+        if let country, !country.isEmpty { queryItems.append(URLQueryItem(name: "country", value: country)) }
+        if let category, !category.isEmpty { queryItems.append(URLQueryItem(name: "category", value: category)) }
+        if favorites { queryItems.append(URLQueryItem(name: "favorites", value: "true")) }
+        if let q, !q.isEmpty { queryItems.append(URLQueryItem(name: "q", value: q)) }
+        if let offset { queryItems.append(URLQueryItem(name: "offset", value: String(offset))) }
+        if let limit { queryItems.append(URLQueryItem(name: "limit", value: String(limit))) }
+        var url = baseURL.appending(path: "api/tv/guide")
+        if !queryItems.isEmpty { url = url.appending(queryItems: queryItems) }
+        return try await send(method: "GET", url: url)
+    }
+
+    /// `GET /api/tv/grid` (see `tv-catalog.ts:243-302`) — an offset-paged
+    /// channel list windowed to `[start, start + hours)`, each row carrying
+    /// its own `programmes` instead of now/next. `start` is an ISO-8601
+    /// string (the route parses it with `new Date(...)`, 400ing on a
+    /// malformed value); `hours` is clamped server-side
+    /// (`GRID_HOURS_MIN`/`MAX`) but sent as-is here. Every other param
+    /// follows `tvGuide`'s omit-when-nil/false/empty convention.
+    public func tvGrid(
+        start: String? = nil,
+        hours: Int? = nil,
+        country: String? = nil,
+        category: String? = nil,
+        favorites: Bool = false,
+        q: String? = nil,
+        offset: Int? = nil,
+        limit: Int? = nil
+    ) async throws -> TvGridResponse {
+        var queryItems: [URLQueryItem] = []
+        if let start, !start.isEmpty { queryItems.append(URLQueryItem(name: "start", value: start)) }
+        if let hours { queryItems.append(URLQueryItem(name: "hours", value: String(hours))) }
+        if let country, !country.isEmpty { queryItems.append(URLQueryItem(name: "country", value: country)) }
+        if let category, !category.isEmpty { queryItems.append(URLQueryItem(name: "category", value: category)) }
+        if favorites { queryItems.append(URLQueryItem(name: "favorites", value: "true")) }
+        if let q, !q.isEmpty { queryItems.append(URLQueryItem(name: "q", value: q)) }
+        if let offset { queryItems.append(URLQueryItem(name: "offset", value: String(offset))) }
+        if let limit { queryItems.append(URLQueryItem(name: "limit", value: String(limit))) }
+        var url = baseURL.appending(path: "api/tv/grid")
+        if !queryItems.isEmpty { url = url.appending(queryItems: queryItems) }
+        return try await send(method: "GET", url: url)
+    }
+
+    /// `GET /api/tv/channels/:id` (see `tv-catalog.ts:305-364`) — full
+    /// channel detail incl. ordered `streams`. 404s on a missing/hidden
+    /// channel (surfaced as `OrbixError.http(404)`).
+    public func tvChannel(id: String) async throws -> TvChannelDetail {
+        try await send(method: "GET", url: baseURL.appending(path: "api/tv/channels/\(id)"))
+    }
+
+    /// `GET /api/tv/channels/:id/programmes?day=YYYY-MM-DD` (see
+    /// `tv-catalog.ts:368-398`) — that (UTC) day's schedule, defaulting
+    /// server-side to the current UTC day when `day` is omitted. Unwrapped
+    /// to the bare array from the `{programmes: [...]}` envelope, same
+    /// convention as `menu()`/`similar(id:)`.
+    public func tvProgrammes(id: String, day: String? = nil) async throws -> [TvProgramme] {
+        var url = baseURL.appending(path: "api/tv/channels/\(id)/programmes")
+        if let day, !day.isEmpty { url = url.appending(queryItems: [URLQueryItem(name: "day", value: day)]) }
+        let response: TvProgrammesResponse = try await send(method: "GET", url: url)
+        return response.programmes
+    }
+
+    /// `GET /api/tv/channels/:id/play` (see `tv-play.ts:103-155`) — the tune
+    /// negotiation: channel summary, now/next, and up to 3 ordered proxied
+    /// sources. **409** `{error:"no_playable_stream"}` when the channel has
+    /// no ordered stream; **404** when missing/hidden.
+    public func tvChannelPlay(id: String) async throws -> TvPlayResponse {
+        try await send(method: "GET", url: baseURL.appending(path: "api/tv/channels/\(id)/play"))
+    }
+
+    /// `GET /api/tv/favorites` (see `tv-catalog.ts:438-450`) — the active
+    /// profile's favorite channels, position-ordered, **without** now/next
+    /// (plain `toCard()`, no `dec`). Unwrapped to the bare array from the
+    /// `{favorites: [...]}` envelope, same convention as `menu()`.
+    /// `{favorites: []}` when no profile is active.
+    public func tvFavorites() async throws -> [TvChannelCard] {
+        let response: TvFavoritesResponse = try await send(method: "GET", url: baseURL.appending(path: "api/tv/favorites"))
+        return response.favorites
+    }
+
+    /// `PUT /api/tv/favorites/:channelId` (add) or `DELETE` (remove) —
+    /// idempotent per the handler (`tv-catalog.ts:403-435`); `DELETE`
+    /// responds **204** with no body, which `perform` tolerates since it
+    /// never attempts to decode the response data. Throws so the UI's
+    /// optimistic favorite toggle can revert on failure (same shape as
+    /// `addToWishlist`/`removeFromWishlist`).
+    public func setTvFavorite(channelId: String, on: Bool) async throws {
+        let url = baseURL.appending(path: "api/tv/favorites/\(channelId)")
+        _ = try await perform(method: on ? "PUT" : "DELETE", url: url)
+    }
+
+    /// `POST /api/tv/events/:channelId` — fire-and-forget tune log (recents
+    /// rail). Best-effort (`async`, not `throws`): the failure is swallowed,
+    /// same as `stopPlayback` — a missed recents write must never disrupt
+    /// tuning.
+    public func postTvEvent(channelId: String) async {
+        _ = try? await perform(method: "POST", url: baseURL.appending(path: "api/tv/events/\(channelId)"))
+    }
+
+    /// `POST /api/tv/streams/:streamId/health` (see `tv-play.ts:273-300`) —
+    /// player health feedback; `code` is the failure reason on `ok == false`.
+    /// Best-effort (`async`, not `throws`), same convention as `postTvEvent`.
+    public func postTvStreamHealth(streamId: String, ok: Bool, code: String? = nil) async {
+        struct Body: Encodable {
+            let ok: Bool
+            let code: String?
+        }
+        let data = try? encodeBody(Body(ok: ok, code: code))
+        _ = try? await perform(
+            method: "POST",
+            url: baseURL.appending(path: "api/tv/streams/\(streamId)/health"),
+            body: data
+        )
+    }
+
     // MARK: - Request plumbing
 
     private func encodeBody<T: Encodable>(_ value: T) throws -> Data {
