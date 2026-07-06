@@ -145,6 +145,18 @@ struct HomeBillboardView: View {
 
     /// Web lines 81-94: Play (primary) + More info (ghost). No hover states —
     /// focus emphasis comes from `OrbixButtonStyle`.
+    ///
+    /// `.focusSection()` here is load-bearing, not decorative: gate-verified
+    /// live (Phase 3 Task 6) that without it, pressing Down from
+    /// `OrbixTopBar` skips this row entirely and drops focus straight into
+    /// the first rail below (`RailView`'s own `.focusSection()` — see its
+    /// doc comment) — the tvOS focus engine's directional search prefers an
+    /// explicit focus section as the next candidate over an unsectioned
+    /// `Button` sitting geometrically closer, so Play/More Info were
+    /// completely unreachable by remote from Home. Once this row is its own
+    /// section, Down from the bar lands here first, and only a second Down
+    /// continues on into the rails, matching how every rail already hands
+    /// off to its neighbor.
     private var buttons: some View {
         HStack(spacing: 20) {
             Button(action: onPlay) {
@@ -159,6 +171,7 @@ struct HomeBillboardView: View {
             .buttonStyle(OrbixButtonStyle(.ghost))
             .accessibilityIdentifier("billboardMoreInfoButton")
         }
+        .focusSection()
     }
 
     /// Web lines 99-102: bordered translucent plate carrying `detail.rating`.
