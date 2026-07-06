@@ -147,6 +147,7 @@ struct LiveTvOverlay: View {
                 }
             }
             .onTapGesture { showOSD() }
+            .accessibilityIdentifier("livePlayerSurface")
     }
 
     // MARK: - Zap OSD
@@ -236,9 +237,11 @@ struct LiveTvOverlay: View {
                 Button("Retry") { controller.retry() }
                     .buttonStyle(OrbixButtonStyle(.primary))
                     .focused($focus, equals: .offlineRetry)
+                    .accessibilityIdentifier("liveOfflineRetry")
                 Button("Next channel") { zap(1) }
                     .buttonStyle(OrbixButtonStyle(.ghost))
                     .focused($focus, equals: .offlineNext)
+                    .accessibilityIdentifier("liveOfflineNext")
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -280,6 +283,7 @@ struct LiveTvOverlay: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .transition(.move(edge: .leading))
+        .accessibilityIdentifier("liveMiniGuide")
     }
 
     private func miniGuideRow(_ channel: TvChannelCard) -> some View {
@@ -309,16 +313,17 @@ struct LiveTvOverlay: View {
         }
         .buttonStyle(MiniGuideRowStyle(isCurrent: channel.id == controller.channelId))
         .focused($focus, equals: .guideRow(channel.id))
+        .accessibilityIdentifier("guideRow_\(channel.id)")
     }
 
     // MARK: - Control cluster + close
 
     private var controlCluster: some View {
         VStack(spacing: 16) {
-            clusterButton(systemName: "chevron.up", target: .chUp) { zap(-1) }
-            clusterButton(systemName: "tv", target: .guide) { guideOpen.toggle() }
-            clusterButton(systemName: "chevron.down", target: .chDown) { zap(1) }
-            clusterButton(systemName: "arrow.uturn.backward", target: .last) { lastChannel() }
+            clusterButton(systemName: "chevron.up", target: .chUp, id: "liveClusterChannelUp") { zap(-1) }
+            clusterButton(systemName: "tv", target: .guide, id: "liveClusterGuide") { guideOpen.toggle() }
+            clusterButton(systemName: "chevron.down", target: .chDown, id: "liveClusterChannelDown") { zap(1) }
+            clusterButton(systemName: "arrow.uturn.backward", target: .last, id: "liveClusterLastChannel") { lastChannel() }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
         .padding(.trailing, 48)
@@ -334,6 +339,7 @@ struct LiveTvOverlay: View {
         .buttonStyle(LiveControlButtonStyle())
         .focused($focus, equals: .close)
         .accessibilityLabel("Close player")
+        .accessibilityIdentifier("liveCloseButton")
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(.leading, 48)
         .padding(.top, 44)
@@ -342,6 +348,7 @@ struct LiveTvOverlay: View {
     private func clusterButton(
         systemName: String,
         target: FocusTarget,
+        id: String,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
@@ -352,6 +359,7 @@ struct LiveTvOverlay: View {
         }
         .buttonStyle(LiveControlButtonStyle())
         .focused($focus, equals: target)
+        .accessibilityIdentifier(id)
     }
 
     // MARK: - Actions

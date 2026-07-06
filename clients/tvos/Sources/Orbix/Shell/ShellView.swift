@@ -79,14 +79,14 @@ import SwiftUI
 ///    `.home`, skipping the pop.) So the pop-vs-go-home decision can't be left
 ///    to implicit priority between an `.onExitCommand` and the stack; it has
 ///    to be made explicitly, using that section's own `path`. `SearchView`,
-///    `LibraryBrowseView`, and `WishlistView` each now take an `onMenuExit: ()
-///    -> Void` and attach their *own* `.onExitCommand` internally: pop
-///    `path.removeLast()` when it's non-empty, else call `onMenuExit` (set to
-///    `{ selection = .home }` below). `.tv`/`.account` (bare
-///    `ContentUnavailableView` placeholders with no `navigationDestination`,
-///    hence no `path` that could ever be non-empty) don't need this — a plain
-///    `.onExitCommand { selection = .home }` on `content`'s case is always
-///    correct for them.
+///    `LibraryBrowseView`, `WishlistView`, and (Phase 4 Task 4) `TvHomeView`
+///    each now take an `onMenuExit: () -> Void` and attach their *own*
+///    `.onExitCommand` internally: pop `path.removeLast()` when it's
+///    non-empty, else call `onMenuExit` (set to `{ selection = .home }`
+///    below). `.account` (still a bare `ContentUnavailableView` placeholder
+///    with no `navigationDestination`, hence no `path` that could ever be
+///    non-empty) doesn't need this — a plain `.onExitCommand { selection =
+///    .home }` on `content`'s case is always correct for it.
 ///
 /// Verified live: Menu from Wishlist's root content → Home; Menu with focus
 /// on the bar at Wishlist → Home (not background); pushing a `TitlePage` from
@@ -143,13 +143,11 @@ struct ShellView: View {
             // `.onExitCommand` attached out here instead.
             SearchView(model: model, onMenuExit: { selection = .home })
         case .tv:
-            placeholder(
-                title: "Live TV",
-                systemImage: "tv",
-                message: "Worldwide channels are coming to the TV app in a later phase.",
-                id: "section_tv"
-            )
-            .onExitCommand { selection = .home }
+            // Pops its own `path` first (only pushed route today is
+            // `TvGuideRoute`), falling to `.home` only once empty — see the
+            // type doc comment for why this can't just be an
+            // `.onExitCommand` attached out here instead.
+            TvHomeView(model: model, onMenuExit: { selection = .home })
         case .category(let libraryId):
             LibraryBrowseView(
                 libraryId: libraryId,
