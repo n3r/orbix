@@ -49,6 +49,7 @@ final class PlaybackController {
     private let client: OrbixClient
     private let baseURL: URL
     private var playSessionId: String?
+    private var isRenegotiating = false
 
     /// Chains progress PUTs so a slow periodic report can never complete
     /// *after* (and clobber) a later one with a stale position — each new
@@ -103,8 +104,10 @@ final class PlaybackController {
 
     /// Web `renegotiate` (`apps/web/src/components/Player.tsx`): switches the
     /// playing stream to a new quality rung and/or audio mode mid-playback.
-    /// Fetches a fresh session at the requested `(quality, audioMode)`, stops
-    /// the *previous* session (releasing its ffmpeg immediately) and re-emits
+    /// Fetches a fresh session at the requested `(quality, audioMode)`, updates
+    /// `playSessionId` and UI state *before* stopping the previous session
+    /// (fire-and-forget, non-blocking) to prevent the periodic progress observer
+    /// from PUTting with a stale session ID during the stop window. Re-emits
     /// `.ready` with the caller-captured position as the resume seek, so the
     /// existing `Coordinator.seekToResumeIfReady` path restores position on the
     /// new stream once its rebuilt `AVPlayerItem` is ready.
@@ -116,26 +119,36 @@ final class PlaybackController {
     /// only `playSessionId` moves forward and every enqueued (and the final
     /// teardown) report targets the newest session.
     ///
+    /// Serialized: concurrent renegotiations are coalesced into a no-op
+    /// (the first in-flight call completes before the next can proceed).
+    ///
     /// A failure is a deliberate no-op: the current session keeps playing
     /// rather than tearing down a working stream. The menu selection reverts on
     /// the next `updateUIViewController` pass because `quality`/`audioMode` are
     /// left unchanged (documented divergence from web, which surfaces an error).
     func renegotiate(quality newQuality: String, audioMode newMode: String, positionSec: Double) async {
         guard newQuality != quality || newMode != audioMode else { return }
+        guard !isRenegotiating else { return }
+        isRenegotiating = true
+        defer { isRenegotiating = false }
+
         let previousSessionId = playSessionId
         do {
             let info = try await client.playbackInfo(
                 fileId: fileId, capabilities: .appleTV, quality: newQuality, audioMode: newMode
             )
             guard let streamURL = URL(string: info.streamUrl, relativeTo: baseURL)?.absoluteURL else { return }
-            if let previousSessionId, previousSessionId != info.playSessionId {
-                await client.stopPlayback(playSessionId: previousSessionId)
-            }
+            // Assign the new session ID and UI state *before* stopping the old session,
+            // so progress reports enqueued during the stop use the new session ID.
             playSessionId = info.playSessionId
             quality = info.quality ?? newQuality
             audioMode = info.audioMode ?? newMode
             qualities = info.qualities ?? qualities
             audioModes = info.audioModes ?? audioModes
+            // Stop the previous session non-blocking (fire-and-forget), mirroring web's behavior.
+            if let previousSessionId, previousSessionId != info.playSessionId {
+                Task { await client.stopPlayback(playSessionId: previousSessionId) }
+            }
             loadState = .ready(streamURL: streamURL, resumeSeconds: max(0, positionSec))
         } catch {
             // no-op — keep the current session playing (see doc comment).
