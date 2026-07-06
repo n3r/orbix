@@ -36,6 +36,16 @@ final class PlaybackController {
 
     private(set) var loadState: LoadState = .loading
 
+    /// The quality/audio-leveling ladder for the *current* session, captured
+    /// from `start()`'s (and later `renegotiate`'s) `playbackInfo` response and
+    /// read by `PlayerScreen` to build the transport-bar Quality/Audio menus.
+    /// Defaults keep the menu inert (a single implicit "source"/"standard"
+    /// entry, so neither submenu is shown) until `start()` fills them in.
+    private(set) var quality: String = "source"
+    private(set) var audioMode: String = "standard"
+    private(set) var qualities: [QualityOption] = []
+    private(set) var audioModes: [AudioModeOption] = []
+
     private let client: OrbixClient
     private let baseURL: URL
     private var playSessionId: String?
@@ -69,6 +79,10 @@ final class PlaybackController {
         do {
             let info = try await client.playbackInfo(fileId: fileId, capabilities: .appleTV)
             playSessionId = info.playSessionId
+            quality = info.quality ?? "source"
+            audioMode = info.audioMode ?? "standard"
+            qualities = info.qualities ?? []
+            audioModes = info.audioModes ?? []
 
             guard let streamURL = URL(string: info.streamUrl, relativeTo: baseURL)?.absoluteURL else {
                 loadState = .error("Couldn't resolve the stream URL.")
@@ -84,6 +98,47 @@ final class PlaybackController {
             loadState = .ready(streamURL: streamURL, resumeSeconds: resumeSeconds)
         } catch {
             loadState = .error("Couldn't start playback: \(error)")
+        }
+    }
+
+    /// Web `renegotiate` (`apps/web/src/components/Player.tsx`): switches the
+    /// playing stream to a new quality rung and/or audio mode mid-playback.
+    /// Fetches a fresh session at the requested `(quality, audioMode)`, stops
+    /// the *previous* session (releasing its ffmpeg immediately) and re-emits
+    /// `.ready` with the caller-captured position as the resume seek, so the
+    /// existing `Coordinator.seekToResumeIfReady` path restores position on the
+    /// new stream once its rebuilt `AVPlayerItem` is ready.
+    ///
+    /// `positionSec` is supplied by the Coordinator, which owns the `AVPlayer`
+    /// — this type never touches it (keeping the split from the doc comment and
+    /// this type independently testable). The same instance's `reportChain`
+    /// carries across the switch untouched: itemId/episodeId are unchanged, so
+    /// only `playSessionId` moves forward and every enqueued (and the final
+    /// teardown) report targets the newest session.
+    ///
+    /// A failure is a deliberate no-op: the current session keeps playing
+    /// rather than tearing down a working stream. The menu selection reverts on
+    /// the next `updateUIViewController` pass because `quality`/`audioMode` are
+    /// left unchanged (documented divergence from web, which surfaces an error).
+    func renegotiate(quality newQuality: String, audioMode newMode: String, positionSec: Double) async {
+        guard newQuality != quality || newMode != audioMode else { return }
+        let previousSessionId = playSessionId
+        do {
+            let info = try await client.playbackInfo(
+                fileId: fileId, capabilities: .appleTV, quality: newQuality, audioMode: newMode
+            )
+            guard let streamURL = URL(string: info.streamUrl, relativeTo: baseURL)?.absoluteURL else { return }
+            if let previousSessionId, previousSessionId != info.playSessionId {
+                await client.stopPlayback(playSessionId: previousSessionId)
+            }
+            playSessionId = info.playSessionId
+            quality = info.quality ?? newQuality
+            audioMode = info.audioMode ?? newMode
+            qualities = info.qualities ?? qualities
+            audioModes = info.audioModes ?? audioModes
+            loadState = .ready(streamURL: streamURL, resumeSeconds: max(0, positionSec))
+        } catch {
+            // no-op — keep the current session playing (see doc comment).
         }
     }
 
