@@ -1,24 +1,34 @@
 import OrbixKit
 import SwiftUI
 
-/// Stub route the header's Guide button pushes onto `TvHomeView`'s own
-/// stack. The full channel-guide destination (grid/list + filters) lands in
-/// Task 5/6 — this task only needs the push target to exist end-to-end (the
-/// button, the route, and the stack wiring), per the brief's "Task-5 bridge"
-/// instruction.
+/// Route the header's Guide button pushes onto `TvHomeView`'s own stack —
+/// destination is the real `TvGuideView` as of Phase 4 Task 5 (previously a
+/// labeled placeholder; see git history for `TvGuidePlaceholderView`).
 struct TvGuideRoute: Hashable {}
 
-/// Placeholder pushed for `TvGuideRoute` today — replaced by the real
-/// `TvGuideView` in a later task without touching `TvHomeView`'s header
-/// button or navigation wiring.
-private struct TvGuidePlaceholderView: View {
+/// Route a guide row's info action pushes onto the same shared stack (see
+/// `TvGuideView.row`'s `.contextMenu`). The full channel/schedule page lands
+/// in Task 7 — this task only needs the push target to exist end-to-end (the
+/// route type, the push, and a small labeled placeholder destination), per
+/// that task's own "Task-7 bridge" instruction — mirrors exactly how
+/// `TvGuideRoute` itself was bridged in Task 4.
+struct TvChannelRoute: Hashable {
+    let channelId: String
+}
+
+/// Placeholder pushed for `TvChannelRoute` today — replaced by the real
+/// channel/schedule page in Task 7 without touching `TvGuideView`'s info
+/// action or the stack wiring here.
+private struct TvChannelPlaceholderView: View {
+    let channelId: String
+
     var body: some View {
         ContentUnavailableView {
-            Label("Guide", systemImage: "list.and.film")
+            Label("Channel", systemImage: "tv")
         } description: {
-            Text("The full channel guide is coming in a later phase.")
+            Text("The channel page is coming in a later phase.")
         }
-        .accessibilityIdentifier("tvGuidePlaceholder")
+        .accessibilityIdentifier("tvChannelPlaceholder")
     }
 }
 
@@ -29,13 +39,15 @@ private struct TvGuidePlaceholderView: View {
 /// only when non-empty (web lines 96-125); a channel select opens
 /// `LiveTvOverlay` full-screen with that rail's own list as the zap context.
 ///
-/// Owns its own `NavigationStack` (today's only pushed route is
-/// `TvGuideRoute`, the header Guide button's bridge) and the same Menu-walk
-/// `onMenuExit` idiom every other hub section takes (`LibraryBrowseView`/
-/// `WishlistView`/`SearchView`): pop this view's own `path` one level per
-/// Menu press before ever falling through to `onMenuExit` — see
-/// `ShellView`'s type doc comment for why that decision has to be made here
-/// rather than via an outer `.onExitCommand`.
+/// Owns its own `NavigationStack`, shared (via its `path` binding) with
+/// everything the header Guide button and its descendants push:
+/// `TvGuideRoute` → the real `TvGuideView` (Task 5), whose own info action
+/// pushes `TvChannelRoute` (still a Task-7 bridge placeholder) onto this
+/// same stack. Also takes the same Menu-walk `onMenuExit` idiom every other
+/// hub section takes (`LibraryBrowseView`/`WishlistView`/`SearchView`): pop
+/// this view's own `path` one level per Menu press before ever falling
+/// through to `onMenuExit` — see `ShellView`'s type doc comment for why that
+/// decision has to be made here rather than via an outer `.onExitCommand`.
 struct TvHomeView: View {
     let model: AppModel
 
@@ -62,7 +74,10 @@ struct TvHomeView: View {
                 }
             }
             .navigationDestination(for: TvGuideRoute.self) { _ in
-                TvGuidePlaceholderView()
+                TvGuideView(model: model, path: $path)
+            }
+            .navigationDestination(for: TvChannelRoute.self) { route in
+                TvChannelPlaceholderView(channelId: route.channelId)
             }
         }
         .onExitCommand {
@@ -123,8 +138,8 @@ struct TvHomeView: View {
                 .accessibilityIdentifier("tvHomeHeading")
             Spacer()
             // Web's visible Guide affordance (`TvHomePage.tsx` lines 86-90,
-            // "the Hulu lesson"); destination is `TvGuidePlaceholderView`
-            // until the real guide screen lands.
+            // "the Hulu lesson"); destination is the real `TvGuideView`
+            // (Phase 4 Task 5).
             Button("Guide") { path.append(TvGuideRoute()) }
                 .buttonStyle(OrbixButtonStyle(.ghost))
                 .accessibilityIdentifier("tvGuideButton")
