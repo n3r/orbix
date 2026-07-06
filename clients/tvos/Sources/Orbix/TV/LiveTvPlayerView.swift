@@ -22,13 +22,34 @@ import UIKit
 /// re-read state from the coordinator's stored (weak) player/item refs, so
 /// there is never a non-`Sendable` AVFoundation value crossing an actor
 /// boundary. Signals wired to the controller:
-/// - `AVPlayerItem.status == .failed` (KVO) → `playbackFailed(code:)`.
-/// - `AVPlayerItemFailedToPlayToEndTime` (Notification) → `playbackFailed`.
+/// - `AVPlayerItem.status == .failed` (KVO) → `reportFailure(code:)`.
+/// - `AVPlayerItemFailedToPlayToEndTime` (Notification) → `reportFailure(code:)`.
 /// - `AVPlayer.timeControlStatus == .playing` (KVO) → `playbackStarted()`.
 ///   `.playing` is AVPlayer's "actually rendering frames" signal — the most
 ///   reliable first-frame proxy — and `playbackStarted()` is idempotent
 ///   (cancels the watchdog; schedules the 30 s health-ok once), so repeated
 ///   `.playing` transitions are harmless.
+///
+/// `reportFailure` — not the two observers directly — is what calls
+/// `controller.playbackFailed(code:)`, and it forwards **at most once per
+/// `AVPlayerItem`** (see `failureReported`). AVPlayer can raise both the KVO
+/// `.failed` status *and* the `AVPlayerItemFailedToPlayToEndTime` notification
+/// for the same underlying error; without this guard the controller would see
+/// two `playbackFailed` calls before the first one's in-place reload actually
+/// rebuilds the item (the reload only takes effect on the *next*
+/// `rebuildIfNeeded`, since `LiveTvController` mutates `@Observable` state that
+/// SwiftUI re-renders asynchronously), so the second, stale call would find
+/// `reloadedOnce` already `true` and immediately — and wrongly — advance past
+/// a source that never actually failed twice, burning the "retry once" rung.
+/// Deduping here (rather than with a generation counter on the controller) is
+/// deliberate: `LiveTvController.emitPlaying()` bumps `playGeneration`
+/// *synchronously* inside the first `playbackFailed` call, before the second,
+/// already-in-flight signal is processed, so a "generation I last handled" flag
+/// read from the controller would already see the bumped generation and treat
+/// the stale second call as new. The dedup instead has to live where the two
+/// duplicate signals actually originate — this coordinator, scoped to one
+/// concrete `AVPlayerItem` instance — and is reset only when `rebuildIfNeeded`
+/// wires up a genuinely new item.
 /// Every observer is torn down in `dismantleUIViewController` (the one hook
 /// guaranteed to fire) so no observer leaks the player graph.
 struct LiveTvPlayerView: UIViewControllerRepresentable {
@@ -69,6 +90,12 @@ struct LiveTvPlayerView: UIViewControllerRepresentable {
         private var timeControlObservation: NSKeyValueObservation?
         private var failedToEndObserver: NSObjectProtocol?
 
+        /// Set once `reportFailure` has forwarded a failure for the current
+        /// item; reset to `false` on every new item in `rebuildIfNeeded`. See
+        /// the type-level doc comment for why the dedup lives here and not on
+        /// `LiveTvController`.
+        private var failureReported = false
+
         init(controller: LiveTvController) {
             self.controller = controller
         }
@@ -80,6 +107,7 @@ struct LiveTvPlayerView: UIViewControllerRepresentable {
             guard currentGeneration != generation else { return }
             currentGeneration = generation
             detachObservers()
+            failureReported = false
 
             let item = AVPlayerItem(url: url)
             observedPlayer = player
@@ -97,7 +125,7 @@ struct LiveTvPlayerView: UIViewControllerRepresentable {
                 queue: .main
             ) { [weak self] _ in
                 Task { @MainActor [weak self] in
-                    self?.controller.playbackFailed(code: "failed_to_play_to_end")
+                    self?.reportFailure(code: "failed_to_play_to_end")
                 }
             }
 
@@ -114,12 +142,20 @@ struct LiveTvPlayerView: UIViewControllerRepresentable {
 
         private func handleItemStatus() {
             guard observedItem?.status == .failed else { return }
-            controller.playbackFailed(code: "item_failed")
+            reportFailure(code: "item_failed")
         }
 
         private func handleTimeControlStatus() {
             guard observedPlayer?.timeControlStatus == .playing else { return }
             controller.playbackStarted()
+        }
+
+        /// Forwards to `controller.playbackFailed(code:)` at most once per
+        /// `AVPlayerItem` — see `failureReported`.
+        private func reportFailure(code: String) {
+            guard !failureReported else { return }
+            failureReported = true
+            controller.playbackFailed(code: code)
         }
 
         private func detachObservers() {

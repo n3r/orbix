@@ -9,7 +9,11 @@ import SwiftUI
 /// ordered sources), drives the multi-source **failover ladder**, reports
 /// per-source health, and tracks offline/exhaustion — and it **never touches
 /// `AVPlayer`**. The `LiveTvPlayerView` coordinator observes the player and
-/// calls `playbackFailed(code:)` / `playbackStarted()` back into here.
+/// calls `playbackFailed(code:)` / `playbackStarted()` back into here — deduped
+/// to at most one `playbackFailed` per real failure (see the coordinator's
+/// `reportFailure`), so this controller can assume every call it receives
+/// (bar the watchdog, which is its own distinct failure source) represents a
+/// genuinely new event and is safe to advance the ladder on unconditionally.
 ///
 /// ## Failover ladder (AVPlayer-adapted)
 /// hls.js's NETWORK-vs-MEDIA distinction has no AVPlayer analogue, so the web
@@ -86,9 +90,9 @@ final class LiveTvController {
         return URL(string: src, relativeTo: baseURL)?.absoluteURL
     }
 
-    /// Tune a channel: log the event (fire-and-forget), fetch ordered sources,
-    /// start from source 0. A 409/404/network, empty sources, or no client →
-    /// offline.
+    /// Tune a channel: log the event (fire-and-forget, not awaited — see
+    /// below), fetch ordered sources, start from source 0. A 409/404/network,
+    /// empty sources, or no client → offline.
     func tune(to id: String) async {
         cancelTimers()
         channelId = id
@@ -100,7 +104,10 @@ final class LiveTvController {
         loadState = .loading
 
         guard let client else { loadState = .offline; return }
-        await client.postTvEvent(channelId: id)
+        // Fire-and-forget: the watch-event log must not delay the zap. Spawned
+        // as its own Task rather than `await`ed so `tvChannelPlay` below starts
+        // immediately instead of serializing behind the log request.
+        Task { await client.postTvEvent(channelId: id) }
         do {
             let p = try await client.tvChannelPlay(id: id)
             guard channelId == id else { return } // superseded by a newer tune
@@ -123,11 +130,23 @@ final class LiveTvController {
     /// AVPlayer reported a fatal failure for the current source (item `.failed`,
     /// failed-to-play-to-end, or the watchdog). Web ladder → one in-place
     /// reload, then advance to the next source; every *advanced-past* source
-    /// reports `ok:false`.
+    /// reports `ok:false`. The `LiveTvPlayerView.Coordinator` collapses the
+    /// KVO `.failed` signal and the `AVPlayerItemFailedToPlayToEndTime`
+    /// notification for one underlying error into a single call here (see its
+    /// `reportFailure`), so this ladder logic runs at most once per real
+    /// failure and never double-consumes the retry-once rung.
     func playbackFailed(code: String) {
         guard let play, let src = currentSource else { return }
         if !reloadedOnce {
             reloadedOnce = true
+            // Cancel any in-flight 30 s health-ok timer and un-mark this
+            // source as reported — a mid-flight reload means playback wasn't
+            // actually stable, so the health clock must restart from the
+            // *reconnected* start (mirrors the web's timer clear on reconnect)
+            // rather than keep counting from the original, now-invalid start.
+            healthTask?.cancel()
+            healthTask = nil
+            reportedOk = false
             showToast("Reconnecting…")             // web tv:player.reconnecting
             emitPlaying()                          // rebuild the AVPlayerItem in place
             startWatchdog()
