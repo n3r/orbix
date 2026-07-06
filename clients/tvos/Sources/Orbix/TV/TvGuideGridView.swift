@@ -268,8 +268,11 @@ struct TvGuideGridView: View {
         VStack(alignment: .leading, spacing: 12) {
             // One horizontal `ScrollView` holds the ruler + every row, so they
             // share its single horizontal offset (see the type doc comment).
-            // The page owns the vertical axis — no vertical `ScrollView` here;
-            // `LazyVStack` lets the page scroll realize rows lazily.
+            // The page owns the vertical axis — no vertical `ScrollView` here.
+            // Rows render EAGERLY: laziness binds to the nearest enclosing
+            // ScrollView (the horizontal one, which never clips vertically),
+            // so vertical virtualization is deliberately traded away — safe
+            // because the response is hard-capped at `channelLimit` (80) rows.
             ScrollView(.horizontal, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
                     ruler(ticks)
