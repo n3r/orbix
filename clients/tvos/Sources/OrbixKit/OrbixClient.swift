@@ -235,12 +235,11 @@ public actor OrbixClient {
     // MARK: - Playback
 
     /// `POST /api/playback/info`. `quality`/`audioMode` are omitted from the wire
-    /// when nil (initial negotiation) so the server picks its defaults; a later
-    /// UI task wires the player's Quality / Audio-leveling menu to pass explicit
-    /// values here to re-negotiate (each choice mints a fresh play session —
-    /// see the web player's `renegotiate` in `apps/web/src/components/Player.tsx`
-    /// for the equivalent flow). `PlaybackController` doesn't call this with
-    /// non-nil values yet — no such menu exists in the tvOS app as of this task.
+    /// when nil (initial negotiation) so the server picks its defaults; the
+    /// player's Quality / Audio-leveling transport menu passes explicit values
+    /// here via `PlaybackController.renegotiate` to switch mid-playback (each
+    /// choice mints a fresh play session — see the web player's `renegotiate`
+    /// in `apps/web/src/components/Player.tsx` for the equivalent flow).
     public func playbackInfo(
         fileId: String,
         capabilities: Capabilities,
