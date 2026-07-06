@@ -46,20 +46,52 @@ import SwiftUI
 ///
 /// Hiding the bar for `.search` removes it (and the "down press drops from
 /// bar into content" focus handoff) from the hierarchy entirely, so that
-/// section's content gets an explicit `.onExitCommand` that sends
-/// `selection` back to `.home` — the tvOS Menu/Back button's fallback once a
-/// `NavigationStack` has nothing left of its own to pop. Without this, Menu
-/// at `.search`'s stack root would fall through to the system default (exit
-/// to the Home Screen) since there is no bar left to hand focus back to.
-/// `.category` keeps its own `.onExitCommand { selection = .home }` as a
-/// harmless defensive leftover from the bar-hidden era rather than something
-/// newly required — its bar is back, so (like `.tv`/`.wishlist`/`.account`,
-/// which have never had one) Menu at its stack root should already have
-/// somewhere to hand focus back to without it.
-/// Verified live: Menu from the Search landing state returns to the bar (on
-/// Home) rather than backgrounding the app; a `NavigationStack` push (e.g. a
-/// search result's `TitlePage`) still pops one level per Menu press first, as
-/// normal, before this fallback ever fires.
+/// section needs its own Menu/Back fallback back to `.home` too — see
+/// `SearchView`'s `onMenuExit` below for how that's wired now.
+///
+/// **Every non-Home hub section (`.tv`, `.category`, `.wishlist`, `.account`,
+/// `.search`) needs a Menu-walk fallback to `.home`** per spec §6 "Menu
+/// walks: player → page → section root → Home" — at `.home` itself, system
+/// behavior (background) stands, same as always. Two distinct situations
+/// both have to route there, and neither can be solved by one
+/// `.onExitCommand` slapped on an outer ancestor (verified live, the hard
+/// way — see below):
+///
+/// 1. **Menu pressed with focus still on the bar** (`.tv`/`.category`/
+///    `.wishlist`/`.account`, whose bar is visible per `showsTopBar`) —
+///    backgrounds the app if nothing catches it (gate-reproduced against
+///    Wishlist). Fixed by attaching `.onExitCommand { selection = .home }`
+///    directly to `OrbixTopBar` in `body` below — safe there because the bar
+///    has no `NavigationStack` of its own to ever need a Back-pop first.
+///
+/// 2. **Menu pressed with focus already in a section's content** — must pop
+///    that section's own `NavigationStack` one level at a time (e.g. a pushed
+///    `TitlePage`) before ever falling through to `.home`. This is *not* a
+///    matter of attachment position the way situation 1 is: verified live
+///    that **any** `.onExitCommand` anywhere in a `NavigationStack`'s ancestor
+///    chain — even attached immediately adjacent to it, no wrapping view in
+///    between — intercepts Menu unconditionally and disables that stack's own
+///    pop-on-Menu entirely for its whole subtree, at any push depth. (Proof:
+///    `HomeView`'s stack has no `.onExitCommand` anywhere near it, and a
+///    pushed `TitlePage` there pops correctly on the first Menu press; every
+///    section that had one nearby — including the original defensive
+///    `.category`-only handler this replaced — instead jumped straight to
+///    `.home`, skipping the pop.) So the pop-vs-go-home decision can't be left
+///    to implicit priority between an `.onExitCommand` and the stack; it has
+///    to be made explicitly, using that section's own `path`. `SearchView`,
+///    `LibraryBrowseView`, and `WishlistView` each now take an `onMenuExit: ()
+///    -> Void` and attach their *own* `.onExitCommand` internally: pop
+///    `path.removeLast()` when it's non-empty, else call `onMenuExit` (set to
+///    `{ selection = .home }` below). `.tv`/`.account` (bare
+///    `ContentUnavailableView` placeholders with no `navigationDestination`,
+///    hence no `path` that could ever be non-empty) don't need this — a plain
+///    `.onExitCommand { selection = .home }` on `content`'s case is always
+///    correct for them.
+///
+/// Verified live: Menu from Wishlist's root content → Home; Menu with focus
+/// on the bar at Wishlist → Home (not background); pushing a `TitlePage` from
+/// a library grid and pressing Menu pops back to the grid first, and only a
+/// second Menu press at that grid's root returns to `.home`.
 struct ShellView: View {
     let model: AppModel
 
@@ -74,6 +106,12 @@ struct ShellView: View {
 
             if showsTopBar {
                 OrbixTopBar(model: model, selection: $selection, isScrolled: isScrolled)
+                    // Menu-walk fallback for focus still on the bar at a
+                    // non-Home section — see the type doc comment for why
+                    // this needs its own attachment point (separate from
+                    // `sectionContent`'s below) and why it's safe here: the
+                    // bar has no `NavigationStack` of its own to pop first.
+                    .onExitCommand { selection = .home }
             }
         }
         .onChange(of: selection) { _, newValue in
@@ -100,8 +138,10 @@ struct ShellView: View {
         case .home:
             HomeView(model: model, isScrolled: $isScrolled)
         case .search:
-            SearchView(model: model)
-                .onExitCommand { selection = .home }
+            // Pops its own `path` first, falling to `.home` only once empty —
+            // see the type doc comment for why this can't just be an
+            // `.onExitCommand` attached out here instead.
+            SearchView(model: model, onMenuExit: { selection = .home })
         case .tv:
             placeholder(
                 title: "Live TV",
@@ -109,16 +149,21 @@ struct ShellView: View {
                 message: "Worldwide channels are coming to the TV app in a later phase.",
                 id: "section_tv"
             )
+            .onExitCommand { selection = .home }
         case .category(let libraryId):
-            LibraryBrowseView(libraryId: libraryId, libraryName: categoryName(for: libraryId), model: model)
-                // Forces a fresh view + `LibraryModel` when switching between
-                // categories — same enum case, different associated
-                // `libraryId`, so SwiftUI would otherwise reuse the existing
-                // view/state rather than reloading for the new library.
-                .id(libraryId)
-                .onExitCommand { selection = .home }
+            LibraryBrowseView(
+                libraryId: libraryId,
+                libraryName: categoryName(for: libraryId),
+                model: model,
+                onMenuExit: { selection = .home }
+            )
+            // Forces a fresh view + `LibraryModel` when switching between
+            // categories — same enum case, different associated
+            // `libraryId`, so SwiftUI would otherwise reuse the existing
+            // view/state rather than reloading for the new library.
+            .id(libraryId)
         case .wishlist:
-            WishlistView(model: model)
+            WishlistView(model: model, onMenuExit: { selection = .home })
         case .account:
             placeholder(
                 title: "Account",
@@ -126,6 +171,7 @@ struct ShellView: View {
                 message: "Profile and account settings are coming to the TV app in a later phase.",
                 id: "section_account"
             )
+            .onExitCommand { selection = .home }
         }
     }
 

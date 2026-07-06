@@ -31,6 +31,12 @@ import SwiftUI
 struct WishlistView: View {
     let model: AppModel
 
+    /// Called on Menu when this section's own `path` is already empty — see
+    /// `ShellView`'s type doc comment for why the Menu-walk fallback to
+    /// `.home` has to be decided here, against this view's own `path`, rather
+    /// than via an `.onExitCommand` `ShellView` attaches from outside.
+    let onMenuExit: () -> Void
+
     @State private var wishlistModel = WishlistModel()
     @State private var imageLoader = ImageLoader()
     @State private var path = NavigationPath()
@@ -74,6 +80,17 @@ struct WishlistView: View {
             }
             .navigationDestination(for: TitleRoute.self) { route in
                 TitlePage(itemId: route.itemId, model: model, path: $path, autoplay: route.autoplay)
+            }
+        }
+        // Pop one level of `path` per Menu press before ever falling through
+        // to `onMenuExit` — see `ShellView`'s type doc comment for why this
+        // has to be an explicit `path.isEmpty` check here rather than relying
+        // on any implicit priority between this and the stack's own pop.
+        .onExitCommand {
+            if path.isEmpty {
+                onMenuExit()
+            } else {
+                path.removeLast()
             }
         }
     }
@@ -287,5 +304,5 @@ final class WishlistModel {
 }
 
 #Preview {
-    WishlistView(model: AppModel())
+    WishlistView(model: AppModel(), onMenuExit: {})
 }

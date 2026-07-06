@@ -91,9 +91,34 @@ struct BoxArtCard: View {
 
     /// Title + subtitle over a bottom black 0.8→0 gradient (web line 50);
     /// subtitle is the resume label when in-progress, else the year (web
-    /// line 24).
+    /// line 24). Web sizes this plate to its content (`pt-8 pb-2` padding
+    /// around a `flex flex-col` text block, not a fixed height) — a fixed
+    /// `.frame(height: 120)` gradient here read taller than the text needed
+    /// (roughly a third of the whole card even for a single title line).
+    /// Ported the same way: the gradient is the text block's own
+    /// `.background`, so its height is exactly "fade headroom + text content
+    /// + bottom padding" rather than an independent fixed-height overlay —
+    /// `.padding(.top, 32)` is the web's `pt-8` fade headroom (32pt), so a
+    /// one-line title (no subtitle) gets a visibly shorter fade than a
+    /// two-line title+subtitle plate, matching web's content-driven height.
     private var titlePlate: some View {
-        ZStack(alignment: .bottomLeading) {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(card.title)
+                .font(.callout.weight(.medium))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+            if let subtitle {
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.8))
+                    .lineLimit(1)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 32)
+        .padding(.bottom, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
             LinearGradient(
                 stops: [
                     .init(color: .black.opacity(0.8), location: 0),
@@ -102,23 +127,7 @@ struct BoxArtCard: View {
                 startPoint: .bottom,
                 endPoint: .top
             )
-            .frame(height: 120)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(card.title)
-                    .font(.callout.weight(.medium))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                if let subtitle {
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.8))
-                        .lineLimit(1)
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 10)
-        }
+        )
     }
 
     private var subtitle: String? {

@@ -36,6 +36,12 @@ import SwiftUI
 struct SearchView: View {
     let model: AppModel
 
+    /// Called on Menu when this section's own `path` is already empty — see
+    /// `ShellView`'s type doc comment for why the Menu-walk fallback to
+    /// `.home` has to be decided here, against this view's own `path`, rather
+    /// than via an `.onExitCommand` `ShellView` attaches from outside.
+    let onMenuExit: () -> Void
+
     @State private var searchModel = SearchModel()
     @State private var imageLoader = ImageLoader()
     @State private var path = NavigationPath()
@@ -67,6 +73,17 @@ struct SearchView: View {
                 TitlePage(itemId: route.itemId, model: model, path: $path, autoplay: route.autoplay)
             }
         }
+        // Pop one level of `path` per Menu press before ever falling through
+        // to `onMenuExit` — see `ShellView`'s type doc comment for why this
+        // has to be an explicit `path.isEmpty` check here rather than relying
+        // on any implicit priority between this and the stack's own pop.
+        .onExitCommand {
+            if path.isEmpty {
+                onMenuExit()
+            } else {
+                path.removeLast()
+            }
+        }
     }
 
     @ViewBuilder
@@ -76,8 +93,8 @@ struct SearchView: View {
             promptView
         case .firstSearchLoading:
             firstSearchSkeleton
-        case .noResults(let searchedQuery):
-            noResultsView(query: searchedQuery)
+        case .noResults:
+            noResultsView
         case .error(let message):
             errorView(message: message, client: client)
         case .loaded(let items):
@@ -138,7 +155,11 @@ struct SearchView: View {
     /// Purple when the response used embedding-based (semantic) search,
     /// neutral when it fell back to keyword matching — ported from web's
     /// `bg-purple-900/50 text-purple-300` vs. `bg-[var(--surface)]
-    /// text-[var(--text-dim)]` (`SearchPage.tsx` lines 87-93).
+    /// text-[var(--text-dim)]` (`SearchPage.tsx` lines 87-93). The web chip is
+    /// `rounded-full`, not the app-wide `OrbixRadius.chip` corner radius other
+    /// chips (`NewBadge`, `QualityChip`) use — a `Capsule()` background here
+    /// only, matching that one pixel of web parity without touching the
+    /// shared chip radius everywhere else.
     private func modeChip(usedEmbeddings: Bool) -> some View {
         Text(usedEmbeddings ? "Semantic" : "Keyword")
             .font(.caption.bold())
@@ -147,7 +168,7 @@ struct SearchView: View {
             .padding(.vertical, 4)
             .background(
                 usedEmbeddings ? OrbixColor.accent2.opacity(0.22) : OrbixColor.surface,
-                in: RoundedRectangle(cornerRadius: OrbixRadius.chip, style: .continuous)
+                in: Capsule()
             )
             .accessibilityIdentifier("searchModeChip")
     }
@@ -203,13 +224,30 @@ struct SearchView: View {
         .accessibilityIdentifier("searchSkeleton")
     }
 
-    private func noResultsView(query: String) -> some View {
-        ContentUnavailableView(
-            "No results for \"\(query)\"",
-            systemImage: "magnifyingglass",
-            description: Text("Try a different title, genre, or mood.")
-        )
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    /// Web renders the "N results" count + mode-badge header **even when
+    /// `results.length === 0`**, then the empty copy below it
+    /// (`SearchPage.tsx` lines 79-100) — the header never disappears just
+    /// because the count hit zero. This used to route straight to a
+    /// full-screen `ContentUnavailableView` instead, silently dropping that
+    /// header. Reuses `resultsHeader`/`modeChip` exactly like
+    /// `resultsContent` does, with `count: 0`, followed by the web's actual
+    /// empty-state copy (`search:empty` / `search:emptyHint`) rather than a
+    /// query-specific message the web never shows.
+    private var noResultsView: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            resultsHeader(count: 0, usedEmbeddings: searchModel.usedEmbeddings)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("No results found.")
+                    .foregroundStyle(OrbixColor.text)
+                Text("Try a different title, or a broader search.")
+                    .font(.callout)
+                    .foregroundStyle(OrbixColor.textDim)
+            }
+        }
+        .padding(.horizontal, 64)
+        .padding(.vertical, 32)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityIdentifier("searchNoResultsState")
     }
 
@@ -389,5 +427,5 @@ final class SearchModel {
 }
 
 #Preview {
-    SearchView(model: AppModel())
+    SearchView(model: AppModel(), onMenuExit: {})
 }
