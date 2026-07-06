@@ -615,47 +615,62 @@ final class TvGuideModel {
         }
     }
 
-    /// The view's initial `.task` and the error state's Retry button:
-    /// fetches page 0, cancelling any pending fetch first and joining the
-    /// started `Task` (the `LibraryModel`/`WishlistModel` `load()`-joins-
-    /// `pendingTask` fix: awaiting `task.value` here, not just firing it,
-    /// so a caller that `await`s `load` observes the *settled* state, not a
-    /// still-`isLoading` snapshot taken the instant before the fetch
-    /// actually starts).
-    func load(client: OrbixClient, filter: GuideFilter, query: String) async {
+    /// Shared cancel-previous/bump-generation/reset-flags/launch-fetch
+    /// plumbing behind `load`, `queryChanged`, and `filterChanged` — those
+    /// three used to each hand-roll an identical block and differed only in
+    /// (a) whether they debounce before actually fetching (`queryChanged`
+    /// alone, ~300ms — a discrete chip press or a programmatic `load()`
+    /// reset skips straight to the fetch, `debounceNs: nil`) and (b) whether
+    /// the caller needs to observe the *settled* result: `load()` alone
+    /// `await`s the returned `Task`'s `.value` (the `LibraryModel`/
+    /// `WishlistModel` `load()`-joins-`pendingTask` fix — so a caller that
+    /// awaits it sees post-fetch state, not a still-`isLoading` snapshot
+    /// taken the instant before the fetch starts); `queryChanged`/
+    /// `filterChanged` are driven from a synchronous `.onChange` closure and
+    /// are necessarily fire-and-forget.
+    @discardableResult
+    private func restartLoad(
+        client: OrbixClient,
+        filter: GuideFilter,
+        query: String,
+        debounceNs: UInt64?
+    ) -> Task<Void, Never> {
         pendingTask?.cancel()
         requestId += 1
         let id = requestId
+        isLoading = true
+        loadError = nil
         let task = Task { [weak self] in
+            if let debounceNs {
+                do {
+                    try await Task.sleep(nanoseconds: debounceNs)
+                } catch {
+                    return // cancelled before the debounce elapsed
+                }
+            }
             guard let self, !Task.isCancelled else { return }
             await self.performLoad(client: client, filter: filter, query: query, offset: 0, requestId: id)
         }
-        isLoading = true
-        loadError = nil
         pendingTask = task
+        return task
+    }
+
+    /// The view's initial `.task` and the error state's Retry button:
+    /// fetches page 0 via `restartLoad`, immediately (no debounce), and
+    /// joins the started `Task` so a caller that `await`s `load` observes
+    /// the settled state.
+    func load(client: OrbixClient, filter: GuideFilter, query: String) async {
+        let task = restartLoad(client: client, filter: filter, query: query, debounceNs: nil)
         await task.value
     }
 
     /// `TvGuideView`'s `.onChange(of: query)` — once per keystroke on the
-    /// system keyboard. Cancels any pending debounce/fetch, then restarts a
-    /// fresh `debounceNanoseconds` timer before actually resetting to page 0
-    /// (the `SearchModel.queryChanged`/`LibraryModel.queryChanged`
+    /// system keyboard. Restarts through the shared `debounceNanoseconds`
+    /// timer before actually resetting to page 0 (the
+    /// `SearchModel.queryChanged`/`LibraryModel.queryChanged`
     /// cancel-previous idiom, verbatim).
     func queryChanged(_ text: String, client: OrbixClient, filter: GuideFilter) {
-        pendingTask?.cancel()
-        requestId += 1
-        let id = requestId
-        isLoading = true
-        loadError = nil
-        pendingTask = Task { [weak self] in
-            do {
-                try await Task.sleep(nanoseconds: Self.debounceNanoseconds)
-            } catch {
-                return // cancelled before the debounce elapsed
-            }
-            guard let self, !Task.isCancelled else { return }
-            await self.performLoad(client: client, filter: filter, query: text, offset: 0, requestId: id)
-        }
+        restartLoad(client: client, filter: filter, query: text, debounceNs: Self.debounceNanoseconds)
     }
 
     /// `TvGuideView`'s `.onChange(of: filter)` — a discrete chip press, not
@@ -664,15 +679,7 @@ final class TvGuideModel {
     /// precedent) so a slow in-flight fetch for a stale filter can never
     /// clobber a newer one.
     func filterChanged(to filter: GuideFilter, client: OrbixClient, query: String) {
-        pendingTask?.cancel()
-        requestId += 1
-        let id = requestId
-        isLoading = true
-        loadError = nil
-        pendingTask = Task { [weak self] in
-            guard let self, !Task.isCancelled else { return }
-            await self.performLoad(client: client, filter: filter, query: query, offset: 0, requestId: id)
-        }
+        restartLoad(client: client, filter: filter, query: query, debounceNs: nil)
     }
 
     /// The tail row's `.onAppear` — fetches the next 100 and appends. Not
@@ -690,7 +697,50 @@ final class TvGuideModel {
         }
     }
 
+    /// Runs one fetch — a page-0 reset (`load`/`queryChanged`/
+    /// `filterChanged`, via `restartLoad`) or a page-N append (`loadMore`) —
+    /// and reconciles it against the model's current generation.
+    ///
+    /// **Data correctness:** a response is applied to
+    /// `channels`/`total`/`loadError` only if `id == requestId`, i.e. no
+    /// newer reset has fired since this fetch was launched. A stale page-0
+    /// response is fully discarded; a stale page-N response is simply never
+    /// appended, leaving whatever's already on screen untouched.
+    ///
+    /// **Liveness (the bug this `defer` fixes):** regardless of staleness,
+    /// this call's own paging flag and `hasLoaded` are *always* cleared on
+    /// exit, on every path — success, failure, or an early `guard id ==
+    /// requestId else { return }` above. Before this fix those returns
+    /// skipped the trailing reset lines entirely, so a superseded
+    /// `loadMore` (offset != 0) left `isLoadingMore` stuck at `true`
+    /// forever, and `loadMore()`'s own `guard !isLoadingMore` then silently
+    /// blocked every future page fetch.
+    ///
+    /// `isLoadingMore` is therefore reset **unconditionally** — a stale
+    /// page-N completion must release it or pagination wedges forever, and
+    /// there is no "later completion" that would otherwise do it, since
+    /// `loadMore` isn't routed through `pendingTask`/cancellation.
+    ///
+    /// `isLoading` (offset == 0 only) is the one asymmetric case: it's only
+    /// cleared when `id == requestId`, i.e. by whichever page-0 request
+    /// turns out to be the *latest* one to finish. A stale page-0 completion
+    /// must NOT clear it out from under a newer page-0 request that's still
+    /// in flight — that newer request already set `isLoading = true` when
+    /// `restartLoad` started it, and it alone (or a still-newer one after
+    /// it) is responsible for eventually turning it back off. Since every
+    /// reset bumps `requestId` before launching its fetch, exactly one
+    /// in-flight page-0 request is ever "current" at a time, so this always
+    /// terminates: whichever request is truly last to be started is
+    /// guaranteed to see `id == requestId` when it completes.
     private func performLoad(client: OrbixClient, filter: GuideFilter, query: String, offset: Int, requestId id: Int) async {
+        defer {
+            if offset == 0 {
+                if id == requestId { isLoading = false }
+            } else {
+                isLoadingMore = false
+            }
+            hasLoaded = true
+        }
         do {
             let response = try await fetch(client: client, filter: filter, query: query, offset: offset)
             // A newer reset (load/queryChanged/filterChanged) may have
@@ -712,15 +762,10 @@ final class TvGuideModel {
                 channels = []
             }
             // A failed page-2+ fetch is silent: the already-loaded channels
-            // stay on screen; `isLoadingMore` still clears below so the tail
-            // row's `.onAppear` can retry on next scroll-to-tail.
+            // stay on screen; `isLoadingMore` still clears (see the `defer`
+            // above) so the tail row's `.onAppear` can retry on next
+            // scroll-to-tail.
         }
-        if offset == 0 {
-            isLoading = false
-        } else {
-            isLoadingMore = false
-        }
-        hasLoaded = true
     }
 
     private func fetch(client: OrbixClient, filter: GuideFilter, query: String, offset: Int) async throws -> TvGuideResponse {
