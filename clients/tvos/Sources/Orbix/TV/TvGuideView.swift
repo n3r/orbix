@@ -28,9 +28,10 @@ enum GuideFilter: Hashable {
 /// toggle), an on-page search field, a horizontal filter-chip row (All /
 /// Favorites / per-country / per-category, facets derived client-side from
 /// the unfiltered first page), and the **LIST** view: a virtualized-in-spirit
-/// `LazyVStack` of rows with offset paging. The **GRID** toggle only renders
-/// a labeled placeholder this task — the real EPG grid lands in Task 6 (see
-/// `gridPlaceholder`).
+/// `LazyVStack` of rows with offset paging. The **GRID** toggle renders
+/// `TvGuideGridView` — the Task-6 TiviMate-style time×channel EPG grid — with
+/// the shared filter/query and a tune handler that bridges the grid's channels
+/// to the zap context (see `bridgeToCard`).
 ///
 /// Pushed onto **`TvHomeView`'s own `NavigationStack`**, not a stack of its
 /// own — `TvHomeView` passes its `path` binding through so this screen's
@@ -159,7 +160,17 @@ struct TvGuideView: View {
                     filterChipsRow
 
                     if view == .grid {
-                        gridPlaceholder
+                        TvGuideGridView(
+                            model: model,
+                            filter: filter,
+                            query: query,
+                            onTune: { gridChannels, id in
+                                liveContext = LivePlayContext(
+                                    channels: gridChannels.map(Self.bridgeToCard),
+                                    initialId: id
+                                )
+                            }
+                        )
                     } else {
                         listBody(client: client)
                     }
@@ -449,21 +460,26 @@ struct TvGuideView: View {
         .accessibilityLabel("Watch \(channel.name)")
     }
 
-    // MARK: - Grid placeholder (Task-6 bridge)
+    // MARK: - Grid tune bridge (Task 6)
 
-    /// Stands in for the real EPG grid until Task 6 lands it — same
-    /// "Task-N bridge" phrasing convention as `TvGuidePlaceholderView`/
-    /// `TvChannelPlaceholderView` in `TvHomeView.swift`, so every unfinished
-    /// destination in the app reads consistently as "not yet built" rather
-    /// than "broken".
-    private var gridPlaceholder: some View {
-        ContentUnavailableView {
-            Label("Grid view", systemImage: "square.grid.3x3")
-        } description: {
-            Text("The full channel grid is coming in a later phase.")
-        }
-        .padding(.top, 60)
-        .accessibilityIdentifier("tvGuideGridPlaceholder")
+    /// Bridges a grid channel (`TvGridChannel`, which carries `programmes` and
+    /// no `now`/`next`) to the `TvChannelCard` shape `LiveTvOverlay`'s zap
+    /// context expects — `now`/`next` nil, every other field one-to-one.
+    /// Mirrors web `handleGridTune` (`TvGuidePage.tsx:150-152`).
+    private static func bridgeToCard(_ c: TvGridChannel) -> TvChannelCard {
+        TvChannelCard(
+            id: c.id,
+            number: c.number,
+            name: c.name,
+            country: c.country,
+            categories: c.categories,
+            quality: c.quality,
+            logo: c.logo,
+            healthy: c.healthy,
+            favorite: c.favorite,
+            now: nil,
+            next: nil
+        )
     }
 }
 
