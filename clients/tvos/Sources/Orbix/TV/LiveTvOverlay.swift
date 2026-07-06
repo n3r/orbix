@@ -10,16 +10,57 @@ import SwiftUI
 /// `LiveTvOverlay(channels:initialId:model:onClose:)`.
 ///
 /// ## Remote mapping (web keyboard → tvOS remote)
+///
+/// ### OSD-gated focus arbitration (Phase 4 review fix)
+/// The persistent control cluster (right edge) and the focusable player
+/// surface both want the same directional presses, so which one wins is
+/// gated on `osdVisible` — the same "show controls, then navigate them"
+/// convention as tvOS's native video-player transport bar:
+///
+/// - **OSD hidden** (normal viewing): the surface is focusable and holds
+///   focus; its `.onMoveCommand` intercepts all four directions (zap /
+///   guide-toggle, below). Select shows the OSD.
+/// - **OSD visible**: the surface is made **non-focusable**
+///   (`surfaceFocusable` excludes `osdVisible`), so native tvOS spatial
+///   navigation takes the arrow presses instead, moving focus around the
+///   always-focusable control cluster (+ close button); Select activates
+///   whichever control has focus. Focus is driven onto the cluster's first
+///   button (`.chUp`) the instant the OSD appears while the surface held
+///   focus (`onChange(of: osdVisible)`), and `.defaultFocus` picks the same
+///   target for the OSD-visible-at-launch case.
+///
+///   **Why toggle `focusable` instead of gating the `.onMoveCommand` closure
+///   body:** SwiftUI's `.onMoveCommand` fully intercepts a directional press
+///   for whatever view currently holds focus — it does not defer to native
+///   spatial navigation for that same press even when the closure body is a
+///   no-op. This was confirmed empirically in the Phase 4 Task 4 live smoke:
+///   the always-focusable cluster was still unreachable via swipe purely
+///   because the surface held focus and had `.onMoveCommand` attached (see
+///   `p4-task-4-report.md` §3e). The closure below keeps a defensive
+///   `guard !osdVisible else { return }` for documentation/belt-and-braces,
+///   but the real gate is `.focusable(surfaceFocusable)` dropping the
+///   surface out of the focus chain entirely while the OSD is up.
+///
+///   When the OSD auto-hides (4 s) — and neither the mini-guide nor the
+///   offline panel owns focus — focus returns to the surface
+///   (`onChange(of: osdVisible)`'s `else` branch, guarded the same way the
+///   existing `guideOpen`/`isOffline` focus handlers are), restoring
+///   swipe-zap. Zapping from the cluster re-shows (and keeps alive) the OSD
+///   via the existing tune-triggered `showOSD()`
+///   (`onChange(of: controller.channelId)`), so repeated cluster taps don't
+///   lose cluster focus mid-stream.
+///
 /// Two coexisting input paths mirror the web's keyboard + pointer-cluster:
 ///
-/// - **Focusable player surface** (default focus during normal playback):
+/// - **Focusable player surface** (default focus while the OSD is hidden):
 ///   - Swipe **up** → `zap(-1)` (previous channel)   — web PageUp / Shift+↑
 ///   - Swipe **down** → `zap(+1)` (next channel)      — web PageDown / Shift+↓
 ///   - Swipe **left / right** → toggle the mini-guide — web `g`
 ///   - **Select** → re-show the OSD                    — web `i` (and `l`; there
 ///     is no custom live-edge catch-up in v1 per spec §7.10 — AVPlayer's live
 ///     defaults hold the window)
-/// - **Persistent, always-focusable on-screen control cluster** (right edge):
+/// - **Persistent, always-focusable on-screen control cluster** (right edge),
+///   reachable via native spatial navigation whenever the OSD is visible:
 ///   channel-up (`zap(-1)`) · guide (toggle) · channel-down (`zap(+1)`) ·
 ///   last-channel jump; plus a top-left **close**.
 /// - **Mini-guide drawer**: native up/down focus moves between rows; **Select
@@ -30,11 +71,6 @@ import SwiftUI
 ///   The handler lives **only on the overlay root** — safe here because the
 ///   overlay is a `.fullScreenCover` with no `NavigationStack` (Phase 3
 ///   lesson: any `onExitCommand` near a stack kills native pop).
-///
-/// Because the cluster is always focusable, a right-swipe from the centered
-/// surface may move focus to the cluster instead of firing the surface's
-/// `onMoveCommand(.right)`; both reach the guide, and the exact arbitration is
-/// finalized in the Task 4 live pass (this task ships no live smoke).
 struct LiveTvOverlay: View {
     let channels: [TvChannelCard]
     let initialId: String
@@ -79,8 +115,11 @@ struct LiveTvOverlay: View {
     }
 
     /// The surface only holds focus (and its move commands only fire) during
-    /// normal playback — the offline panel and mini-guide own focus otherwise.
-    private var surfaceFocusable: Bool { !guideOpen && !isOffline }
+    /// normal playback with the OSD hidden — the offline panel and mini-guide
+    /// own focus otherwise, and the OSD-visible control cluster owns it while
+    /// the OSD is up (see the type doc comment's "OSD-gated focus
+    /// arbitration" section).
+    private var surfaceFocusable: Bool { !guideOpen && !isOffline && !osdVisible }
 
     // MARK: - Body
 
@@ -114,16 +153,36 @@ struct LiveTvOverlay: View {
             controlCluster
             closeButton
         }
-        .defaultFocus($focus, .surface)
+        // OSD-visible-at-launch picks the cluster's first button; hidden-at-launch
+        // (not currently reachable, since `osdVisible` starts `true`) would pick
+        // the surface. Kept dynamic rather than hardcoded to `.surface` so the
+        // invariant ("OSD visible ⇒ default focus is the cluster") holds even if
+        // that initial value ever changes.
+        .defaultFocus($focus, osdVisible ? .chUp : .surface)
         .task { await controller.tune(to: initialId) }
         .onAppear { showOSD() }
         .onChange(of: controller.channelId) { _, _ in showOSD() }
         .onChange(of: isOffline) { _, offline in
             if offline { focus = .offlineRetry }
-            else if !guideOpen { focus = .surface }
+            else if !guideOpen { focus = osdVisible ? .chUp : .surface }
         }
         .onChange(of: guideOpen) { _, open in
-            focus = open ? .guideRow(controller.channelId) : (isOffline ? .offlineRetry : .surface)
+            focus = open ? .guideRow(controller.channelId) : (isOffline ? .offlineRetry : (osdVisible ? .chUp : .surface))
+        }
+        .onChange(of: osdVisible) { _, visible in
+            // The offline panel and mini-guide already own focus in their own
+            // states (handled above) — don't fight them here.
+            guard !guideOpen, !isOffline else { return }
+            if visible {
+                // OSD just appeared: if the surface was holding focus, hand it to
+                // the cluster's first button so arrows navigate controls instead
+                // of re-firing the surface's zap/guide-toggle `onMoveCommand`.
+                if focus == .surface { focus = .chUp }
+            } else {
+                // OSD just auto-hid: return focus to the surface so swipe-zap
+                // resumes, regardless of which control last held it.
+                focus = .surface
+            }
         }
         .onExitCommand {
             if guideOpen { guideOpen = false } else { onClose() }
@@ -139,6 +198,11 @@ struct LiveTvOverlay: View {
             .focusable(surfaceFocusable)
             .focused($focus, equals: .surface)
             .onMoveCommand { direction in
+                // Defensive only: `surfaceFocusable` (which excludes `osdVisible`)
+                // means the surface shouldn't hold focus — and thus shouldn't
+                // receive this callback at all — whenever the OSD is visible. See
+                // the type doc comment's "OSD-gated focus arbitration" section.
+                guard !osdVisible else { return }
                 switch direction {
                 case .up: zap(-1)
                 case .down: zap(1)
