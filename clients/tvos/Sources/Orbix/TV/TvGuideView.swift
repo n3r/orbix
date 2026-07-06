@@ -35,9 +35,8 @@ enum GuideFilter: Hashable {
 ///
 /// Pushed onto **`TvHomeView`'s own `NavigationStack`**, not a stack of its
 /// own — `TvHomeView` passes its `path` binding through so this screen's
-/// info action can push `TvChannelRoute` onto that same stack (that
-/// destination is itself only a Task-7 bridge placeholder today; see
-/// `TvHomeView.swift`).
+/// info action can push `TvChannelRoute` onto that same stack, landing on
+/// the real `TvChannelView` (Task 7; see `TvHomeView.swift`).
 ///
 /// Web→tvOS adaptations (mirrors `LibraryBrowseView`'s precedents exactly):
 /// - **Toggle + filter chips → focusable `Capsule` chip buttons**

@@ -7,29 +7,12 @@ import SwiftUI
 struct TvGuideRoute: Hashable {}
 
 /// Route a guide row's info action pushes onto the same shared stack (see
-/// `TvGuideView.row`'s `.contextMenu`). The full channel/schedule page lands
-/// in Task 7 — this task only needs the push target to exist end-to-end (the
-/// route type, the push, and a small labeled placeholder destination), per
-/// that task's own "Task-7 bridge" instruction — mirrors exactly how
-/// `TvGuideRoute` itself was bridged in Task 4.
+/// `TvGuideView.row`'s `.contextMenu`) — destination is the real
+/// `TvChannelView` as of Phase 4 Task 7 (previously a labeled placeholder,
+/// `TvChannelPlaceholderView`; see git history), mirroring exactly how
+/// `TvGuideRoute` itself was upgraded from a placeholder in Task 5.
 struct TvChannelRoute: Hashable {
     let channelId: String
-}
-
-/// Placeholder pushed for `TvChannelRoute` today — replaced by the real
-/// channel/schedule page in Task 7 without touching `TvGuideView`'s info
-/// action or the stack wiring here.
-private struct TvChannelPlaceholderView: View {
-    let channelId: String
-
-    var body: some View {
-        ContentUnavailableView {
-            Label("Channel", systemImage: "tv")
-        } description: {
-            Text("The channel page is coming in a later phase.")
-        }
-        .accessibilityIdentifier("tvChannelPlaceholder")
-    }
 }
 
 /// Phase 4 Task 4 TV Home screen, reached by selecting **TV** in
@@ -42,7 +25,7 @@ private struct TvChannelPlaceholderView: View {
 /// Owns its own `NavigationStack`, shared (via its `path` binding) with
 /// everything the header Guide button and its descendants push:
 /// `TvGuideRoute` → the real `TvGuideView` (Task 5), whose own info action
-/// pushes `TvChannelRoute` (still a Task-7 bridge placeholder) onto this
+/// pushes `TvChannelRoute` → the real `TvChannelView` (Task 7) onto this
 /// same stack. Also takes the same Menu-walk `onMenuExit` idiom every other
 /// hub section takes (`LibraryBrowseView`/`WishlistView`/`SearchView`): pop
 /// this view's own `path` one level per Menu press before ever falling
@@ -77,7 +60,7 @@ struct TvHomeView: View {
                 TvGuideView(model: model, path: $path)
             }
             .navigationDestination(for: TvChannelRoute.self) { route in
-                TvChannelPlaceholderView(channelId: route.channelId)
+                TvChannelView(channelId: route.channelId, model: model)
             }
         }
         .onExitCommand {
