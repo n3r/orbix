@@ -111,8 +111,16 @@ struct TvChannelView: View {
     private func detailView(_ detail: TvChannelDetail, client: OrbixClient) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 40) {
-                hero(detail, client: client)
-                watchButton(detail)
+                VStack(alignment: .leading, spacing: 40) {
+                    hero(detail, client: client)
+                    watchButton(detail)
+                }
+                // Own focus section for the hero's favorite heart + Watch
+                // button — the `dayTabs` idiom applied here as a mitigation
+                // attempt for the focus-lockup finding documented on
+                // `favoriteButton` below (see its doc comment for the live
+                // result of this specific change).
+                .focusSection()
                 scheduleSection(client: client)
             }
             .padding(.horizontal, 64)
@@ -205,6 +213,28 @@ struct TvChannelView: View {
 
     // MARK: - Favorite toggle (web lines 68-78, optimistic)
 
+    /// **Focus-lockup finding (p4-task-7 live smoke, `.superpowers/sdd/p4-task-7-report.md`
+    /// §5):** after Select toggled this heart on, every further directional
+    /// press (Up/Down/Left+Down/Right×6) was a no-op until Menu — only
+    /// documented in a since-reverted XCUITest harness, no trace in source
+    /// until this comment. Hypothesis: the optimistic flip
+    /// (`TvChannelModel.toggleFavorite`) re-renders this button's label
+    /// (`Image(systemName:)` + `foregroundStyle` both key off `detail.favorite`)
+    /// off the main render pass that installed the current focus, which is a
+    /// known SwiftUI/tvOS class of bug where the focus engine's currently-
+    /// focused item goes stale across a state-driven (not gesture-driven)
+    /// view update. **Mitigations applied this pass (p4-task-7/8 follow-up):**
+    /// (1) `detailView` now wraps this hero + `watchButton` in their own
+    /// `.focusSection()` (the `dayTabs` idiom) so a stale/lost focus can't
+    /// escape into the schedule below or the nav bar above; (2) `.id(
+    /// "favoriteButton")` below pins this button's identity across the
+    /// re-render so SwiftUI can't treat the post-toggle label as a new view.
+    /// Live-reverify result: see the p4-task-7-report.md "Fix report
+    /// (favorite focus)" section appended for this pass — if it says the
+    /// lockup still reproduces, the mitigations are cosmetic and the real fix
+    /// needs an explicit `@FocusState` re-assert after `toggleFavorite`
+    /// completes (not attempted here — out of scope for a two-mitigation
+    /// budget).
     private func favoriteButton(_ detail: TvChannelDetail, client: OrbixClient) -> some View {
         Button {
             Task { await channelModel.toggleFavorite(client: client) }
@@ -215,6 +245,7 @@ struct TvChannelView: View {
                 .frame(width: 60, height: 60)
         }
         .buttonStyle(TvChannelFavoriteButtonStyle())
+        .id("favoriteButton")
         .accessibilityIdentifier("tvChannelFavoriteButton")
         .accessibilityLabel(detail.favorite ? "Remove from favorites" : "Add to favorites")
     }

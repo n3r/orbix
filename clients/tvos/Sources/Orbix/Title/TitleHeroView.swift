@@ -173,6 +173,15 @@ struct TitleHeroView: View {
     }
 
     /// Web lines 112-121: ghost button, hidden while membership is unknown.
+    ///
+    /// Same optimistic-toggle-in-hero shape as `TvChannelView.favoriteButton`
+    /// (this button's label text flips off `onToggleWishlist`'s optimistic
+    /// state change, same as that button's `Image(systemName:)`), which has a
+    /// live-observed post-toggle focus lockup on tvOS (see its doc comment,
+    /// `.superpowers/sdd/p4-task-7-report.md` §5) — this button couldn't be
+    /// live-checked this pass (its toggle target, the wishlist membership
+    /// fetch, was stale/hidden against the NAS used), so flag it for the same
+    /// directional-press check at the Phase 6 hardware pass.
     private func wishlistButton(inWishlist: Bool) -> some View {
         Button(action: onToggleWishlist) {
             Text(inWishlist ? "✓ In Wishlist" : "+ Add to Wishlist")
