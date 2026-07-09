@@ -460,7 +460,7 @@ final class TitleModel {
             } else if let orbixError = error as? OrbixError, case .http(_, let code) = orbixError, let code {
                 loadError = L10n.errorMessage(code)
             } else {
-                loadError = L10n.t("title.errorTitle")
+                loadError = L10n.t("errors.network")
             }
             isLoading = false
             hasLoaded = true

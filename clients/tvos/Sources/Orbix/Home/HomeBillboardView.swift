@@ -123,7 +123,7 @@ struct HomeBillboardView: View {
         if let genre = detail?.genres?.first, !genre.isEmpty { parts.append(genre) }
         if let year = card.year ?? detail?.year { parts.append(String(year)) }
         if let seasons = detail?.seasons, !seasons.isEmpty {
-            parts.append("\(seasons.count) Season\(seasons.count == 1 ? "" : "s")")
+            parts.append(L10n.t("catalog.spotlight.seasons", seasons.count))
         } else if let runtime = Self.formattedRuntime(detail?.runtimeSec) {
             parts.append(runtime)
         }
@@ -160,13 +160,13 @@ struct HomeBillboardView: View {
     private var buttons: some View {
         HStack(spacing: 20) {
             Button(action: onPlay) {
-                Label("Play", systemImage: "play.fill")
+                Label(L10n.t("catalog.hero.play"), systemImage: "play.fill")
             }
             .buttonStyle(OrbixButtonStyle(.primary))
             .accessibilityIdentifier("billboardPlayButton")
 
             Button(action: onMoreInfo) {
-                Label("More Info", systemImage: "info.circle")
+                Label(L10n.t("catalog.hero.moreInfo"), systemImage: "info.circle")
             }
             .buttonStyle(OrbixButtonStyle(.ghost))
             .accessibilityIdentifier("billboardMoreInfoButton")
@@ -187,7 +187,7 @@ struct HomeBillboardView: View {
                 RoundedRectangle(cornerRadius: OrbixRadius.sm, style: .continuous)
                     .strokeBorder(OrbixColor.surface2)
             }
-            .accessibilityLabel("Rated \(rating)")
+            .accessibilityLabel(L10n.t("catalog.hero.rated", rating))
     }
 
     // MARK: - Images
@@ -207,13 +207,15 @@ struct HomeBillboardView: View {
         return baseURL.appending(path: "api/images/\(path)")
     }
 
-    /// `3720` → `"1h 2m"`; `600` → `"10m"`; `nil`/non-positive → `nil` (same
-    /// helper `TitlePage` uses for its metadata row).
+    /// `3720` → `"1h 2m"`; `600` → `"10m"`; `nil`/non-positive → `nil` — same
+    /// helper `TitlePage`/`TitleHeroView`/`SeasonEpisodeListView` each keep
+    /// their own private copy of (no shared symbol exists yet; Task 3 may
+    /// consolidate).
     private static func formattedRuntime(_ seconds: Int?) -> String? {
         guard let seconds, seconds > 0 else { return nil }
         let hours = seconds / 3600
         let minutes = (seconds % 3600) / 60
-        return hours > 0 ? "\(hours)h \(minutes)m" : "\(minutes)m"
+        return hours > 0 ? L10n.t("title.runtime.hm", hours, minutes) : L10n.t("title.runtime.m", minutes)
     }
 }
 

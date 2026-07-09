@@ -688,7 +688,7 @@ final class TvChannelModel {
             } else if let orbixError = error as? OrbixError, case .http(_, let code) = orbixError, let code {
                 loadError = L10n.errorMessage(code)
             } else {
-                loadError = L10n.t("tv.channel.errorTitle")
+                loadError = L10n.t("errors.network")
             }
         }
         isLoading = false

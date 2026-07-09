@@ -298,7 +298,7 @@ final class WishlistModel {
             if case OrbixError.http(_, let code) = error, let code {
                 loadError = L10n.errorMessage(code)
             } else {
-                loadError = L10n.t("wishlist.errorTitle")
+                loadError = L10n.t("errors.network")
             }
             items = []
         }

@@ -298,6 +298,39 @@
         }
       }
     },
+    "catalog.hero.moreInfo": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "More info"
+          }
+        }
+      }
+    },
+    "catalog.hero.play": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Play"
+          }
+        }
+      }
+    },
+    "catalog.hero.rated": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rated %@"
+          }
+        }
+      }
+    },
     "catalog.home.emptyBody": {
       "extractionState": "manual",
       "localizations": {
@@ -360,6 +393,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "New"
+          }
+        }
+      }
+    },
+    "catalog.spotlight.seasons": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Seasons"
           }
         }
       }
