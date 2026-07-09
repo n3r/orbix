@@ -187,6 +187,24 @@ final class LivePlayerViewController: UIViewController {
         container.playerLayer.videoGravity = .resizeAspect
         view = container
     }
+
+    /// **Idle-timer suppression (p4-task-8 gate find).** The VOD player gets
+    /// this for free from `AVPlayerViewController`; this bare
+    /// `AVPlayer`+`AVPlayerLayer` surface does not, so ~2 idle minutes into a
+    /// live channel tvOS's idle timer fired mid-broadcast (screensaver on
+    /// hardware; on the simulator the scene deactivated — playback halted and
+    /// the live cover unwound to TV Home, reproduced twice at ~120 s under a
+    /// zero-input soak against a healthy stream). Scope the suppression to
+    /// exactly this controller's on-screen lifetime.
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        UIApplication.shared.isIdleTimerDisabled = true
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        UIApplication.shared.isIdleTimerDisabled = false
+    }
 }
 
 /// `UIView` whose backing layer is an `AVPlayerLayer`, so it resizes with the

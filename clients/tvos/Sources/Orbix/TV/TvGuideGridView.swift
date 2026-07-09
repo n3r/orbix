@@ -210,7 +210,10 @@ struct TvGuideGridView: View {
     /// Web label: `start.toLocaleDateString({weekday, day, month}) · HH:MM–HH:MM`.
     private var windowLabel: String {
         let start = gridModel.start
-        let end = start.addingTimeInterval(Self.windowMs)
+        // NOTE: `windowMs` lives in the layout math's millisecond domain;
+        // `addingTimeInterval` takes SECONDS. Feeding it ms pushed the label's
+        // end ~166 days out (16 h off in time-of-day — "9:00 PM–1:00 PM").
+        let end = start.addingTimeInterval(Double(Self.hours) * 3_600)
         let date = Self.dateFormatter.string(from: start)
         let from = Self.timeFormatter.string(from: start)
         let to = Self.timeFormatter.string(from: end)

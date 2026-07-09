@@ -229,12 +229,23 @@ struct TvChannelView: View {
     /// escape into the schedule below or the nav bar above; (2) `.id(
     /// "favoriteButton")` below pins this button's identity across the
     /// re-render so SwiftUI can't treat the post-toggle label as a new view.
-    /// Live-reverify result: see the p4-task-7-report.md "Fix report
-    /// (favorite focus)" section appended for this pass — if it says the
-    /// lockup still reproduces, the mitigations are cosmetic and the real fix
-    /// needs an explicit `@FocusState` re-assert after `toggleFavorite`
-    /// completes (not attempted here — out of scope for a two-mitigation
-    /// budget).
+    /// **Live-reverify result (p4-task-8 gate, vs the NAS):** the lockup
+    /// STILL reproduces with both mitigations in place — Select toggles
+    /// (server round-trip confirmed both ways, heart re-renders correctly)
+    /// but every directional press afterwards is a no-op until Menu. The two
+    /// mitigations above are therefore cosmetic; kept because they are
+    /// harmless and scope focus correctly. **The `@FocusState` re-assert
+    /// predicted below was ALSO attempted at the gate** (bind
+    /// `.focused($favoriteFocused)`, drop + re-assert across a 50 ms tick
+    /// after `toggleFavorite` returns) **and equally failed** — press events
+    /// kept reaching the heart (Select toggled on/off repeatedly) while the
+    /// focus engine ignored directional input, so the stale item is not the
+    /// (only) problem; the engine's spatial search itself goes dead around
+    /// this button after the state-driven re-render. Reverted to avoid
+    /// shipping an ineffective behavior change. Root-cause candidates for the
+    /// Phase 6 hardware pass: restructure so the toggle does not re-render the
+    /// focused subtree (e.g. move `favorite` presentation out of the Button
+    /// label), or debounce the optimistic flip until focus moves.
     private func favoriteButton(_ detail: TvChannelDetail, client: OrbixClient) -> some View {
         Button {
             Task { await channelModel.toggleFavorite(client: client) }
