@@ -299,8 +299,19 @@ struct PlayerViewController: UIViewControllerRepresentable {
                         self?.renegotiate(quality: selectedQuality, audioMode: option.id)
                     }
                 }
-                // Icon required for the same reason as Quality above; the speaker
-                // glyph reads distinctly from AVKit's built-in audio-track button.
+                // Icon required for the same reason as Quality above. P5 Task 6
+                // tried `waveform` here (hoping it would read more distinctly
+                // than `speaker.wave.2`) but live-verified against the real
+                // transport bar it collides *worse*: tvOS's own native "Audio
+                // Adjustments → Reduce Loud Sounds" button (present whenever
+                // the platform offers loudness reduction) renders as the exact
+                // same vertical-bars `waveform` glyph, and it sits right next
+                // to this one — two adjacent buttons with an identical icon,
+                // one of which is *also* about audio loudness/leveling, reads
+                // as far more confusing than the original `speaker.wave.2`
+                // collision this was meant to fix. Reverted to `speaker.wave.2`
+                // per the brief's fallback instruction; see
+                // `.superpowers/sdd/p5-task-6-report.md` for the screenshot.
                 items.append(UIMenu(
                     title: "Audio",
                     image: UIImage(systemName: "speaker.wave.2"),
@@ -377,7 +388,7 @@ struct PlayerScreen: View {
 
             switch controller.loadState {
             case .loading:
-                ProgressView("Loading…")
+                ProgressView(L10n.t("common.status.loading"))
                     .font(.title3)
                     .tint(.white)
                     .foregroundStyle(.white)
@@ -440,11 +451,11 @@ struct PlayerScreen: View {
 
     private func errorView(message: String) -> some View {
         ContentUnavailableView {
-            Label("Couldn't play title", systemImage: "exclamationmark.triangle")
+            Label(L10n.t("player.error.generic"), systemImage: "exclamationmark.triangle")
         } description: {
             Text(message)
         } actions: {
-            Button("Close") { dismiss() }
+            Button(L10n.t("player.close")) { dismiss() }
                 .accessibilityIdentifier("playerScreenCloseButton")
         }
         .foregroundStyle(.white)

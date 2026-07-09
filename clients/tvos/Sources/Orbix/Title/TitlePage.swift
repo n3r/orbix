@@ -256,9 +256,9 @@ struct TitlePage: View {
     /// `Button(action: {})` rather than a plain plate: on tvOS a
     /// `ScrollView(.horizontal)` only auto-scrolls to reveal off-screen
     /// content when something inside is focusable (unlike the web's
-    /// non-interactive `<div>` cards) — matches `seasonChip`/`PosterCard`'s
-    /// focusable-card convention. There's no cast-detail destination to
-    /// navigate to, so the action is intentionally a no-op.
+    /// non-interactive `<div>` cards) — matches `SeasonEpisodeListView.seasonTab`/
+    /// `PosterCard`'s focusable-card convention. There's no cast-detail
+    /// destination to navigate to, so the action is intentionally a no-op.
     private func castCard(_ member: ItemDetail.CastMember, index: Int) -> some View {
         Button {
             // No-op: no cast-detail page exists on TV; the card exists so

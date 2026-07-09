@@ -96,7 +96,7 @@ struct TvChannelView: View {
     private func content(client: OrbixClient) -> some View {
         switch channelModel.loadState {
         case .loading:
-            ProgressView("Loading…")
+            ProgressView(L10n.t("common.status.loading"))
                 .font(.title3)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .notFound:
@@ -432,39 +432,18 @@ struct TvChannelView: View {
     /// `start <= now < stop` — the web's exact containment test
     /// (`Date.parse(p.start) <= nowMs && nowMs < Date.parse(p.stop)`).
     private func isAiring(_ programme: TvProgramme, at now: Date) -> Bool {
-        guard let start = Self.parseISO(programme.start), let stop = Self.parseISO(programme.stop) else {
+        guard let start = orbixParseISODate(programme.start), let stop = orbixParseISODate(programme.stop) else {
             return false
         }
         return start <= now && now < stop
     }
 
     /// Locale HH:MM — reuses `ChannelNowNextView.time`'s formatter/parsing
-    /// idiom rather than duplicating a third copy of the same
-    /// `DateFormatter`/`ISO8601DateFormatter` pair.
+    /// idiom rather than duplicating a third copy of the same display
+    /// formatting.
     private static func timeLabel(_ iso: String) -> String {
         ChannelNowNextView.time(iso)
     }
-
-    /// `OrbixKit`'s own ISO parser (`tvParseMs`) is `internal` to that
-    /// module, so the on-air boolean test needs its own `Date`-returning
-    /// parse here — the same fractional-then-plain two-formatter idiom every
-    /// other ISO parse site in this app already duplicates (`tvParseMs`,
-    /// `ChannelNowNextView.time`, `Billboard.parseISODate`).
-    private static func parseISO(_ iso: String) -> Date? {
-        isoFractional.date(from: iso) ?? isoPlain.date(from: iso)
-    }
-
-    private static let isoFractional: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-
-    private static let isoPlain: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
 
     // MARK: - Schedule skeleton / empty / error
 

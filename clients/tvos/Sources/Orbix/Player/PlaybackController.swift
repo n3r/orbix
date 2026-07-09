@@ -86,7 +86,10 @@ final class PlaybackController {
             audioModes = info.audioModes ?? []
 
             guard let streamURL = URL(string: info.streamUrl, relativeTo: baseURL)?.absoluteURL else {
-                loadState = .error("Couldn't resolve the stream URL.")
+                // Malformed `streamUrl` from a well-formed response — not a
+                // network/permission failure, so the generic player-load
+                // string fits better than a server error code.
+                loadState = .error(L10n.t("player.error.generic"))
                 return
             }
 
@@ -98,7 +101,18 @@ final class PlaybackController {
             }
             loadState = .ready(streamURL: streamURL, resumeSeconds: resumeSeconds)
         } catch {
-            loadState = .error("Couldn't start playback: \(error)")
+            // Same server-code-first idiom every other model in the app uses
+            // (`HomeModel.load`, `LibraryModel.performLoad`, etc.) — a coded
+            // HTTP failure (e.g. a kids-restricted item, `not_allowed_for_kids`)
+            // gets its own translated message; anything else (offline, DNS,
+            // timeout) falls back to the player-specific network string
+            // rather than a raw interpolated Swift error description, which
+            // was neither localized nor user-presentable.
+            if case OrbixError.http(_, let code) = error, let code {
+                loadState = .error(L10n.errorMessage(code))
+            } else {
+                loadState = .error(L10n.t("player.error.network"))
+            }
         }
     }
 

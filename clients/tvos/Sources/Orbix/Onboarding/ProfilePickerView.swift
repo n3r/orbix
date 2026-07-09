@@ -107,7 +107,7 @@ struct ProfilePickerView: View {
                     .foregroundStyle(OrbixColor.text)
 
                 if profileModel.isLoading && profileModel.profiles.isEmpty {
-                    ProgressView("Loading profiles…")
+                    ProgressView(L10n.t("common.status.loading"))
                         .font(.title3)
                 } else if let loadError = profileModel.loadError, profileModel.profiles.isEmpty {
                     errorView(message: loadError, client: client)

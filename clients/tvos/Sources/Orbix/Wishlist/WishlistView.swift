@@ -20,7 +20,7 @@ import SwiftUI
 /// diverges.
 ///
 /// Server returns the wishlist newest-first already (`OrbixClient.wishlist()`
-/// doc comment; `apps/api` orders by `WishlistEntry.createdAt desc`), so
+/// doc comment; `apps/api` orders by `WishlistEntry.addedAt desc`), so
 /// unlike `LibraryBrowseView` there is no client-side sort to apply or chip
 /// row to drive it.
 ///
@@ -30,6 +30,13 @@ import SwiftUI
 /// render inline on the title page — no separate pushed destination).
 struct WishlistView: View {
     let model: AppModel
+    /// Driven from this view's scroll offset, same wiring as `HomeView`/
+    /// `LibraryBrowseView` — `ShellView` owns the state and its top bar
+    /// reacts (transparent → near-solid). See `scrollOffsetReader`. Added
+    /// P5 Task 6: before this, scrolling Wishlist left the bar however
+    /// `HomeView` (the only prior driver) had last left it, instead of
+    /// re-solidifying on this section's own scroll.
+    @Binding var isScrolled: Bool
 
     /// Called on Menu when this section's own `path` is already empty — see
     /// `ShellView`'s type doc comment for why the Menu-walk fallback to
@@ -48,6 +55,11 @@ struct WishlistView: View {
         GridItem(.adaptive(minimum: 220, maximum: 220), spacing: 32)
     ]
 
+    /// tvOS 17 has no `onScrollGeometryChange` (18+), so scroll offset is read
+    /// via a `GeometryReader` + `PreferenceKey` in this named coordinate
+    /// space — same idiom as `HomeView.scrollSpace`.
+    private static let scrollSpace = "wishlistScroll"
+
     var body: some View {
         NavigationStack(path: $path) {
             Group {
@@ -55,17 +67,26 @@ struct WishlistView: View {
                     content(client: client)
                         // `.task` reruns on every appearance of this view —
                         // not just once per `WishlistModel` lifetime — because
-                        // a `NavigationStack` push/pop (selecting a card, then
-                        // Menu-ing back to this grid) fires the SwiftUI
-                        // appear/disappear pair on this root view exactly like
-                        // `onAppear`/`onDisappear` would, and switching
-                        // `ShellView.selection` away from `.wishlist` and back
-                        // tears down and recreates this whole view (and
-                        // `wishlistModel`) fresh. Either path re-fetches, which
-                        // is exactly what's needed: the wishlist can change
-                        // while the app runs (a Phase-3 title-page toggle, or a
-                        // web user editing it concurrently), so returning to
-                        // "My List" should never show stale membership. Same
+                        // switching `ShellView.selection` away from `.wishlist`
+                        // and back tears down and recreates this whole view
+                        // (and `wishlistModel`) fresh (`content` is a plain
+                        // `switch` in a `@ViewBuilder`, not a `.tag`-based
+                        // `TabView`, so there's nothing to preserve identity
+                        // across). (P5 Task 6 correction: an earlier draft of
+                        // this comment additionally claimed a `NavigationStack`
+                        // push/pop — selecting a card, then Menu-ing back to
+                        // this grid — also fires the same appear/disappear
+                        // pair; that was never live-verified and shouldn't be
+                        // assumed — `NavigationStack` generally keeps a root
+                        // view mounted, off-screen, under a pushed destination
+                        // rather than tearing it down, so a push/pop by itself
+                        // may not actually re-trigger `.task`. The section-switch
+                        // teardown above is the mechanism this view actually
+                        // relies on.) This re-fetches exactly what's needed:
+                        // the wishlist can change while the app runs (a
+                        // Phase-3 title-page toggle, or a web user editing it
+                        // concurrently), so returning to "My List" should
+                        // never show stale membership. Same
                         // idiom as `HomeModel.load`/`LibraryModel.load`, which
                         // have no "already loaded, skip" guard for the same
                         // reason.
@@ -127,8 +148,24 @@ struct WishlistView: View {
             .padding(.horizontal, 64)
             .padding(.top, Self.contentTopPadding)
             .padding(.bottom, 80)
+            .background(scrollOffsetReader)
         }
+        .coordinateSpace(name: Self.scrollSpace)
+        .modifier(SectionScrollDetector(isScrolled: $isScrolled))
         .accessibilityIdentifier("wishlistScroll")
+    }
+
+    /// Measures the content's top edge in the named coordinate space; the
+    /// value goes negative as the user scrolls up. Feeds
+    /// `SectionScrollDetector`'s tvOS-17 fallback path — same idiom as
+    /// `HomeView.scrollOffsetReader`.
+    private var scrollOffsetReader: some View {
+        GeometryReader { proxy in
+            Color.clear.preference(
+                key: ScrollOffsetKey.self,
+                value: proxy.frame(in: .named(Self.scrollSpace)).minY
+            )
+        }
     }
 
     private var heading: some View {
@@ -308,5 +345,5 @@ final class WishlistModel {
 }
 
 #Preview {
-    WishlistView(model: AppModel(), onMenuExit: {})
+    WishlistView(model: AppModel(), isScrolled: .constant(false), onMenuExit: {})
 }

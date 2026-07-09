@@ -103,13 +103,13 @@ struct HomeView: View {
         // (web pulls the billboard up under the fixed nav with `-mt-14`).
         .ignoresSafeArea(edges: .top)
         .coordinateSpace(name: Self.scrollSpace)
-        .modifier(HomeScrollDetector(isScrolled: $isScrolled))
+        .modifier(SectionScrollDetector(isScrolled: $isScrolled))
         .accessibilityIdentifier("homeScroll")
     }
 
     /// Measures the content's top edge in the named coordinate space; the
     /// value goes negative as the user scrolls up. `isScrolled = offset < -10`.
-    /// Feeds `HomeScrollDetector`'s tvOS-17 fallback path.
+    /// Feeds `SectionScrollDetector`'s tvOS-17 fallback path.
     private var scrollOffsetReader: some View {
         GeometryReader { proxy in
             Color.clear.preference(
@@ -193,44 +193,6 @@ struct HomeView: View {
     /// autoplay route just shows the page — see `TitlePage.autoplayIfNeeded`).
     private func play(_ card: MediaCard) {
         path.append(TitleRoute(itemId: card.id, autoplay: true))
-    }
-}
-
-/// Carries the Home `ScrollView`'s top-edge offset out of the geometry reader
-/// so `HomeView` can drive `isScrolled` on tvOS 17. Only the top-most reading
-/// matters.
-private struct ScrollOffsetKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
-/// Flips `isScrolled` once Home scrolls its content up past a small threshold,
-/// so the shell's top bar goes transparent → near-solid (web `useScrolled`).
-///
-/// Prefers `onScrollGeometryChange` (tvOS 18+) — the reliable modern signal
-/// that every current Apple TV runs — and falls back to the
-/// `GeometryReader` + `PreferenceKey` offset in the named coordinate space on
-/// the tvOS-17 floor (`onScrollGeometryChange` doesn't exist there). Both read
-/// the same "content top moved up ~one nudge" idea: `contentOffset.y > 10`
-/// (18+, positive as content scrolls up) mirrors the fallback's `minY < -10`.
-private struct HomeScrollDetector: ViewModifier {
-    @Binding var isScrolled: Bool
-
-    func body(content: Content) -> some View {
-        if #available(tvOS 18.0, *) {
-            content.onScrollGeometryChange(for: Bool.self) { geometry in
-                geometry.contentOffset.y > 10
-            } action: { _, scrolled in
-                if scrolled != isScrolled { isScrolled = scrolled }
-            }
-        } else {
-            content.onPreferenceChange(ScrollOffsetKey.self) { offset in
-                let scrolled = offset < -10
-                if scrolled != isScrolled { isScrolled = scrolled }
-            }
-        }
     }
 }
 

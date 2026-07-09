@@ -154,10 +154,16 @@ struct TitleHeroView: View {
     /// Always rendered (never conditionally hidden): a dimmed, `disabled`
     /// button when `!canPlay` communicates "nothing to play" rather than
     /// silently omitting the button (same rationale `TitlePage.playButton`
-    /// documents; `OrbixButtonStyle` supplies the disabled dim).
+    /// documents; `OrbixButtonStyle` supplies the disabled dim). Web parity
+    /// (`TitleHero.tsx:102-110`): the play glyph only appears when playable —
+    /// the disabled state renders bare `noMedia` text, no icon.
     private var playButton: some View {
         Button(action: onPlay) {
-            Label(playLabel, systemImage: "play.fill")
+            if canPlay {
+                Label(playLabel, systemImage: "play.fill")
+            } else {
+                Text(playLabel)
+            }
         }
         .buttonStyle(OrbixButtonStyle(.primary))
         .disabled(!canPlay)

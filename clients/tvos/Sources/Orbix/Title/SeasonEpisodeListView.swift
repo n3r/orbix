@@ -339,13 +339,11 @@ struct SeasonEpisodeListView: View {
         return L10n.t("title.episodeNumber", episode.episodeNumber)
     }
 
-    /// `"3. Pilot"` when titled, `"Episode 3"` otherwise (web `"# Title"`,
-    /// line 174).
+    /// Web parity (`SeasonEpisodeList.tsx:174`): ALWAYS `"N. Title"`, where an
+    /// untitled episode's title falls back to the localized "Episode N" — so
+    /// an untitled E3 reads "3. Episode 3", exactly like the web.
     private func episodeLabel(_ episode: Episode) -> String {
-        if let title = episode.title, !title.isEmpty {
-            return "\(episode.episodeNumber). \(title)"
-        }
-        return episodeDisplayTitle(episode)
+        "\(episode.episodeNumber). \(episodeDisplayTitle(episode))"
     }
 
     /// Shown via the player's `externalMetadata` (its `videoTitle` param) so
@@ -693,16 +691,21 @@ private struct SeasonTabChipStyle: ButtonStyle {
 }
 
 /// Episode still-frame art fetched via `ImageLoader`; the big episode number
-/// as a placeholder when there's no still at all (web line 156), or a plain
-/// surface fill while a real still loads. Mirrors `PosterCard`'s
-/// `PosterArtwork` (own tiny loader-view per call site, same `.task(id:)`
-/// reload-on-url-change behavior, different placeholder for the 16:9 still).
+/// as a placeholder when there's no still at all (web line 156) **or** when
+/// the fetch fails (tracked the same way `ChannelLogoView` tracks a dead/
+/// purged cache file — a `failed` flag set in the `.task(id:)`, since a
+/// `UIImage` fetch has no browser-native `onError` fallback), rather than a
+/// blank surface. Otherwise a plain surface fill while a real still loads.
+/// Mirrors `PosterCard`'s `PosterArtwork` (own tiny loader-view per call
+/// site, same `.task(id:)` reload-on-url-change behavior, different
+/// placeholder for the 16:9 still).
 private struct EpisodeStillArtwork: View {
     let url: URL?
     let episodeNumber: Int
     let imageLoader: ImageLoader
 
     @State private var uiImage: UIImage?
+    @State private var failed = false
 
     var body: some View {
         ZStack {
@@ -711,8 +714,9 @@ private struct EpisodeStillArtwork: View {
                 Image(uiImage: uiImage)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-            } else if url == nil {
-                // No still at all → the big episode number (web line 156).
+            } else if url == nil || failed {
+                // No still at all, or the fetch failed → the big episode
+                // number (web line 156).
                 Text("\(episodeNumber)")
                     .font(.system(size: 48, weight: .semibold))
                     .foregroundStyle(OrbixColor.textDim)
@@ -721,9 +725,12 @@ private struct EpisodeStillArtwork: View {
         .clipped()
         .task(id: url) {
             uiImage = nil
+            failed = false
             guard let url else { return }
-            if let data = await imageLoader.image(for: url) {
-                uiImage = UIImage(data: data)
+            if let data = await imageLoader.image(for: url), let img = UIImage(data: data) {
+                uiImage = img
+            } else {
+                failed = true
             }
         }
     }

@@ -37,6 +37,13 @@ struct LibraryBrowseView: View {
     let libraryId: String
     let libraryName: String
     let model: AppModel
+    /// Driven from this view's scroll offset, same wiring as `HomeView` —
+    /// `ShellView` owns the state and its top bar reacts (transparent →
+    /// near-solid). See `scrollOffsetReader`. Added P5 Task 6: before this,
+    /// scrolling Library left the bar however `HomeView` (the only prior
+    /// driver) had last left it, instead of re-solidifying on this section's
+    /// own scroll.
+    @Binding var isScrolled: Bool
 
     /// Called on Menu when this section's own `path` is already empty — see
     /// `ShellView`'s type doc comment for why the Menu-walk fallback to
@@ -55,6 +62,11 @@ struct LibraryBrowseView: View {
     private let gridColumns = [
         GridItem(.adaptive(minimum: 220, maximum: 220), spacing: 32)
     ]
+
+    /// tvOS 17 has no `onScrollGeometryChange` (18+), so scroll offset is read
+    /// via a `GeometryReader` + `PreferenceKey` in this named coordinate
+    /// space — same idiom as `HomeView.scrollSpace`.
+    private static let scrollSpace = "libraryScroll"
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -136,8 +148,24 @@ struct LibraryBrowseView: View {
             .padding(.horizontal, 64)
             .padding(.top, Self.contentTopPadding)
             .padding(.bottom, 80)
+            .background(scrollOffsetReader)
         }
+        .coordinateSpace(name: Self.scrollSpace)
+        .modifier(SectionScrollDetector(isScrolled: $isScrolled))
         .accessibilityIdentifier("libraryScroll")
+    }
+
+    /// Measures the content's top edge in the named coordinate space; the
+    /// value goes negative as the user scrolls up. Feeds
+    /// `SectionScrollDetector`'s tvOS-17 fallback path — same idiom as
+    /// `HomeView.scrollOffsetReader`.
+    private var scrollOffsetReader: some View {
+        GeometryReader { proxy in
+            Color.clear.preference(
+                key: ScrollOffsetKey.self,
+                value: proxy.frame(in: .named(Self.scrollSpace)).minY
+            )
+        }
     }
 
     private var heading: some View {
@@ -474,5 +502,5 @@ final class LibraryModel {
 }
 
 #Preview {
-    LibraryBrowseView(libraryId: "lib_1", libraryName: "Movies", model: AppModel(), onMenuExit: {})
+    LibraryBrowseView(libraryId: "lib_1", libraryName: "Movies", model: AppModel(), isScrolled: .constant(false), onMenuExit: {})
 }

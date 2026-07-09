@@ -19,10 +19,18 @@ import SwiftUI
 /// there are no more bare-`ContentUnavailableView` placeholder sections left
 /// in this switch.
 ///
-/// `isScrolled` is owned here and driven by `HomeView`'s scroll offset (the
-/// bar goes transparent → near-solid). Only Home scrolls its content under the
-/// bar, so leaving Home resets it to `false` — a non-Home section never leaves
-/// the bar stuck solid.
+/// `isScrolled` is owned here and driven by whichever section is on screen's
+/// own scroll offset (the bar goes transparent → near-solid) — `HomeView`,
+/// `LibraryBrowseView`, and `WishlistView` each thread it through via
+/// `SectionScrollDetector` (P5 Task 6; before that fix only `HomeView` drove
+/// it, so scrolling Library/Wishlist never re-solidified the bar — it just
+/// showed whatever `isScrolled` Home had last left behind). `.tv` and
+/// `.account` don't scroll their content under the bar today, so they're not
+/// wired to it (left as a follow-up if either grows a scrolling root). Every
+/// section switch resets `isScrolled = false` — each section starts fresh at
+/// its own scroll top, so a section can never inherit a stuck-solid (or
+/// stuck-transparent) bar from whatever the previously active section had
+/// scrolled to.
 ///
 /// **Bar suppression is `.search`-only.** `SearchView` uses SwiftUI's
 /// `.searchable`, whose system chrome (title + search field + on-screen
@@ -117,8 +125,12 @@ struct ShellView: View {
                     .onExitCommand { selection = .home }
             }
         }
-        .onChange(of: selection) { _, newValue in
-            if newValue != .home { isScrolled = false }
+        // Every section switch resets `isScrolled` — including switching
+        // *into* Home, which previously kept whatever value a non-Home
+        // section had last left it at (see the type doc comment). Each
+        // section owns fresh scroll state.
+        .onChange(of: selection) { _, _ in
+            isScrolled = false
         }
     }
 
@@ -156,6 +168,7 @@ struct ShellView: View {
                 libraryId: libraryId,
                 libraryName: categoryName(for: libraryId),
                 model: model,
+                isScrolled: $isScrolled,
                 onMenuExit: { selection = .home }
             )
             // Forces a fresh view + `LibraryModel` when switching between
@@ -164,7 +177,7 @@ struct ShellView: View {
             // view/state rather than reloading for the new library.
             .id(libraryId)
         case .wishlist:
-            WishlistView(model: model, onMenuExit: { selection = .home })
+            WishlistView(model: model, isScrolled: $isScrolled, onMenuExit: { selection = .home })
         case .account:
             // Pops nothing (this section pushes no routes at all) — falls
             // straight to `.home` on Menu; see the type doc comment for why

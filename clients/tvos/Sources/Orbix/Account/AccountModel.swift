@@ -88,6 +88,13 @@ final class AccountModel {
         guard !libraryIds.isEmpty, !isSavingMenu else { return } // ≥1 enforced (server 400s "empty" too)
         isSavingMenu = true
         menuError = nil
+        // Web parity (`onSave` clears its own prior success/error banner
+        // before the request starts): reset the previous attempt's success
+        // flag too, not just its error. Without this, a save that succeeds
+        // and is later retried-and-fails would render *both* the stale
+        // "Saved." confirmation (left over from the earlier success) and the
+        // new failure's error message at the same time.
+        menuSaved = false
         do {
             let items = try await client.saveMenu(libraryIds: libraryIds)
             appModel.applyMenu(items)

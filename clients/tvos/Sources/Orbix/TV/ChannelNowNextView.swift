@@ -55,36 +55,39 @@ struct ChannelNowNextView: View {
 
     // MARK: - ISO → local HH:MM
 
-    /// A computed property (not a cached `static let`): a `static let` would
-    /// capture whatever `L10n.locale` was at first access and outlive any
-    /// later profile language change, since `RootView`'s `.id(uiLanguage)`
-    /// rebuild recreates *views*, not this type's static storage. Rebuilt on
-    /// every call instead, always reading the current `L10n.locale`.
+    /// Locale-keyed cache, not a bare `static let`: a single cached formatter
+    /// would capture whatever `L10n.locale` was at first access and outlive
+    /// any later profile language change, since `RootView`'s `.id(uiLanguage)`
+    /// rebuild recreates *views*, not this type's static storage — see
+    /// `displayFormatter` below. P5 Task 6: there's one `ChannelNowNextView`
+    /// per guide row, each calling `time(_:)` once or twice per render, so
+    /// rebuilding a fresh `DateFormatter` on *every* call (the simpler
+    /// correctness-only fix) allocated dozens of them per guide render.
+    /// Keying by locale identifier keeps the same correctness (a language
+    /// change gets its own fresh entry, never a stale reused instance) while
+    /// making the steady state — unchanged locale, the overwhelmingly common
+    /// case — reuse one instance: at most a handful of entries, one per
+    /// language the app ships (6 today).
+    private static var displayFormatterCache: [String: DateFormatter] = [:]
+
     private static var displayFormatter: DateFormatter {
+        let key = L10n.locale.identifier
+        if let cached = displayFormatterCache[key] { return cached }
         let f = DateFormatter()
         f.locale = L10n.locale
         f.timeStyle = .short
         f.dateStyle = .none
+        displayFormatterCache[key] = f
         return f
     }
 
-    private static let isoFractional: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-
-    private static let isoPlain: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
-
     /// Localized short time for an ISO timestamp; echoes the raw string back
     /// if it can't be parsed (defensive — the guide chip still renders).
+    /// Parsing delegates to `OrbixKit`'s `orbixParseISODate` (the shared
+    /// fractional-then-plain two-formatter idiom) rather than this view
+    /// keeping its own private formatter pair.
     static func time(_ iso: String) -> String {
-        let date = isoFractional.date(from: iso) ?? isoPlain.date(from: iso)
-        guard let date else { return iso }
+        guard let date = orbixParseISODate(iso) else { return iso }
         return displayFormatter.string(from: date)
     }
 }

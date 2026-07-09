@@ -426,7 +426,7 @@ public actor OrbixClient {
 
     /// `GET /api/tv/channels/:id` (see `tv-catalog.ts:305-364`) — full
     /// channel detail incl. ordered `streams`. 404s on a missing/hidden
-    /// channel (surfaced as `OrbixError.http(404)`).
+    /// channel (surfaced as `OrbixError.http(404, code:)`).
     public func tvChannel(id: String) async throws -> TvChannelDetail {
         try await send(method: "GET", url: baseURL.appending(path: "api/tv/channels/\(id)"))
     }
