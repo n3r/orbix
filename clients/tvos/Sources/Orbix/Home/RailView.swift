@@ -16,18 +16,30 @@ import SwiftUI
 /// already made (the focus engine auto-scrolls to keep the focused card
 /// on-screen as the remote's D-pad moves focus within the `.focusSection()`).
 ///
-/// Heading text is always the server-provided `row.title` (web line 53-54's
-/// `LOCALIZED_ROW_KEYS`-based override is a Phase 5 i18n concern per the
-/// plan, not reproduced here).
+/// Heading text mirrors the web's `LOCALIZED_ROW_KEYS` override
+/// (`MediaRow.tsx:19,53-54`): the three static UI-chrome row keys are
+/// localized by key via `L10n.t("catalog.rows.\(row.key)")`; every other
+/// (data-bearing) row falls back to the server-provided `row.title`.
 struct RailView: View {
     let row: HomeRow
     let baseURL: URL?
     let imageLoader: ImageLoader
     var onSelect: (MediaCard) -> Void
 
+    /// Home-row keys whose headings are static UI chrome and can be
+    /// localized by key. Data-bearing rows (e.g. "becauseYouWatched", whose
+    /// heading embeds a media title) are not listed and fall back to the
+    /// server-provided `row.title`. Mirrors the web's `LOCALIZED_ROW_KEYS`
+    /// (`MediaRow.tsx:19`).
+    private static let localizedRowKeys: Set<String> = ["continue", "hiddenGems", "tonight"]
+
+    private var heading: String {
+        Self.localizedRowKeys.contains(row.key) ? L10n.t("catalog.rows.\(row.key)") : row.title
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text(row.title)
+            Text(heading)
                 .font(OrbixType.rowHeading)
                 .foregroundStyle(OrbixColor.text)
                 .padding(.leading, 4)

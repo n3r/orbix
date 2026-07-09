@@ -1248,12 +1248,13 @@
       }
     },
     "catalog.home.emptyBody": {
+      "comment": "TV-worded — English is deliberately TV-specific (differs from the web's wording for this string); es/de/pt/ru/fr retranslated to match the TV English, not ported from web (Phase 5 Task 5 review fix); flagged for Phase 6 audit.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Füge eine Mediathek hinzu und starte einen Scan, um deine Startseite zu füllen."
+            "value": "Scanne eine Bibliothek auf dem Server, um hier Titel zu sehen."
           }
         },
         "en": {
@@ -1265,36 +1266,37 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Añade una biblioteca y ejecuta un análisis para llenar tu inicio con algo que ver."
+            "value": "Escanea una biblioteca en el servidor para ver títulos aquí."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ajoutez une bibliothèque et lancez une analyse pour remplir votre accueil."
+            "value": "Analysez une bibliothèque sur le serveur pour voir des titres ici."
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Adicione uma biblioteca e faça uma varredura para preencher sua página inicial."
+            "value": "Escaneie uma biblioteca no servidor para ver títulos aqui."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Добавьте библиотеку и запустите сканирование, чтобы заполнить главную страницу."
+            "value": "Запустите сканирование библиотеки на сервере, чтобы увидеть тайтлы здесь."
           }
         }
       }
     },
     "catalog.home.emptyTitle": {
+      "comment": "TV-worded — English is deliberately TV-specific (differs from the web's wording for this string); es/de/pt/ru/fr retranslated to match the TV English, not ported from web (Phase 5 Task 5 review fix); flagged for Phase 6 audit.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deine Mediathek ist leer"
+            "value": "Noch keine Titel"
           }
         },
         "en": {
@@ -1306,36 +1308,37 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu biblioteca está vacía"
+            "value": "Todavía no hay títulos"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Votre bibliothèque est vide"
+            "value": "Aucun titre pour l'instant"
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sua biblioteca está vazia"
+            "value": "Ainda não há títulos"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ваша библиотека пуста"
+            "value": "Тайтлов пока нет"
           }
         }
       }
     },
     "catalog.home.errorTitle": {
+      "comment": "TV-worded — English is deliberately TV-specific (differs from the web's wording for this string); es/de/pt/ru/fr retranslated to match the TV English, not ported from web (Phase 5 Task 5 review fix); flagged for Phase 6 audit.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Startseite konnte nicht geladen werden"
+            "value": "Titel konnten nicht geladen werden"
           }
         },
         "en": {
@@ -1347,25 +1350,25 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "No se pudo cargar tu inicio"
+            "value": "No se pudieron cargar los títulos"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Impossible de charger votre accueil"
+            "value": "Impossible de charger les titres"
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Não foi possível carregar sua página inicial"
+            "value": "Não foi possível carregar os títulos"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Не удалось загрузить главную страницу"
+            "value": "Не удалось загрузить тайтлы"
           }
         }
       }
@@ -1408,6 +1411,129 @@
           "stringUnit": {
             "state": "translated",
             "value": "Библиотека"
+          }
+        }
+      }
+    },
+    "catalog.rows.continue": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weiterschauen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continue Watching"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seguir viendo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reprendre la lecture"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continuar assistindo"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Продолжить просмотр"
+          }
+        }
+      }
+    },
+    "catalog.rows.hiddenGems": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verborgene Schätze"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hidden gems"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Joyas ocultas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Perles cachées"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Joias escondidas"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Скрытые жемчужины"
+          }
+        }
+      }
+    },
+    "catalog.rows.tonight": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Etwas für heute Abend"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pick something for tonight"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elige algo para esta noche"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une idée pour ce soir"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escolha algo para esta noite"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выберите что-нибудь на вечер"
           }
         }
       }
