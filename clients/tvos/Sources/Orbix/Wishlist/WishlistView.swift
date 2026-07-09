@@ -132,7 +132,7 @@ struct WishlistView: View {
     }
 
     private var heading: some View {
-        Text("My List")
+        Text(L10n.t("wishlist.heading"))
             .font(OrbixType.rowHeading)
             .foregroundStyle(OrbixColor.text)
             .accessibilityIdentifier("wishlistHeading")
@@ -177,11 +177,11 @@ struct WishlistView: View {
     /// requirement (`WishlistPage.tsx` lines 21-26).
     private var emptyView: some View {
         ContentUnavailableView {
-            Label("My List is empty", systemImage: "heart")
+            Label(L10n.t("wishlist.emptyTitle"), systemImage: "heart")
         } description: {
             VStack(spacing: 6) {
-                Text("Your wishlist is empty.")
-                Text("Open a title and press “Add to Wishlist” to save it for later.")
+                Text(L10n.t("wishlist.empty"))
+                Text(L10n.t("wishlist.emptyHint"))
                     .font(.callout)
             }
         }
@@ -191,11 +191,11 @@ struct WishlistView: View {
 
     private func errorView(message: String, client: OrbixClient) -> some View {
         ContentUnavailableView {
-            Label("Couldn't load your list", systemImage: "exclamationmark.triangle")
+            Label(L10n.t("wishlist.errorTitle"), systemImage: "exclamationmark.triangle")
         } description: {
             Text(message)
         } actions: {
-            Button("Retry") {
+            Button(L10n.t("common.actions.retry")) {
                 Task { await wishlistModel.load(client: client) }
             }
             .accessibilityIdentifier("wishlistRetryButton")
@@ -295,7 +295,11 @@ final class WishlistModel {
             loadError = nil
         } catch {
             guard !Task.isCancelled else { return }
-            loadError = "Couldn't load your list: \(error)"
+            if case OrbixError.http(_, let code) = error, let code {
+                loadError = L10n.errorMessage(code)
+            } else {
+                loadError = L10n.t("wishlist.errorTitle")
+            }
             items = []
         }
         isLoading = false

@@ -38,7 +38,7 @@ struct OnboardingChrome<Content: View>: View {
     /// task doesn't own, so this is a small local copy rather than an
     /// extraction.
     private var wordmark: some View {
-        Text("ORBIX")
+        Text(L10n.t("common.app.wordmark"))
             .font(OrbixType.wordmark(size: 44))
             .kerning(10)
             .foregroundStyle(OrbixColor.accent)

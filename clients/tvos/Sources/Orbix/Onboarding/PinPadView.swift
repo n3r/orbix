@@ -32,7 +32,7 @@ struct PinPadView: View {
 
     var body: some View {
         VStack(spacing: 36) {
-            Text("Enter PIN")                       // → profiles.pin.title (Task 4)
+            Text(L10n.t("profiles.pin.title"))
                 .font(.title.bold())
                 .foregroundStyle(OrbixColor.text)
             Text(profileName)
@@ -64,7 +64,7 @@ struct PinPadView: View {
                         if !entered.isEmpty { entered.removeLast() }
                     }
                     digitKey(0)
-                    key(label: Text("Cancel"), id: "pinKey_cancel", action: onCancel) // → profiles.pin.cancel (Task 4)
+                    key(label: Text(L10n.t("profiles.pin.cancel")), id: "pinKey_cancel", action: onCancel)
                 }
             }
             .focusSection()

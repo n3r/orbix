@@ -63,8 +63,8 @@ struct SearchView: View {
                     ProgressView()
                 }
             }
-            .navigationTitle("Search")
-            .searchable(text: $query, prompt: "Movies, shows, genres…")
+            .navigationTitle(L10n.t("search.title"))
+            .searchable(text: $query, prompt: Text(L10n.t("search.searchablePrompt")))
             .onChange(of: query) { _, newValue in
                 guard let client = model.client else { return }
                 searchModel.queryChanged(newValue, client: client)
@@ -144,7 +144,7 @@ struct SearchView: View {
     /// "N results" + the semantic/keyword mode badge (web lines 84-93).
     private func resultsHeader(count: Int, usedEmbeddings: Bool) -> some View {
         HStack(spacing: 16) {
-            Text("\(count) \(count == 1 ? "result" : "results")")
+            Text(L10n.plural("search.results", count))
                 .font(.title3)
                 .foregroundStyle(OrbixColor.textDim)
             modeChip(usedEmbeddings: usedEmbeddings)
@@ -161,7 +161,7 @@ struct SearchView: View {
     /// only, matching that one pixel of web parity without touching the
     /// shared chip radius everywhere else.
     private func modeChip(usedEmbeddings: Bool) -> some View {
-        Text(usedEmbeddings ? "Semantic" : "Keyword")
+        Text(usedEmbeddings ? L10n.t("search.modeChip.semantic") : L10n.t("search.modeChip.keyword"))
             .font(.caption.bold())
             .foregroundStyle(usedEmbeddings ? OrbixColor.accent2 : OrbixColor.textDim)
             .padding(.horizontal, 10)
@@ -182,15 +182,16 @@ struct SearchView: View {
     // MARK: - Landing / skeleton / empty / error states
 
     /// Teaching landing state shown before any query is typed — ported from
-    /// web's centered heading + hint (`SearchPage.tsx` lines 69-74), reusing
-    /// the `search:landing`/`search:placeholder` copy as literal English
-    /// (Phase 5 moves this into the String Catalog).
+    /// web's centered heading + hint (`SearchPage.tsx` lines 69-74), resolving
+    /// the `search.landing`/`search.placeholder` catalog keys (Phase 5 Task 4)
+    /// whose `en` values mirror the web `search:landing`/`search:placeholder`
+    /// copy verbatim.
     private var promptView: some View {
         VStack(spacing: 12) {
-            Text("Search your library")
+            Text(L10n.t("search.landing"))
                 .font(OrbixType.rowHeading)
                 .foregroundStyle(OrbixColor.text)
-            Text("e.g. comedy under 2 hours, something funny and lighthearted")
+            Text(L10n.t("search.placeholder"))
                 .font(.title3)
                 .foregroundStyle(OrbixColor.textDim)
                 .multilineTextAlignment(.center)
@@ -238,9 +239,9 @@ struct SearchView: View {
             resultsHeader(count: 0, usedEmbeddings: searchModel.usedEmbeddings)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("No results found.")
+                Text(L10n.t("search.empty"))
                     .foregroundStyle(OrbixColor.text)
-                Text("Try a different title, or a broader search.")
+                Text(L10n.t("search.emptyHint"))
                     .font(.callout)
                     .foregroundStyle(OrbixColor.textDim)
             }
@@ -253,11 +254,11 @@ struct SearchView: View {
 
     private func errorView(message: String, client: OrbixClient) -> some View {
         ContentUnavailableView {
-            Label("Couldn't search", systemImage: "exclamationmark.triangle")
+            Label(L10n.t("search.errorTitle"), systemImage: "exclamationmark.triangle")
         } description: {
             Text(message)
         } actions: {
-            Button("Retry") {
+            Button(L10n.t("common.actions.retry")) {
                 searchModel.queryChanged(query, client: client)
             }
             .accessibilityIdentifier("searchRetryButton")
@@ -417,7 +418,11 @@ final class SearchModel {
             loadError = nil
         } catch {
             guard !Task.isCancelled else { return }
-            loadError = "Couldn't search: \(error)"
+            if case OrbixError.http(_, let code) = error, let code {
+                loadError = L10n.errorMessage(code)
+            } else {
+                loadError = L10n.t("search.errors.failed")
+            }
             results = []
             usedEmbeddings = false
             searchedQuery = query

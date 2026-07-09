@@ -67,7 +67,11 @@ final class ProfilePickerModel {
         do {
             profiles = try await client.profiles()
         } catch {
-            loadError = "Couldn't load profiles: \(error)"
+            if case OrbixError.http(_, let code) = error, let code {
+                loadError = L10n.errorMessage(code)
+            } else {
+                loadError = L10n.t("profiles.errors.loadFailed")
+            }
         }
         isLoading = false
     }
@@ -116,14 +120,18 @@ final class ProfilePickerModel {
             if pin == nil {
                 pinPrompt = profiles.first { $0.id == id }
             } else {
-                pinError = "Wrong PIN. Try again."   // → profiles.pin.wrong (Task 4)
+                pinError = L10n.t("profiles.pin.wrong")
             }
             return false
         } catch {
             if pin == nil {
-                loadError = "Couldn't select profile: \(error)"
+                if case OrbixError.http(_, let code) = error, let code {
+                    loadError = L10n.errorMessage(code)
+                } else {
+                    loadError = L10n.t("profiles.errors.selectFailed")
+                }
             } else {
-                pinError = "Couldn't verify PIN. Try again."  // → profiles.pin.failed
+                pinError = L10n.t("profiles.pin.failed")
             }
             return false
         }
@@ -145,7 +153,11 @@ final class ProfilePickerModel {
         do {
             _ = try await client.createProfile(name: name, language: language)
         } catch {
-            addError = "Couldn't create profile: \(error)"
+            if case OrbixError.http(_, let code) = error, let code {
+                addError = L10n.errorMessage(code)
+            } else {
+                addError = L10n.t("profiles.errors.addFailed")
+            }
             return false
         }
 
@@ -158,7 +170,11 @@ final class ProfilePickerModel {
         do {
             profiles = try await client.profiles()
         } catch {
-            loadError = "Couldn't load profiles: \(error)"
+            if case OrbixError.http(_, let code) = error, let code {
+                loadError = L10n.errorMessage(code)
+            } else {
+                loadError = L10n.t("profiles.errors.loadFailed")
+            }
         }
         return true
     }

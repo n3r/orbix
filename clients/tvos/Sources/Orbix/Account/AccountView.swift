@@ -120,7 +120,7 @@ struct AccountView: View {
                 Text(model.activeProfile?.name ?? "")
                     .font(.system(size: 34, weight: .semibold))
                     .foregroundStyle(OrbixColor.text)
-                Text(model.activeProfile?.kind == "kids" ? "Kids profile" : "Standard profile")
+                Text(model.activeProfile?.kind == "kids" ? L10n.t("account.profileKind.kids") : L10n.t("account.profileKind.standard"))
                     .font(.title3)
                     .foregroundStyle(OrbixColor.textDim)
             }
@@ -145,7 +145,7 @@ struct AccountView: View {
     /// optimistic-flip mechanics.
     private func languageSection(client: OrbixClient) -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Language")
+            Text(L10n.t("common.language"))
                 .font(OrbixType.rowHeading)
                 .foregroundStyle(OrbixColor.text)
 
@@ -189,7 +189,7 @@ struct AccountView: View {
     /// (`AppModel.switchProfile()`), which now offers PIN entry for free
     /// (Task 2's single integration point).
     private var switchProfileSection: some View {
-        Button("Switch Profile") {
+        Button(L10n.t("nav.switchProfile")) {
             model.switchProfile()
         }
         .buttonStyle(OrbixButtonStyle(.ghost))
@@ -211,10 +211,10 @@ struct AccountView: View {
         // which needs the full content width to lay out six native labels
         // without truncating (see `content`'s `.frame(maxWidth: .infinity)`).
         VStack(alignment: .leading, spacing: 20) {
-            Text("My Menu")
+            Text(L10n.t("account.tabs.menu"))
                 .font(OrbixType.rowHeading)
                 .foregroundStyle(OrbixColor.text)
-            Text("Choose which categories show in your menu and put them in order.")
+            Text(L10n.t("account.menu.intro"))
                 .font(.callout)
                 .foregroundStyle(OrbixColor.textDim)
 
@@ -247,7 +247,7 @@ struct AccountView: View {
     }
 
     private func menuRow(_ library: MenuItem, index: Int, total: Int) -> some View {
-        let name = library.name ?? "Library"
+        let name = library.name ?? L10n.t("catalog.library.fallbackName")
         let isEnabled = accountModel.enabled.contains(library.libraryId)
         return HStack(spacing: 20) {
             Button {
@@ -275,7 +275,7 @@ struct AccountView: View {
                 .buttonStyle(MenuMoveButtonStyle())
                 .disabled(index == 0)
                 .accessibilityIdentifier("accountMenuUp_\(library.libraryId)")
-                .accessibilityLabel("Move \(name) up")
+                .accessibilityLabel(L10n.t("account.menu.moveUp", name))
 
                 Button {
                     accountModel.move(index, 1)
@@ -285,7 +285,7 @@ struct AccountView: View {
                 .buttonStyle(MenuMoveButtonStyle())
                 .disabled(index == total - 1)
                 .accessibilityIdentifier("accountMenuDown_\(library.libraryId)")
-                .accessibilityLabel("Move \(name) down")
+                .accessibilityLabel(L10n.t("account.menu.moveDown", name))
             }
         }
         .padding(.horizontal, 20)
@@ -298,7 +298,7 @@ struct AccountView: View {
     /// least one" / "Saved." captions (`ProfileMenuEditor.tsx:86-90`).
     private func menuSaveRow(client: OrbixClient) -> some View {
         HStack(spacing: 16) {
-            Button(accountModel.isSavingMenu ? "Saving…" : "Save menu") {
+            Button(accountModel.isSavingMenu ? L10n.t("common.status.saving") : L10n.t("account.menu.save")) {
                 Task { await accountModel.saveMenu(client: client, appModel: model) }
             }
             .buttonStyle(OrbixButtonStyle(.primary))
@@ -306,12 +306,12 @@ struct AccountView: View {
             .accessibilityIdentifier("accountMenuSave")
 
             if accountModel.noneEnabled {
-                Text("Select at least one category.")
+                Text(L10n.t("account.menu.selectOne"))
                     .font(.callout)
                     .foregroundStyle(OrbixColor.textDim)
                     .accessibilityIdentifier("accountMenuSelectOne")
             } else if accountModel.menuSaved {
-                Text("Saved.")
+                Text(L10n.t("account.menu.saved"))
                     .font(.callout)
                     .foregroundStyle(OrbixColor.textDim)
                     .accessibilityIdentifier("accountMenuSaved")
@@ -333,10 +333,10 @@ struct AccountView: View {
     /// check either of these, so they're surfaced here instead.
     private var serverSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Server")
+            Text(L10n.t("account.server.heading"))
                 .font(OrbixType.rowHeading)
                 .foregroundStyle(OrbixColor.text)
-            Text(model.baseURL?.absoluteString ?? "Not configured")
+            Text(model.baseURL?.absoluteString ?? L10n.t("account.server.url"))
                 .font(.callout)
                 .foregroundStyle(OrbixColor.textDim)
                 .accessibilityIdentifier("accountServerURL")
@@ -364,7 +364,7 @@ struct AccountView: View {
     /// that method's doc comment.
     private var unlinkSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Button("Unlink Device") {
+            Button(L10n.t("account.unlink.button")) {
                 showUnlinkConfirm = true
             }
             .buttonStyle(OrbixButtonStyle(.danger))
@@ -372,15 +372,15 @@ struct AccountView: View {
         }
         .focusSection()
         .accessibilityIdentifier("accountUnlinkSection")
-        .alert("Unlink this device?", isPresented: $showUnlinkConfirm) {
-            Button("Cancel", role: .cancel) {}
+        .alert(L10n.t("account.unlink.confirmTitle"), isPresented: $showUnlinkConfirm) {
+            Button(L10n.t("common.actions.cancel"), role: .cancel) {}
                 .accessibilityIdentifier("accountUnlinkCancel")
-            Button("Unlink", role: .destructive) {
+            Button(L10n.t("account.unlink.confirmButton"), role: .destructive) {
                 Task { await model.unlinkDevice() }
             }
             .accessibilityIdentifier("accountUnlinkConfirm")
         } message: {
-            Text("You'll need to pair again to use this device.")
+            Text(L10n.t("account.unlink.confirmBody"))
         }
     }
 }

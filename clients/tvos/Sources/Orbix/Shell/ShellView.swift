@@ -182,7 +182,7 @@ struct ShellView: View {
     /// keeps "Browse" as the fallback for parity if a library ever isn't in
     /// `menuItems` (e.g. a stale/removed category).
     private func categoryName(for libraryId: String) -> String {
-        model.menuItems.first { $0.libraryId == libraryId }?.name ?? "Browse"
+        model.menuItems.first { $0.libraryId == libraryId }?.name ?? L10n.t("catalog.browse.title")
     }
 }
 

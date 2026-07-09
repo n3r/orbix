@@ -170,7 +170,7 @@ struct SeasonEpisodeListView: View {
 
     private func sectionBody(client: OrbixClient) -> some View {
         VStack(alignment: .leading, spacing: 24) {
-            Text("Episodes")
+            Text(L10n.t("title.episodesHeading"))
                 .font(.title3.bold())
                 .foregroundStyle(OrbixColor.text)
                 .padding(.leading, 4)
@@ -220,13 +220,13 @@ struct SeasonEpisodeListView: View {
     /// `^season ` prefix, in which case "Season N".
     private func seasonLabel(_ season: ItemDetail.SeasonSummary) -> String {
         if season.seasonNumber == 0 {
-            return season.name ?? "Specials"
+            return season.name ?? L10n.t("title.specials")
         }
         if let name = season.name, !name.isEmpty,
            name.range(of: "^season\\s", options: [.regularExpression, .caseInsensitive]) == nil {
             return name
         }
-        return "Season \(season.seasonNumber)"
+        return L10n.t("title.seasonNumber", season.seasonNumber)
     }
 
     // MARK: - Episodes region (grid / skeleton / empty / error)
@@ -308,7 +308,7 @@ struct SeasonEpisodeListView: View {
     /// has no episodes, never while it's still loading (the skeleton covers
     /// that).
     private var noEpisodesView: some View {
-        Text("No episodes found for this season.")
+        Text(L10n.t("title.noEpisodes"))
             .font(.callout)
             .foregroundStyle(OrbixColor.textDim)
             .padding(.vertical, 24)
@@ -321,7 +321,7 @@ struct SeasonEpisodeListView: View {
             Text(message)
                 .font(.callout)
                 .foregroundStyle(OrbixColor.textDim)
-            Button("Retry") {
+            Button(L10n.t("common.actions.retry")) {
                 Task { await episodeModel.load(seriesId: seriesId, season: selectedSeason, client: client) }
             }
             .accessibilityIdentifier("seasonEpisodeRetryButton")
@@ -336,7 +336,7 @@ struct SeasonEpisodeListView: View {
     /// `"Pilot"` when titled, `"Episode 3"` otherwise.
     private func episodeDisplayTitle(_ episode: Episode) -> String {
         if let title = episode.title, !title.isEmpty { return title }
-        return "Episode \(episode.episodeNumber)"
+        return L10n.t("title.episodeNumber", episode.episodeNumber)
     }
 
     /// `"3. Pilot"` when titled, `"Episode 3"` otherwise (web `"# Title"`,
@@ -360,7 +360,7 @@ struct SeasonEpisodeListView: View {
         guard let seconds, seconds > 0 else { return nil }
         let hours = seconds / 3600
         let minutes = (seconds % 3600) / 60
-        return hours > 0 ? "\(hours)h \(minutes)m" : "\(minutes)m"
+        return hours > 0 ? L10n.t("title.runtime.hm", hours, minutes) : L10n.t("title.runtime.m", minutes)
     }
 
     /// Web `pct` (lines 125-130): a finished episode fills the bar; otherwise
@@ -515,8 +515,10 @@ final class SeasonEpisodeModel {
             guard !Task.isCancelled, loadedSeason == season else { return }
             if let orbixError = error as? OrbixError, case .http(404, _) = orbixError {
                 notFound = true
+            } else if let orbixError = error as? OrbixError, case .http(_, let code) = orbixError, let code {
+                loadError = L10n.errorMessage(code)
             } else {
-                loadError = "Couldn't load episodes: \(error)"
+                loadError = L10n.t("errors.network")
             }
         }
 
@@ -616,7 +618,7 @@ private struct EpisodeCardContent: View {
                 }
             }
             if !playable {
-                Text("Not in library")
+                Text(L10n.t("title.notInLibrary"))
                     .font(.caption)
                     .italic()
                     .foregroundStyle(OrbixColor.textDim)

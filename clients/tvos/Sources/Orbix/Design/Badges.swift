@@ -8,13 +8,13 @@ import SwiftUI
 /// over the card art.
 struct NewBadge: View {
     var body: some View {
-        Text("NEW")
+        Text(L10n.t("catalog.spotlight.new"))
             .font(.caption.bold())
             .foregroundStyle(.white)
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
             .background(OrbixColor.accentStrong, in: RoundedRectangle(cornerRadius: OrbixRadius.chip, style: .continuous))
-            .accessibilityLabel(Text("New"))
+            .accessibilityLabel(Text(L10n.t("catalog.spotlight.newAccessibilityLabel")))
     }
 }
 

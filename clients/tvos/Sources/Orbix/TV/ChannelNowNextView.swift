@@ -14,9 +14,10 @@ import SwiftUI
 /// - Times are formatted locale-aware short (`hour: "2-digit", minute:
 ///   "2-digit"` on web → `DateFormatter.timeStyle = .short` here), parsed with
 ///   the same fractional-then-plain ISO idiom OrbixKit uses.
-/// - Copy matches the web English strings (`tv:guidePage.noEpg` /
-///   `tv:guidePage.next`) — the tvOS app has no i18n layer, so these are the
-///   English literals rather than translation keys.
+/// - Copy is resolved via `L10n.t` against the `tv.guidePage.noEpg` /
+///   `tv.guidePage.nextLine` catalog keys (Phase 5 Task 4), mirroring the web
+///   English strings (`tv:guidePage.noEpg` / `tv:guidePage.next`) verbatim
+///   for `en`.
 struct ChannelNowNextView: View {
     let now: TvProgrammeSlot?
     let next: TvProgrammeSlot?
@@ -37,14 +38,14 @@ struct ChannelNowNextView: View {
                 NowProgressBar(fraction: tvNowProgressFraction(startISO: now.start, stopISO: now.stop))
                     .frame(maxWidth: 220)
             } else {
-                Text("No guide data")
+                Text(L10n.t("tv.guidePage.noEpg"))
                     .font(.caption)
                     .foregroundStyle(OrbixColor.textDim)
                     .lineLimit(1)
             }
 
             if let next {
-                Text("Next · \(Self.time(next.start)) \(next.title)")
+                Text(L10n.t("tv.guidePage.nextLine", Self.time(next.start), next.title))
                     .font(.caption2)
                     .foregroundStyle(OrbixColor.textDim)
                     .lineLimit(1)

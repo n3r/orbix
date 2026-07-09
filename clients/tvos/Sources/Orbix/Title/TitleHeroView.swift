@@ -112,9 +112,9 @@ struct TitleHeroView: View {
         if detail.kind == "series", let seasons = detail.seasons, !seasons.isEmpty {
             let seasonCount = seasons.count
             let episodeCount = seasons.reduce(0) { $0 + ($1.episodeCount ?? 0) }
-            var text = "\(seasonCount) season\(seasonCount == 1 ? "" : "s")"
+            var text = L10n.plural("title.seasonCount", seasonCount)
             if episodeCount > 0 {
-                text += " · \(episodeCount) episode\(episodeCount == 1 ? "" : "s")"
+                text += " · " + L10n.plural("title.episodeCount", episodeCount)
             }
             parts.append(text)
         } else if let runtime = Self.formattedRuntime(detail.runtimeSec) {
@@ -168,8 +168,8 @@ struct TitleHeroView: View {
     /// resume-awareness enhancement layered on top (movie only, per the
     /// brief — a series' per-episode resume is a later task's job).
     private var playLabel: String {
-        if !canPlay { return "No media" }
-        return resumeAvailable ? "Resume" : "Play"
+        if !canPlay { return L10n.t("title.noMedia") }
+        return resumeAvailable ? L10n.t("title.resume") : L10n.t("title.play")
     }
 
     /// Web lines 112-121: ghost button, hidden while membership is unknown.
@@ -184,7 +184,7 @@ struct TitleHeroView: View {
     /// directional-press check at the Phase 6 hardware pass.
     private func wishlistButton(inWishlist: Bool) -> some View {
         Button(action: onToggleWishlist) {
-            Text(inWishlist ? "✓ In Wishlist" : "+ Add to Wishlist")
+            Text(inWishlist ? L10n.t("title.wishlistButton.inWishlist") : L10n.t("title.wishlistButton.add"))
         }
         .buttonStyle(OrbixButtonStyle(.ghost))
         .accessibilityIdentifier("titlePageWishlistButton")
@@ -205,7 +205,7 @@ struct TitleHeroView: View {
         guard let seconds, seconds > 0 else { return nil }
         let hours = seconds / 3600
         let minutes = (seconds % 3600) / 60
-        return hours > 0 ? "\(hours)h \(minutes)m" : "\(minutes)m"
+        return hours > 0 ? L10n.t("title.runtime.hm", hours, minutes) : L10n.t("title.runtime.m", minutes)
     }
 }
 

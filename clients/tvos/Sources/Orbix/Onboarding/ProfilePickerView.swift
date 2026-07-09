@@ -102,7 +102,7 @@ struct ProfilePickerView: View {
             VStack(spacing: 48) {
                 wordmark
 
-                Text("Who's Watching?")
+                Text(L10n.t("profiles.title"))
                     .font(.system(size: 64, weight: .bold))
                     .foregroundStyle(OrbixColor.text)
 
@@ -134,7 +134,7 @@ struct ProfilePickerView: View {
     /// wrapped in `OnboardingChrome` itself, since that layout is a narrow
     /// centered card and the picker is a full-screen moment on web too).
     private var wordmark: some View {
-        Text("ORBIX")
+        Text(L10n.t("common.app.wordmark"))
             .font(OrbixType.wordmark(size: 44))
             .kerning(10)
             .foregroundStyle(OrbixColor.accent)
@@ -152,7 +152,7 @@ struct ProfilePickerView: View {
             .padding(.vertical, 16)
 
             if profileModel.profiles.isEmpty {
-                Text("Create your first profile to start watching.")
+                Text(L10n.t("profiles.emptyHint"))
                     .font(.callout)
                     .foregroundStyle(OrbixColor.textDim)
                     .multilineTextAlignment(.center)
@@ -203,7 +203,7 @@ struct ProfilePickerView: View {
                     // badge renders exactly where KIDS always has.
                     VStack(alignment: .trailing, spacing: 8) {
                         if profile.kind == "kids" {
-                            Text("KIDS")
+                            Text(L10n.t("profiles.badge.kids"))
                                 .font(.caption.bold())
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 4)
@@ -270,7 +270,7 @@ struct ProfilePickerView: View {
                 // Fixed-size (rather than the profile tiles' `frame(maxWidth:
                 // 220)`) so "Add Profile" — longer than any real profile name
                 // — never truncates to "Add Prof…" (finding 3).
-                Text("Add Profile")
+                Text(L10n.t("profiles.addProfile"))
                     .font(.title3)
                     .foregroundStyle(OrbixColor.textDim)
                     .lineLimit(1)
@@ -306,7 +306,7 @@ struct ProfilePickerView: View {
                 .frame(maxWidth: 900)
                 .accessibilityIdentifier("profilesErrorMessage")
 
-            Button("Retry") {
+            Button(L10n.t("common.actions.retry")) {
                 Task { await profileModel.load(client: client) }
             }
             .buttonStyle(OrbixButtonStyle(.primary))
@@ -334,32 +334,32 @@ struct ProfilePickerView: View {
     @ViewBuilder
     private func addProfileForm(client: OrbixClient) -> some View {
         VStack(alignment: .leading, spacing: 32) {
-            Text("New Profile")
+            Text(L10n.t("profiles.form.title"))
                 .font(.title2.bold())
                 .foregroundStyle(OrbixColor.text)
 
             VStack(alignment: .leading, spacing: 12) {
-                Text("Name")
+                Text(L10n.t("profiles.form.nameLabel"))
                     .font(.callout)
                     .foregroundStyle(OrbixColor.textDim)
-                TextField("Profile name", text: $newProfileName)
+                TextField(L10n.t("profiles.form.namePlaceholder"), text: $newProfileName)
                     .textFieldStyle(.plain)
                     .focused($nameFieldFocused)
                     .accessibilityIdentifier("profileNameField")
             }
 
             VStack(alignment: .leading, spacing: 12) {
-                Text("Language")
+                Text(L10n.t("profiles.language.label"))
                     .font(.callout)
                     .foregroundStyle(OrbixColor.textDim)
-                Picker("Language", selection: $newProfileLanguage) {
+                Picker(L10n.t("profiles.language.label"), selection: $newProfileLanguage) {
                     ForEach(Self.languages, id: \.code) { language in
                         Text(language.label).tag(language.code)
                     }
                 }
                 .accessibilityIdentifier("profileLanguagePicker")
 
-                Text("The language Orbix uses for this profile.")
+                Text(L10n.t("profiles.language.help"))
                     .font(.caption)
                     .foregroundStyle(OrbixColor.textDim)
             }
@@ -372,14 +372,14 @@ struct ProfilePickerView: View {
             }
 
             HStack(spacing: 24) {
-                Button(profileModel.isAdding ? "Saving…" : "Create") {
+                Button(profileModel.isAdding ? L10n.t("common.status.saving") : L10n.t("profiles.form.create")) {
                     submitAddProfile(client: client)
                 }
                 .buttonStyle(OrbixButtonStyle(.primary))
                 .disabled(newProfileName.isEmpty || profileModel.isAdding)
                 .accessibilityIdentifier("createProfileButton")
 
-                Button("Cancel") {
+                Button(L10n.t("common.actions.cancel")) {
                     closeAddForm()
                 }
                 .buttonStyle(OrbixButtonStyle(.ghost))

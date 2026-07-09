@@ -246,7 +246,7 @@ struct LiveTvOverlay: View {
                             QualityChip(label: quality)
                         }
                         if controller.sourceIndex > 0, let total = controller.play?.sources.count {
-                            Text("Source \(controller.sourceIndex + 1)/\(total)")
+                            Text(L10n.t("tv.player.source", controller.sourceIndex + 1, total))
                                 .font(.caption)
                                 .foregroundStyle(.white.opacity(0.6))
                         }
@@ -261,7 +261,7 @@ struct LiveTvOverlay: View {
                             .frame(maxWidth: 260)
                     }
                     if let next = controller.play?.nowNext.next {
-                        Text("Next · \(next.title)")
+                        Text(L10n.t("tv.player.nextProgramme", next.title))
                             .font(.caption2)
                             .foregroundStyle(.white.opacity(0.5))
                             .lineLimit(1)
@@ -294,15 +294,15 @@ struct LiveTvOverlay: View {
 
     private var offlinePanel: some View {
         VStack(spacing: 24) {
-            Text("Channel appears offline")
+            Text(L10n.t("tv.player.offline"))
                 .font(.title2.weight(.medium))
                 .foregroundStyle(.white)
             HStack(spacing: 20) {
-                Button("Retry") { controller.retry() }
+                Button(L10n.t("common.actions.retry")) { controller.retry() }
                     .buttonStyle(OrbixButtonStyle(.primary))
                     .focused($focus, equals: .offlineRetry)
                     .accessibilityIdentifier("liveOfflineRetry")
-                Button("Next channel") { zap(1) }
+                Button(L10n.t("tv.player.nextChannel")) { zap(1) }
                     .buttonStyle(OrbixButtonStyle(.ghost))
                     .focused($focus, equals: .offlineNext)
                     .accessibilityIdentifier("liveOfflineNext")
@@ -316,7 +316,7 @@ struct LiveTvOverlay: View {
     private var miniGuide: some View {
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
-                Text("Channels")
+                Text(L10n.t("tv.player.miniGuide"))
                     .font(.caption.weight(.semibold))
                     .textCase(.uppercase)
                     .foregroundStyle(.white.opacity(0.5))
@@ -402,7 +402,7 @@ struct LiveTvOverlay: View {
         }
         .buttonStyle(LiveControlButtonStyle())
         .focused($focus, equals: .close)
-        .accessibilityLabel("Close player")
+        .accessibilityLabel(L10n.t("tv.player.close"))
         .accessibilityIdentifier("liveCloseButton")
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(.leading, 48)

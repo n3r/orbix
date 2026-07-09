@@ -20,6 +20,8 @@ targets:
     sources:
       - path: Sources/Orbix
       - path: Resources/Assets.xcassets
+      - path: Resources/Localizable.xcstrings
+        buildPhase: resources
     dependencies:
       - target: OrbixKit
     settings:

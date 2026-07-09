@@ -84,7 +84,7 @@ struct TitlePage: View {
     private func content(client: OrbixClient) -> some View {
         switch titleModel.loadState {
         case .loading:
-            ProgressView("Loading…")
+            ProgressView(L10n.t("common.status.loading"))
                 .font(.title3)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .notFound:
@@ -221,7 +221,7 @@ struct TitlePage: View {
     @ViewBuilder
     private func unmatchedNotice(_ detail: ItemDetail) -> some View {
         if detail.matchState != "matched", detail.matchState != "manual" {
-            Text("Metadata not matched yet — scan with a TMDB token to enrich.")
+            Text(L10n.t("title.unmatchedNotice"))
                 .font(.callout)
                 .foregroundStyle(OrbixColor.warning)
                 .padding(.horizontal, 64)
@@ -233,7 +233,7 @@ struct TitlePage: View {
 
     private func castRail(_ cast: [ItemDetail.CastMember]) -> some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text("Cast")
+            Text(L10n.t("title.section.cast"))
                 .font(.title3.bold())
                 .foregroundStyle(OrbixColor.text)
                 .padding(.leading, 4)
@@ -297,7 +297,7 @@ struct TitlePage: View {
 
     private func moreLikeThisRail(_ items: [MediaCard]) -> some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text("More Like This")
+            Text(L10n.t("title.similar"))
                 .font(.title3.bold())
                 .padding(.leading, 4)
 
@@ -332,10 +332,10 @@ struct TitlePage: View {
         if detail.director != nil || !(detail.genres ?? []).isEmpty {
             VStack(alignment: .leading, spacing: 4) {
                 if let director = detail.director {
-                    detailLine(label: "Director", value: director.name)
+                    detailLine(label: L10n.t("title.section.director"), value: director.name)
                 }
                 if let genres = detail.genres, !genres.isEmpty {
-                    detailLine(label: "Genres", value: genres.joined(separator: ", "))
+                    detailLine(label: L10n.t("title.section.genres"), value: genres.joined(separator: ", "))
                 }
             }
             .padding(.horizontal, 64)
@@ -355,9 +355,9 @@ struct TitlePage: View {
 
     private var notFoundView: some View {
         ContentUnavailableView(
-            "Not available",
+            L10n.t("title.notAvailable"),
             systemImage: "eye.slash",
-            description: Text("This title isn't available right now.")
+            description: Text(L10n.t("title.notAvailableBody"))
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityIdentifier("titlePageNotFound")
@@ -365,11 +365,11 @@ struct TitlePage: View {
 
     private func errorView(message: String, client: OrbixClient) -> some View {
         ContentUnavailableView {
-            Label("Couldn't load title", systemImage: "exclamationmark.triangle")
+            Label(L10n.t("title.errorTitle"), systemImage: "exclamationmark.triangle")
         } description: {
             Text(message)
         } actions: {
-            Button("Retry") {
+            Button(L10n.t("common.actions.retry")) {
                 Task { await titleModel.load(itemId: itemId, client: client) }
             }
             .accessibilityIdentifier("titlePageRetryButton")
@@ -435,7 +435,7 @@ final class TitleModel {
         }
         if isLoading || !hasLoaded { return .loading }
         if notFound { return .notFound }
-        return .error(loadError ?? "Something went wrong.")
+        return .error(loadError ?? L10n.t("errors.unknown"))
     }
 
     /// Fetches the item detail (+ similar, + wishlist membership, all
@@ -457,8 +457,10 @@ final class TitleModel {
         } catch {
             if let orbixError = error as? OrbixError, case .http(404, _) = orbixError {
                 notFound = true
+            } else if let orbixError = error as? OrbixError, case .http(_, let code) = orbixError, let code {
+                loadError = L10n.errorMessage(code)
             } else {
-                loadError = "Couldn't load title: \(error)"
+                loadError = L10n.t("title.errorTitle")
             }
             isLoading = false
             hasLoaded = true

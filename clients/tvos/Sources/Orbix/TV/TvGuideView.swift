@@ -193,7 +193,7 @@ struct TvGuideView: View {
     private var header: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text("TV Guide")
+                Text(L10n.t("tv.guidePage.title"))
                     .font(OrbixType.rowHeading)
                     .foregroundStyle(OrbixColor.text)
                     .accessibilityIdentifier("tvGuideHeading")
@@ -212,18 +212,17 @@ struct TvGuideView: View {
         .id(Self.topAnchorId)
     }
 
-    /// Web's `tv:guidePage.channelCount_one`/`_other` pluralization
-    /// (`en/tv.json`), as an English literal — this app has no i18n layer.
+    /// Web's `tv:guidePage.channelCount_one`/`_other` pluralization.
     private static func channelCountLabel(_ count: Int) -> String {
-        count == 1 ? "1 channel" : "\(count) channels"
+        L10n.plural("tv.guidePage.channelCount", count)
     }
 
     private var viewToggle: some View {
         HStack(spacing: 12) {
-            guideChip(label: "List", isSelected: view == .list, id: "tvGuideToggle_list") {
+            guideChip(label: L10n.t("tv.guidePage.viewList"), isSelected: view == .list, id: "tvGuideToggle_list") {
                 setView(.list)
             }
-            guideChip(label: "Grid", isSelected: view == .grid, id: "tvGuideToggle_grid") {
+            guideChip(label: L10n.t("tv.guidePage.viewGrid"), isSelected: view == .grid, id: "tvGuideToggle_grid") {
                 setView(.grid)
             }
         }
@@ -254,7 +253,7 @@ struct TvGuideView: View {
     // MARK: - Search field (web `<Input>` → on-page `TextField`)
 
     private var searchField: some View {
-        TextField("", text: $query, prompt: Text("Search channels").foregroundStyle(OrbixColor.textDim))
+        TextField("", text: $query, prompt: Text(L10n.t("tv.guidePage.searchPlaceholder")).foregroundStyle(OrbixColor.textDim))
             .textFieldStyle(.plain)
             .font(.system(size: 24))
             .foregroundStyle(OrbixColor.text)
@@ -270,10 +269,10 @@ struct TvGuideView: View {
     private var filterChipsRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 16) {
-                guideChip(label: "All", isSelected: filter == .all, id: "tvGuideFilterChip_all") {
+                guideChip(label: L10n.t("tv.guidePage.all"), isSelected: filter == .all, id: "tvGuideFilterChip_all") {
                     filter = .all
                 }
-                guideChip(label: "Favorites", isSelected: filter == .favorites, id: "tvGuideFilterChip_favorites") {
+                guideChip(label: L10n.t("tv.guidePage.favorites"), isSelected: filter == .favorites, id: "tvGuideFilterChip_favorites") {
                     filter = .favorites
                 }
                 ForEach(guideModel.countries, id: \.self) { code in
@@ -287,7 +286,7 @@ struct TvGuideView: View {
                 }
                 ForEach(guideModel.categories, id: \.self) { category in
                     guideChip(
-                        label: Self.capitalizedCategory(category),
+                        label: Self.categoryLabel(category),
                         isSelected: filter == .category(category),
                         id: "tvGuideFilterChip_category_\(category)"
                     ) {
@@ -305,13 +304,15 @@ struct TvGuideView: View {
         .accessibilityIdentifier("tvGuideFilterChips")
     }
 
-    /// Web `c.id.charAt(0).toUpperCase() + c.id.slice(1)`
-    /// (`TvGuidePage.tsx` line 207's `defaultValue`) — mirrors
-    /// `TvHomeView.capitalized` exactly (server category ids are always
-    /// lowercase single words, so this reads identically to
-    /// `String.capitalized` in practice, but matches the web's exact
-    /// transform rather than title-casing every word).
-    private static func capitalizedCategory(_ id: String) -> String {
+    /// Localized category display name (`tv.categories.<id>`) — replaces the
+    /// old capitalize-the-id fallback (`TvGuidePage.tsx` line 207's
+    /// `defaultValue`) with the full category map (mirrors
+    /// `TvHomeView.categoryLabel`/`TvChannelView.categoryLabel`). Falls back
+    /// to capitalizing the id for any category not yet in the catalog.
+    private static func categoryLabel(_ id: String) -> String {
+        let key = "tv.categories.\(id)"
+        let localized = L10n.t(key)
+        guard localized == key else { return localized }
         guard let first = id.first else { return id }
         return first.uppercased() + id.dropFirst()
     }
@@ -360,9 +361,9 @@ struct TvGuideView: View {
     /// needed).
     private var emptyView: some View {
         ContentUnavailableView {
-            Label("No channels match.", systemImage: "list.and.film")
+            Label(L10n.t("tv.guidePage.empty"), systemImage: "list.and.film")
         } description: {
-            Text("Try a different search, or a different filter.")
+            Text(L10n.t("tv.guidePage.emptyHint"))
         }
         .padding(.top, 60)
         .accessibilityIdentifier("tvGuideEmptyState")
@@ -370,11 +371,11 @@ struct TvGuideView: View {
 
     private func errorView(message: String, client: OrbixClient) -> some View {
         ContentUnavailableView {
-            Label("Couldn't load channels", systemImage: "exclamationmark.triangle")
+            Label(L10n.t("tv.guidePage.errorTitle"), systemImage: "exclamationmark.triangle")
         } description: {
             Text(message)
         } actions: {
-            Button("Retry") {
+            Button(L10n.t("common.actions.retry")) {
                 Task { await guideModel.load(client: client, filter: filter, query: query) }
             }
             .accessibilityIdentifier("tvGuideRetryButton")
@@ -451,12 +452,12 @@ struct TvGuideView: View {
         }
         .buttonStyle(GuideRowStyle())
         .contextMenu {
-            Button("Channel details") {
+            Button(L10n.t("tv.guidePage.schedule")) {
                 path.append(TvChannelRoute(channelId: channel.id))
             }
         }
         .accessibilityIdentifier("tvGuideRow_\(channel.id)")
-        .accessibilityLabel("Watch \(channel.name)")
+        .accessibilityLabel(L10n.t("tv.guidePage.play", channel.name))
     }
 
     // MARK: - Grid tune bridge (Task 6)
@@ -773,7 +774,11 @@ final class TvGuideModel {
         } catch {
             guard id == requestId else { return }
             if offset == 0 {
-                loadError = "Couldn't load channels: \(error)"
+                if case OrbixError.http(_, let code) = error, let code {
+                    loadError = L10n.errorMessage(code)
+                } else {
+                    loadError = L10n.t("errors.network")
+                }
                 channels = []
             }
             // A failed page-2+ fetch is silent: the already-loaded channels

@@ -156,9 +156,9 @@ struct HomeView: View {
 
     private var emptyView: some View {
         ContentUnavailableView(
-            "No titles yet",
+            L10n.t("catalog.home.emptyTitle"),
             systemImage: "film.stack",
-            description: Text("Scan a library on the server to see titles here.")
+            description: Text(L10n.t("catalog.home.emptyBody"))
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityIdentifier("homeEmptyState")
@@ -166,11 +166,11 @@ struct HomeView: View {
 
     private func errorView(message: String, client: OrbixClient) -> some View {
         ContentUnavailableView {
-            Label("Couldn't load titles", systemImage: "exclamationmark.triangle")
+            Label(L10n.t("catalog.home.errorTitle"), systemImage: "exclamationmark.triangle")
         } description: {
             Text(message)
         } actions: {
-            Button("Retry") {
+            Button(L10n.t("common.actions.retry")) {
                 Task { await homeModel.load(client: client) }
             }
             .accessibilityIdentifier("homeRetryButton")
@@ -281,7 +281,11 @@ final class HomeModel {
             let homeRows = try await client.homeRows()
             rows = homeRows.rows
         } catch {
-            loadError = "Couldn't load titles: \(error)"
+            if case OrbixError.http(_, let code) = error, let code {
+                loadError = L10n.errorMessage(code)
+            } else {
+                loadError = L10n.t("errors.network")
+            }
         }
         isLoading = false
         hasLoaded = true

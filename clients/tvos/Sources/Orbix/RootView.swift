@@ -68,7 +68,7 @@ struct RootView: View {
     private var scanningView: some View {
         VStack(spacing: 24) {
             ProgressView().scaleEffect(1.5)
-            Text("Searching your network for Orbix…")
+            Text(L10n.t("server.scanning"))
                 .font(.title2)
                 .foregroundStyle(OrbixColor.textDim)
         }
@@ -77,7 +77,7 @@ struct RootView: View {
 
     private var serverListView: some View {
         VStack(spacing: 24) {
-            Text("Select your server").font(.title2)
+            Text(L10n.t("server.selectTitle")).font(.title2)
 
             ForEach(model.discoveredServers) { server in
                 Button {
@@ -98,9 +98,9 @@ struct RootView: View {
             }
 
             HStack(spacing: 24) {
-                Button("Enter address manually") { showManualEntry = true }
+                Button(L10n.t("server.manualEntry")) { showManualEntry = true }
                     .buttonStyle(OrbixButtonStyle(.ghost))
-                Button("Scan again") { Task { await model.scanForServers() } }
+                Button(L10n.t("server.scanAgain")) { Task { await model.scanForServers() } }
                     .buttonStyle(OrbixButtonStyle(.ghost))
             }
             .padding(.top, 8)
@@ -112,34 +112,34 @@ struct RootView: View {
     private var manualEntryView: some View {
         VStack(spacing: 24) {
             if model.didScan && model.discoveredServers.isEmpty {
-                Text("No Orbix servers found on your network")
+                Text(L10n.t("server.notFound"))
                     .font(.title2)
                     .foregroundStyle(OrbixColor.textDim)
             }
 
-            TextField("192.168.1.10:8080", text: $baseURLText)
+            TextField(L10n.t("server.addressPlaceholder"), text: $baseURLText)
                 .textFieldStyle(.plain)
                 .focused($isTextFieldFocused)
                 .frame(maxWidth: 900)
                 .onSubmit(checkServer)
                 .accessibilityIdentifier("baseURLField")
 
-            Text("No need to type http:// — it's added for you.")
+            Text(L10n.t("server.httpHint"))
                 .font(.callout)
                 .foregroundStyle(OrbixColor.textDim)
 
             HStack(spacing: 24) {
-                Button("Connect", action: checkServer)
+                Button(L10n.t("server.connect"), action: checkServer)
                     .buttonStyle(OrbixButtonStyle(.primary))
                     .disabled(trimmedBaseURLText.isEmpty)
                     .accessibilityIdentifier("checkServerButton")
-                Button("Scan again") {
+                Button(L10n.t("server.scanAgain")) {
                     showManualEntry = false
                     Task { await model.scanForServers() }
                 }
                 .buttonStyle(OrbixButtonStyle(.ghost))
                 if !model.discoveredServers.isEmpty {
-                    Button("Back to list") { showManualEntry = false }
+                    Button(L10n.t("server.backToList")) { showManualEntry = false }
                         .buttonStyle(OrbixButtonStyle(.ghost))
                 }
             }
@@ -158,16 +158,16 @@ struct RootView: View {
     private var statusView: some View {
         if let reachable = model.reachable {
             if reachable {
-                Label("Server reachable", systemImage: "checkmark.circle.fill")
+                Label(L10n.t("server.reachable"), systemImage: "checkmark.circle.fill")
                     .font(.title3)
                     .foregroundStyle(OrbixColor.success)
             } else {
-                Label("Couldn't reach that server", systemImage: "xmark.circle.fill")
+                Label(L10n.t("server.unreachable"), systemImage: "xmark.circle.fill")
                     .font(.title3)
                     .foregroundStyle(OrbixColor.danger)
             }
         } else if model.isChecking {
-            Text("Checking…")
+            Text(L10n.t("server.checking"))
                 .font(.title3)
                 .foregroundStyle(OrbixColor.textDim)
         }

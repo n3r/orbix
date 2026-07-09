@@ -47,7 +47,7 @@ struct RatingBadges: View {
     /// so it's intentionally the one non-`OrbixColor` literal in this view.
     private func imdbChip(_ rating: Double) -> some View {
         HStack(spacing: 4) {
-            Text("IMDb")
+            Text(L10n.t("rating.imdb"))
                 .font(.system(size: 15, weight: .bold))
             Text(fmt1(rating))
         }
@@ -71,7 +71,7 @@ struct RatingBadges: View {
     private func tmdbChip(_ score: Double) -> some View {
         chip {
             HStack(spacing: 4) {
-                Text("TMDB")
+                Text(L10n.t("rating.tmdb"))
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(OrbixColor.accent)
                 Text(fmt1(score))
@@ -82,7 +82,7 @@ struct RatingBadges: View {
     private func metacriticChip(_ score: Int) -> some View {
         chip {
             HStack(spacing: 4) {
-                Text("MC")
+                Text(L10n.t("rating.metacritic"))
                     .font(.system(size: 15, weight: .semibold))
                 Text("\(score)")
             }

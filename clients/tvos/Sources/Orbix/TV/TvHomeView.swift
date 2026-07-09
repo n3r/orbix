@@ -115,7 +115,7 @@ struct TvHomeView: View {
 
     private var header: some View {
         HStack {
-            Text("Live TV")
+            Text(L10n.t("tv.home.heading"))
                 .font(OrbixType.rowHeading)
                 .foregroundStyle(OrbixColor.text)
                 .accessibilityIdentifier("tvHomeHeading")
@@ -123,7 +123,7 @@ struct TvHomeView: View {
             // Web's visible Guide affordance (`TvHomePage.tsx` lines 86-90,
             // "the Hulu lesson"); destination is the real `TvGuideView`
             // (Phase 4 Task 5).
-            Button("Guide") { path.append(TvGuideRoute()) }
+            Button(L10n.t("tv.guide")) { path.append(TvGuideRoute()) }
                 .buttonStyle(OrbixButtonStyle(.ghost))
                 .accessibilityIdentifier("tvGuideButton")
         }
@@ -138,7 +138,7 @@ struct TvHomeView: View {
             if !home.recents.isEmpty {
                 ChannelRailView(
                     id: "recents",
-                    title: "Recently watched",
+                    title: L10n.t("tv.rails.recents"),
                     channels: home.recents,
                     baseURL: model.baseURL,
                     imageLoader: imageLoader,
@@ -149,7 +149,7 @@ struct TvHomeView: View {
             if !home.favorites.isEmpty {
                 ChannelRailView(
                     id: "favorites",
-                    title: "Favorites",
+                    title: L10n.t("tv.rails.favorites"),
                     channels: home.favorites,
                     baseURL: model.baseURL,
                     imageLoader: imageLoader,
@@ -174,7 +174,7 @@ struct TvHomeView: View {
                 if !category.channels.isEmpty {
                     ChannelRailView(
                         id: "category_\(category.id)",
-                        title: Self.capitalized(category.id),
+                        title: Self.categoryLabel(category.id),
                         channels: category.channels,
                         baseURL: model.baseURL,
                         imageLoader: imageLoader,
@@ -187,13 +187,15 @@ struct TvHomeView: View {
         .padding(.horizontal, 64)
     }
 
-    /// Web `c.id.charAt(0).toUpperCase() + c.id.slice(1)` (`TvHomePage.tsx`
-    /// line 118's `defaultValue`) — uppercase just the first character,
-    /// leave the rest untouched (server category ids are always lowercase
-    /// single words, so this reads identically to `String.capitalized` in
-    /// practice, but matches the web's exact transform rather than title-
-    /// casing every word).
-    private static func capitalized(_ id: String) -> String {
+    /// Localized category display name (`tv.categories.<id>`) — replaces the
+    /// old capitalize-the-id fallback (`TvHomePage.tsx` line 118's
+    /// `defaultValue`) with the full category map (mirrors
+    /// `TvGuideView.categoryLabel`/`TvChannelView.categoryLabel`). Falls back
+    /// to capitalizing the id for any category not yet in the catalog.
+    private static func categoryLabel(_ id: String) -> String {
+        let key = "tv.categories.\(id)"
+        let localized = L10n.t(key)
+        guard localized == key else { return localized }
         guard let first = id.first else { return id }
         return first.uppercased() + id.dropFirst()
     }
@@ -229,9 +231,9 @@ struct TvHomeView: View {
     /// (`OrbixTopBar.isKids`) and `/tv/*` 403s kids server-side regardless.
     private var emptyView: some View {
         ContentUnavailableView {
-            Label("Live TV", systemImage: "tv")
+            Label(L10n.t("tv.home.heading"), systemImage: "tv")
         } description: {
-            Text("Live channels aren't set up yet. Ask your server admin to add a TV source.")
+            Text(L10n.t("tv.home.emptyBody"))
         }
         .padding(.top, 60)
         .accessibilityIdentifier("tvHomeEmptyState")
@@ -239,11 +241,11 @@ struct TvHomeView: View {
 
     private func errorView(message: String, client: OrbixClient) -> some View {
         ContentUnavailableView {
-            Label("Couldn't load channels", systemImage: "exclamationmark.triangle")
+            Label(L10n.t("tv.home.errorTitle"), systemImage: "exclamationmark.triangle")
         } description: {
             Text(message)
         } actions: {
-            Button("Retry") {
+            Button(L10n.t("common.actions.retry")) {
                 Task { await tvModel.load(client: client) }
             }
             .accessibilityIdentifier("tvHomeRetryButton")
@@ -339,7 +341,11 @@ final class TvHomeModel {
             loadError = nil
         } catch {
             guard !Task.isCancelled else { return }
-            loadError = "Couldn't load channels: \(error)"
+            if case OrbixError.http(_, let code) = error, let code {
+                loadError = L10n.errorMessage(code)
+            } else {
+                loadError = L10n.t("errors.network")
+            }
             home = nil
         }
         isLoading = false

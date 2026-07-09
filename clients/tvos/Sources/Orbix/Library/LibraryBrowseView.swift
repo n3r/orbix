@@ -176,7 +176,7 @@ struct LibraryBrowseView: View {
     /// (`catalog:browse.searchPlaceholder` in `apps/web/src/locales/en/catalog.json`),
     /// not a generic "Filter" — reused verbatim for parity.
     private var filterField: some View {
-        TextField("", text: $query, prompt: Text("Search titles…").foregroundStyle(OrbixColor.textDim))
+        TextField("", text: $query, prompt: Text(L10n.t("catalog.browse.searchPlaceholder")).foregroundStyle(OrbixColor.textDim))
             .textFieldStyle(.plain)
             .font(.system(size: 24))
             .foregroundStyle(OrbixColor.text)
@@ -245,9 +245,9 @@ struct LibraryBrowseView: View {
 
     private var emptyView: some View {
         ContentUnavailableView {
-            Label("No items found", systemImage: "square.stack")
+            Label(L10n.t("catalog.browse.emptyTitle"), systemImage: "square.stack")
         } description: {
-            Text("Try a different search, or check back after your next library scan.")
+            Text(L10n.t("catalog.browse.emptyBody"))
         }
         .padding(.top, 60)
         .accessibilityIdentifier("libraryEmptyState")
@@ -255,11 +255,11 @@ struct LibraryBrowseView: View {
 
     private func errorView(message: String, client: OrbixClient) -> some View {
         ContentUnavailableView {
-            Label("Couldn't load titles", systemImage: "exclamationmark.triangle")
+            Label(L10n.t("catalog.browse.errorTitle"), systemImage: "exclamationmark.triangle")
         } description: {
             Text(message)
         } actions: {
-            Button("Retry") {
+            Button(L10n.t("common.actions.retry")) {
                 Task { await libraryModel.load(client: client, libraryId: libraryId, sort: sort, q: query) }
             }
             .accessibilityIdentifier("libraryRetryButton")
@@ -289,9 +289,9 @@ enum LibrarySort: String, CaseIterable {
 
     var label: String {
         switch self {
-        case .title: return "Title"
-        case .added: return "Added"
-        case .year: return "Year"
+        case .title: return L10n.t("catalog.browse.sortChip.title")
+        case .added: return L10n.t("catalog.browse.sortChip.added")
+        case .year: return L10n.t("catalog.browse.sortChip.year")
         }
     }
 }
@@ -461,7 +461,11 @@ final class LibraryModel {
             loadError = nil
         } catch {
             guard !Task.isCancelled else { return }
-            loadError = "Couldn't load titles: \(error)"
+            if case OrbixError.http(_, let code) = error, let code {
+                loadError = L10n.errorMessage(code)
+            } else {
+                loadError = L10n.t("errors.network")
+            }
             items = []
         }
         isLoading = false

@@ -53,10 +53,13 @@ struct ChannelCard: View {
         }
         .buttonStyle(ChannelCardStyle())
         .contextMenu {
-            Button(channel.favorite ? "Remove from Favorites" : "Add to Favorites", action: onToggleFavorite)
+            Button(
+                channel.favorite ? L10n.t("tv.card.unfavoriteMenuLabel") : L10n.t("tv.card.favoriteMenuLabel"),
+                action: onToggleFavorite
+            )
         }
         .accessibilityIdentifier("channelCard_\(channel.id)")
-        .accessibilityLabel("Watch \(channel.name)")
+        .accessibilityLabel(L10n.t("tv.card.play", channel.name))
     }
 
     // MARK: - Art + scrim (dim together when offline)
@@ -132,7 +135,7 @@ struct ChannelCard: View {
             .fill(Color(white: 0.42)) // web `bg-zinc-500`
             .frame(width: 12, height: 12)
             .padding(10)
-            .accessibilityLabel("Offline")
+            .accessibilityLabel(L10n.t("tv.badges.offline"))
     }
 }
 

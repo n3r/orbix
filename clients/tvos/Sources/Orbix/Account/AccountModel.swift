@@ -54,7 +54,13 @@ final class AccountModel {
             let rest = cfg.libraries.map(\.libraryId).filter { !cfg.enabled.contains($0) }
             order = cfg.enabled + rest
             enabled = Set(cfg.enabled)
-        } catch { menuError = "Couldn't load menu settings." }
+        } catch {
+            if case OrbixError.http(_, let code) = error, let code {
+                menuError = L10n.errorMessage(code)
+            } else {
+                menuError = L10n.t("account.menu.loadFailed")
+            }
+        }
     }
 
     func toggle(_ id: String) {
@@ -76,7 +82,13 @@ final class AccountModel {
             let items = try await client.saveMenu(libraryIds: libraryIds)
             appModel.applyMenu(items)
             menuSaved = true
-        } catch { menuError = "Couldn't save the menu. Try again." }
+        } catch {
+            if case OrbixError.http(_, let code) = error, let code {
+                menuError = L10n.errorMessage(code)
+            } else {
+                menuError = L10n.t("account.menu.saveFailed")
+            }
+        }
         isSavingMenu = false
     }
 
@@ -98,7 +110,11 @@ final class AccountModel {
             _ = try await client.updateProfile(id: profileId, language: code)
         } catch {
             appModel.profileLanguageChanged(previous)
-            languageError = "Couldn't change the language. Try again."
+            if case OrbixError.http(_, let code) = error, let code {
+                languageError = L10n.errorMessage(code)
+            } else {
+                languageError = L10n.t("account.language.error")
+            }
         }
     }
 }

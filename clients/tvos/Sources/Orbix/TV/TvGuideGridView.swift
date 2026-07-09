@@ -152,11 +152,11 @@ struct TvGuideGridView: View {
 
     private var navRow: some View {
         HStack(spacing: 16) {
-            navButton(label: "Now", id: "tvGridNav_now") {
+            navButton(label: L10n.t("tv.grid.now"), id: "tvGridNav_now") {
                 guard let client = model.client else { return }
                 gridModel.showNow(client: client, filter: filter, query: query)
             }
-            navIconButton(system: "chevron.left", label: "Previous", id: "tvGridNav_prev") {
+            navIconButton(system: "chevron.left", label: L10n.t("tv.grid.prev"), id: "tvGridNav_prev") {
                 guard let client = model.client else { return }
                 gridModel.showPrev(client: client, filter: filter, query: query)
             }
@@ -166,16 +166,16 @@ struct TvGuideGridView: View {
                 .frame(minWidth: 340)
                 .multilineTextAlignment(.center)
                 .accessibilityIdentifier("tvGridWindowLabel")
-            navIconButton(system: "chevron.right", label: "Next", id: "tvGridNav_next") {
+            navIconButton(system: "chevron.right", label: L10n.t("tv.grid.next"), id: "tvGridNav_next") {
                 guard let client = model.client else { return }
                 gridModel.showNext(client: client, filter: filter, query: query)
             }
             Spacer(minLength: 24)
-            navButton(label: "Today", id: "tvGridNav_today") {
+            navButton(label: L10n.t("tv.grid.today"), id: "tvGridNav_today") {
                 guard let client = model.client else { return }
                 gridModel.showNow(client: client, filter: filter, query: query)
             }
-            navButton(label: "Tomorrow", id: "tvGridNav_tomorrow") {
+            navButton(label: L10n.t("tv.grid.tomorrow"), id: "tvGridNav_tomorrow") {
                 guard let client = model.client else { return }
                 gridModel.showTomorrow(client: client, filter: filter, query: query)
             }
@@ -231,11 +231,11 @@ struct TvGuideGridView: View {
                 .accessibilityIdentifier("tvGuideGridLoadingState")
         case .error(let message):
             ContentUnavailableView {
-                Label("Couldn't load guide", systemImage: "exclamationmark.triangle")
+                Label(L10n.t("tv.grid.errorTitle"), systemImage: "exclamationmark.triangle")
             } description: {
                 Text(message)
             } actions: {
-                Button("Retry") {
+                Button(L10n.t("common.actions.retry")) {
                     guard let client = model.client else { return }
                     Task { await gridModel.load(client: client, filter: filter, query: query) }
                 }
@@ -245,9 +245,9 @@ struct TvGuideGridView: View {
             .accessibilityIdentifier("tvGuideGridErrorState")
         case .empty:
             ContentUnavailableView {
-                Label("No channels match.", systemImage: "square.grid.3x3")
+                Label(L10n.t("tv.guidePage.empty"), systemImage: "square.grid.3x3")
             } description: {
-                Text("Try a different search, or a different filter.")
+                Text(L10n.t("tv.guidePage.emptyHint"))
             }
             .padding(.top, 60)
             .accessibilityIdentifier("tvGuideGridEmptyState")
@@ -299,7 +299,7 @@ struct TvGuideGridView: View {
             // `tv:grid.showingOf` source, which the brief's prose paraphrased;
             // ported as-is, matching Task 5's search-placeholder precedent).
             if gridModel.total > channels.count {
-                Text("Showing \(channels.count) of \(gridModel.total) — narrow the filter")
+                Text(L10n.t("tv.grid.showingOf", channels.count, gridModel.total))
                     .font(.callout)
                     .foregroundStyle(OrbixColor.textDim)
                     .accessibilityIdentifier("tvGuideGridLimitNote")
@@ -390,7 +390,7 @@ struct TvGuideGridView: View {
         }
         .buttonStyle(GridCellStyle())
         .accessibilityIdentifier("tvGridRow_\(channel.id)")
-        .accessibilityLabel("Watch \(channel.name)")
+        .accessibilityLabel(L10n.t("tv.guidePage.play", channel.name))
     }
 
     @ViewBuilder
@@ -400,7 +400,7 @@ struct TvGuideGridView: View {
 
             if channel.programmes.isEmpty {
                 // Web `tv:guidePage.noEpg` across an empty row's track.
-                Text("No guide data")
+                Text(L10n.t("tv.guidePage.noEpg"))
                     .font(.callout)
                     .foregroundStyle(OrbixColor.textDim)
                     .padding(.horizontal, 16)
@@ -455,7 +455,11 @@ struct TvGuideGridView: View {
         .buttonStyle(GridBlockStyle(airing: airing))
         .offset(x: x, y: Self.blockVInset)
         .accessibilityIdentifier("tvGridBlock_\(p.id)")
-        .accessibilityLabel(airing ? "Watch \(p.title) on \(channel.name) — On now" : "Watch \(p.title) on \(channel.name)")
+        .accessibilityLabel(
+            airing
+                ? L10n.t("tv.grid.playProgrammeOnNow", p.title, channel.name)
+                : L10n.t("tv.grid.playProgramme", p.title, channel.name)
+        )
     }
 
     // MARK: - Locale formatters
@@ -707,7 +711,11 @@ final class TvGuideGridModel {
             loadError = nil
         } catch {
             guard id == requestId else { return }
-            loadError = "Couldn't load guide: \(error)"
+            if case OrbixError.http(_, let code) = error, let code {
+                loadError = L10n.errorMessage(code)
+            } else {
+                loadError = L10n.t("errors.network")
+            }
             channels = []
             total = 0
         }

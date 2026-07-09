@@ -146,7 +146,7 @@ struct TvChannelView: View {
             .clipShape(RoundedRectangle(cornerRadius: OrbixRadius.md, style: .continuous))
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("Channel \(detail.number)")
+                Text(L10n.t("tv.channel.number", detail.number))
                     .font(.callout)
                     .foregroundStyle(OrbixColor.textDim)
                 Text(detail.name)
@@ -178,10 +178,10 @@ struct TvChannelView: View {
                 badgeChip(region)
             }
             ForEach(detail.categories, id: \.self) { category in
-                badgeChip(Self.capitalized(category))
+                badgeChip(Self.categoryLabel(category))
             }
             if !detail.healthy {
-                Text("● Offline")
+                Text(L10n.t("tv.channel.offlineDot"))
                     .font(.callout)
                     .foregroundStyle(OrbixColor.textDim)
                     .accessibilityIdentifier("tvChannelOfflineDot")
@@ -203,10 +203,15 @@ struct TvChannelView: View {
             .overlay(Capsule().strokeBorder(OrbixColor.surface2, lineWidth: 1))
     }
 
-    /// Web `c.id.charAt(0).toUpperCase() + c.id.slice(1)` — mirrors
-    /// `TvHomeView.capitalized`/`TvGuideView.capitalizedCategory` exactly
-    /// (server category ids are always lowercase single words).
-    private static func capitalized(_ id: String) -> String {
+    /// Localized category display name (`tv.categories.<id>`) — replaces the
+    /// old capitalize-the-id fallback with the full category map (mirrors
+    /// `TvHomeView.categoryLabel`/`TvGuideView.categoryLabel`). Falls back to
+    /// capitalizing the id for any category not yet in the catalog (a future
+    /// server-side category the catalog hasn't caught up with).
+    private static func categoryLabel(_ id: String) -> String {
+        let key = "tv.categories.\(id)"
+        let localized = L10n.t(key)
+        guard localized == key else { return localized }
         guard let first = id.first else { return id }
         return first.uppercased() + id.dropFirst()
     }
@@ -258,7 +263,7 @@ struct TvChannelView: View {
         .buttonStyle(TvChannelFavoriteButtonStyle())
         .id("favoriteButton")
         .accessibilityIdentifier("tvChannelFavoriteButton")
-        .accessibilityLabel(detail.favorite ? "Remove from favorites" : "Add to favorites")
+        .accessibilityLabel(detail.favorite ? L10n.t("tv.card.unfavorite") : L10n.t("tv.card.favorite"))
     }
 
     // MARK: - Watch (web lines 81-85)
@@ -269,7 +274,7 @@ struct TvChannelView: View {
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: "play.fill")
-                Text("Watch")
+                Text(L10n.t("tv.channel.watch"))
             }
         }
         .buttonStyle(OrbixButtonStyle(.primary))
@@ -300,7 +305,7 @@ struct TvChannelView: View {
 
     private func scheduleSection(client: OrbixClient) -> some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text("Schedule")
+            Text(L10n.t("tv.channel.schedule"))
                 .font(.title3.bold())
                 .foregroundStyle(OrbixColor.text)
 
@@ -312,8 +317,8 @@ struct TvChannelView: View {
 
     private var dayTabs: some View {
         HStack(spacing: 12) {
-            dayTab(offset: 0, label: "Today", id: "tvChannelScheduleTab_today")
-            dayTab(offset: 1, label: "Tomorrow", id: "tvChannelScheduleTab_tomorrow")
+            dayTab(offset: 0, label: L10n.t("tv.channel.today"), id: "tvChannelScheduleTab_today")
+            dayTab(offset: 1, label: L10n.t("tv.channel.tomorrow"), id: "tvChannelScheduleTab_tomorrow")
         }
         // Own focus section so left/right steps between the two day tabs
         // instead of escaping to the hero above or the schedule list below —
@@ -410,12 +415,13 @@ struct TvChannelView: View {
         .accessibilityIdentifier("tvChannelProgrammeRow_\(programme.id)")
     }
 
-    /// Web `tv:channel.onNow` ("On now"), CSS-`uppercase`d at render — ported
-    /// as the literal display string "ON NOW" (same precedent as
-    /// `NewBadge`'s "NEW": the port renders the visual output, not the source
-    /// string + a `.textCase` modifier).
+    /// Web `tv:channel.onNow` ("On now"), CSS-`uppercase`d at render — the
+    /// catalog stores the base value "On now" (`tv.channel.onNow`) and
+    /// `.textCase(.uppercase)` applies the same transform the web's CSS does,
+    /// so a future translation only needs the natural-case string.
     private var onNowBadge: some View {
-        Text("ON NOW")
+        Text(L10n.t("tv.channel.onNow"))
+            .textCase(.uppercase)
             .font(.caption2.bold())
             .foregroundStyle(.white)
             .padding(.horizontal, 8)
@@ -477,7 +483,7 @@ struct TvChannelView: View {
 
     /// Web `tv:channel.noSchedule` verbatim.
     private var noScheduleView: some View {
-        Text("No schedule available for this day.")
+        Text(L10n.t("tv.channel.noSchedule"))
             .font(.callout)
             .foregroundStyle(OrbixColor.textDim)
             .padding(.vertical, 24)
@@ -489,7 +495,7 @@ struct TvChannelView: View {
             Text(message)
                 .font(.callout)
                 .foregroundStyle(OrbixColor.textDim)
-            Button("Retry") {
+            Button(L10n.t("common.actions.retry")) {
                 guard let client = model.client else { return }
                 Task {
                     await channelModel.loadProgrammes(
@@ -510,9 +516,9 @@ struct TvChannelView: View {
     /// Web `tv:channel.notFound` ("Channel not found.").
     private var notFoundView: some View {
         ContentUnavailableView(
-            "Channel not found",
+            L10n.t("tv.channel.notFound"),
             systemImage: "tv.slash",
-            description: Text("This channel isn't available right now.")
+            description: Text(L10n.t("tv.channel.notFoundBody"))
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityIdentifier("tvChannelNotFound")
@@ -520,11 +526,11 @@ struct TvChannelView: View {
 
     private func errorView(message: String, client: OrbixClient) -> some View {
         ContentUnavailableView {
-            Label("Couldn't load channel", systemImage: "exclamationmark.triangle")
+            Label(L10n.t("tv.channel.errorTitle"), systemImage: "exclamationmark.triangle")
         } description: {
             Text(message)
         } actions: {
-            Button("Retry") {
+            Button(L10n.t("common.actions.retry")) {
                 Task { await channelModel.load(id: channelId, client: client) }
             }
             .accessibilityIdentifier("tvChannelRetryButton")
@@ -657,7 +663,7 @@ final class TvChannelModel {
         if let channel { return .loaded(channel) }
         if isLoading || !hasLoaded { return .loading }
         if notFound { return .notFound }
-        return .error(loadError ?? "Something went wrong.")
+        return .error(loadError ?? L10n.t("errors.unknown"))
     }
 
     var scheduleLoadState: ScheduleLoadState {
@@ -679,8 +685,10 @@ final class TvChannelModel {
         } catch {
             if let orbixError = error as? OrbixError, case .http(404, _) = orbixError {
                 notFound = true
+            } else if let orbixError = error as? OrbixError, case .http(_, let code) = orbixError, let code {
+                loadError = L10n.errorMessage(code)
             } else {
-                loadError = "Couldn't load channel: \(error)"
+                loadError = L10n.t("tv.channel.errorTitle")
             }
         }
         isLoading = false
@@ -720,7 +728,11 @@ final class TvChannelModel {
             programmes = fetched
         } catch {
             guard !Task.isCancelled, loadedDay == day else { return }
-            programmesError = "Couldn't load schedule: \(error)"
+            if case OrbixError.http(_, let code) = error, let code {
+                programmesError = L10n.errorMessage(code)
+            } else {
+                programmesError = L10n.t("errors.network")
+            }
         }
 
         guard !Task.isCancelled, loadedDay == day else { return }

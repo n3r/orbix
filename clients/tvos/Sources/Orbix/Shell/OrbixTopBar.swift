@@ -44,9 +44,9 @@ struct OrbixTopBar: View {
         HStack(spacing: 0) {
             HStack(spacing: 28) {
                 wordmark
-                labeledItem(.home, "Home", systemImage: "house.fill", id: "nav_home")
+                labeledItem(.home, L10n.t("nav.home"), systemImage: "house.fill", id: "nav_home")
                 if !isKids {
-                    labeledItem(.tv, "TV", systemImage: "tv", id: "nav_tv")
+                    labeledItem(.tv, L10n.t("nav.tv"), systemImage: "tv", id: "nav_tv")
                 }
                 categoryItems
             }
@@ -78,7 +78,7 @@ struct OrbixTopBar: View {
     /// Non-focusable brand mark (see the type's doc comment). Web:
     /// `text-lg font-extrabold uppercase tracking-[0.25em] text-[var(--accent)]`.
     private var wordmark: some View {
-        Text("ORBIX")
+        Text(L10n.t("common.app.wordmark"))
             .font(OrbixType.wordmark(size: 34))
             .kerning(8)
             .foregroundStyle(OrbixColor.accent)
@@ -89,7 +89,7 @@ struct OrbixTopBar: View {
     private var categoryItems: some View {
         ForEach(visibleCategories, id: \.libraryId) { item in
             labeledItem(.category(item.libraryId),
-                        item.name ?? "Library",
+                        item.name ?? L10n.t("catalog.library.fallbackName"),
                         systemImage: nil,
                         id: "nav_category_\(item.libraryId)")
         }
@@ -107,7 +107,7 @@ struct OrbixTopBar: View {
     private var moreMenu: some View {
         Menu {
             ForEach(overflowCategories, id: \.libraryId) { item in
-                Button(item.name ?? "Library") { selection = .category(item.libraryId) }
+                Button(item.name ?? L10n.t("catalog.library.fallbackName")) { selection = .category(item.libraryId) }
             }
         } label: {
             MoreMenuLabel()
@@ -230,7 +230,7 @@ private struct MoreMenuLabel: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Text("More").font(.system(size: 26))
+            Text(L10n.t("nav.more")).font(.system(size: 26))
             Image(systemName: "chevron.down").font(.system(size: 18))
         }
         .foregroundStyle(isFocused ? Color.white : OrbixColor.textDim)

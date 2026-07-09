@@ -147,7 +147,7 @@ final class LiveTvController {
             healthTask?.cancel()
             healthTask = nil
             reportedOk = false
-            showToast("Reconnecting…")             // web tv:player.reconnecting
+            showToast(L10n.t("tv.player.reconnecting"))
             emitPlaying()                          // rebuild the AVPlayerItem in place
             startWatchdog()
             return
@@ -159,8 +159,7 @@ final class LiveTvController {
             sourceIndex = next
             reloadedOnce = false
             reportedOk = false
-            // web tv:player.tryingSource: "Trying next source (n/total)…"
-            showToast("Trying next source (\(next + 1)/\(play.sources.count))…")
+            showToast(L10n.t("tv.player.tryingSource", next + 1, play.sources.count))
             emitPlaying()
             startWatchdog()
         } else {
