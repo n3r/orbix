@@ -123,7 +123,7 @@ struct HomeBillboardView: View {
         if let genre = detail?.genres?.first, !genre.isEmpty { parts.append(genre) }
         if let year = card.year ?? detail?.year { parts.append(String(year)) }
         if let seasons = detail?.seasons, !seasons.isEmpty {
-            parts.append(L10n.t("catalog.spotlight.seasons", seasons.count))
+            parts.append(L10n.plural("catalog.spotlight.seasons", seasons.count))
         } else if let runtime = Self.formattedRuntime(detail?.runtimeSec) {
             parts.append(runtime)
         }
@@ -207,10 +207,10 @@ struct HomeBillboardView: View {
         return baseURL.appending(path: "api/images/\(path)")
     }
 
-    /// `3720` → `"1h 2m"`; `600` → `"10m"`; `nil`/non-positive → `nil` — same
-    /// helper `TitlePage`/`TitleHeroView`/`SeasonEpisodeListView` each keep
-    /// their own private copy of (no shared symbol exists yet; Task 3 may
-    /// consolidate).
+    /// `3720` → `"1h 2m"`; `600` → `"10m"`; `nil`/non-positive → `nil` — the
+    /// same helper `TitlePage`/`TitleHeroView`/`SeasonEpisodeListView` each
+    /// keep as a private copy (no shared symbol exists yet; the Phase 5
+    /// polish pass may consolidate).
     private static func formattedRuntime(_ seconds: Int?) -> String? {
         guard let seconds, seconds > 0 else { return nil }
         let hours = seconds / 3600
