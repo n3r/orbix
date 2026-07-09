@@ -5,8 +5,10 @@ import OrbixKit
 /// Drives the tvOS profile picker (SP2 M2): loads the account's profiles
 /// (`GET /api/profiles`) and, on selection, persists the choice as this
 /// device's active profile (`POST /api/profiles/:id/select` — see
-/// `OrbixClient.selectProfile(id:)`, which for a Bearer-authed device
+/// `OrbixClient.selectProfile(id:pin:)`, which for a Bearer-authed device
 /// updates `DeviceToken.activeProfileId` server-side instead of a cookie).
+/// PIN-protected profiles 403 the pin-less attempt, which swaps the picker
+/// over to the PIN pad (`pinPrompt`/`PinPadView`) for a `{pin}` retry.
 @MainActor
 @Observable
 final class ProfilePickerModel {
@@ -18,6 +20,21 @@ final class ProfilePickerModel {
     /// disable just that row and guards `select` against a second call
     /// (e.g. a double press on the remote) racing the first.
     private(set) var selectingId: String?
+
+    /// Non-nil while the PIN pad is up for this profile (attempt-select hit
+    /// 403 pin_required). The pad is the tvOS adaptation the web doesn't have —
+    /// web parity used to stop at a localized error (spec §12), superseded by
+    /// the Phase-5 user decision to ship PIN entry.
+    private(set) var pinPrompt: Profile?
+
+    /// The most recent PIN-attempt failure, if any — the pad's error line
+    /// (distinct from `loadError`, which the grid owns; a pad-owned failure
+    /// must not leak onto the grid behind it, and vice versa).
+    private(set) var pinError: String?
+
+    /// True while a pin-carrying `select` is in flight — the pad disables
+    /// its keys so a slow verify can't accumulate stray digit presses.
+    private(set) var isVerifyingPin = false
 
     /// True while `addProfile` is in flight — lets the add-profile form
     /// disable its Create button and guards against a double submit.
@@ -55,30 +72,59 @@ final class ProfilePickerModel {
         isLoading = false
     }
 
-    /// Selects `id` as this device's active profile. Returns `true` on
-    /// success (the caller advances past the picker); on failure sets
-    /// `loadError` and returns `false` so the picker stays up.
+    /// Dismisses the PIN pad without selecting (the pad's Cancel key) —
+    /// back to the grid, with any stale wrong-PIN message dropped so a
+    /// reopened pad starts clean.
+    func cancelPinEntry() {
+        pinPrompt = nil
+        pinError = nil
+    }
+
+    /// Selects `id` as this device's active profile, optionally with a PIN
+    /// (`POST /api/profiles/:id/select`, body `{}`/`{pin}`). Returns `true`
+    /// on success (the caller advances past the picker). The TV never gates
+    /// on `Profile.hasPin` (absent on this branch's wire): every selection
+    /// is attempted pin-less first, and a 403 — the only 403 this route
+    /// sends is `{error:"pin_required"}`, on this branch (`profiles.ts:81-85`)
+    /// and on `origin/main` (`:281-283`) alike — opens the pad
+    /// (`pinPrompt`); the same 403 on a pin-carrying retry means "wrong
+    /// PIN" (`pinError`). Any other failure sets `loadError` (grid) or
+    /// `pinError` (pad) per which surface owns the in-flight attempt, and
+    /// returns `false` so that surface stays up.
     @discardableResult
-    func select(_ id: String, client: OrbixClient) async -> Bool {
+    func select(_ id: String, pin: String? = nil, client: OrbixClient) async -> Bool {
         guard selectingId == nil else { return false }
         selectingId = id
         defer { selectingId = nil }
+        if pin != nil {
+            // nil→message transitions drive the pad's clear-on-error; reset to
+            // nil at the start of every attempt so consecutive wrong PINs still
+            // produce a fresh transition.
+            pinError = nil
+            isVerifyingPin = true
+        }
+        defer { isVerifyingPin = false }
 
         do {
-            try await client.selectProfile(id: id)
+            try await client.selectProfile(id: id, pin: pin)
+            pinPrompt = nil
+            pinError = nil
             return true
         } catch OrbixError.http(403, _) {
-            // Web parity (`ProfilesPage.handleSelectProfile`): the only 403
-            // `POST /profiles/:id/select` ever sends is `{error:
-            // "pin_required"}` (see `apps/api/src/routes/profiles.ts` — a
-            // device client never sends a `pin` in the body, so this is the
-            // sole way that route 403s). There's no PIN entry UI here (same
-            // as web), so surface the same "not yet supported" message
-            // rather than a generic failure.
-            loadError = "This profile requires a PIN. PIN entry is not yet supported."
+            // The only 403 this route sends is {error:"pin_required"} — on this
+            // branch (profiles.ts:81-85) and on origin/main (:281-283) alike.
+            if pin == nil {
+                pinPrompt = profiles.first { $0.id == id }
+            } else {
+                pinError = "Wrong PIN. Try again."   // → profiles.pin.wrong (Task 4)
+            }
             return false
         } catch {
-            loadError = "Couldn't select profile: \(error)"
+            if pin == nil {
+                loadError = "Couldn't select profile: \(error)"
+            } else {
+                pinError = "Couldn't verify PIN. Try again."  // → profiles.pin.failed
+            }
             return false
         }
     }

@@ -12,6 +12,8 @@ import SwiftUI
 /// advance to the M1 home list; the add tile swaps in a small create form
 /// (`ProfilePickerModel.addProfile`, wrapping `OrbixClient.createProfile`)
 /// rather than navigating away, so Cancel is a one-button trip back.
+/// A PIN-protected tile 403s the pin-less select and swaps in `PinPadView`
+/// the same way (`ProfilePickerModel.pinPrompt`) for a `{pin}` retry.
 struct ProfilePickerView: View {
     let model: AppModel
 
@@ -62,7 +64,27 @@ struct ProfilePickerView: View {
 
     @ViewBuilder
     private func content(client: OrbixClient) -> some View {
-        if showAddForm {
+        // Same same-screen state-swap idiom as `showAddForm` below: a
+        // PIN-protected tile's pin-less select 403s (`pin_required`), the
+        // model captures the profile as `pinPrompt`, and the pad swaps in —
+        // Cancel is a one-button trip back with no navigation stack.
+        if let prompt = profileModel.pinPrompt {
+            OnboardingChrome {
+                PinPadView(
+                    profileName: prompt.name,
+                    errorText: profileModel.pinError,
+                    isVerifying: profileModel.isVerifyingPin,
+                    onSubmit: { pin in
+                        Task {
+                            if await profileModel.select(prompt.id, pin: pin, client: client) {
+                                model.profileSelected()
+                            }
+                        }
+                    },
+                    onCancel: { profileModel.cancelPinEntry() }
+                )
+            }
+        } else if showAddForm {
             OnboardingChrome {
                 addProfileForm(client: client)
             }
@@ -175,16 +197,38 @@ struct ProfilePickerView: View {
                             Circle().stroke(OrbixColor.text.opacity(0.9), lineWidth: isFocused ? 4 : 0)
                         }
 
-                    if profile.kind == "kids" {
-                        Text("KIDS")
-                            .font(.caption.bold())
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
-                            .background(.yellow, in: Capsule())
-                            .foregroundStyle(.black)
-                            .offset(x: 8, y: -8)
-                            .accessibilityIdentifier("kidsBadge_\(profile.id)")
+                    // Badges stack (trailing-aligned) so KIDS and the lock
+                    // can coexist without overlapping; the offset that used
+                    // to sit on the KIDS badge moved to the stack, so a lone
+                    // badge renders exactly where KIDS always has.
+                    VStack(alignment: .trailing, spacing: 8) {
+                        if profile.kind == "kids" {
+                            Text("KIDS")
+                                .font(.caption.bold())
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(.yellow, in: Capsule())
+                                .foregroundStyle(.black)
+                                .accessibilityIdentifier("kidsBadge_\(profile.id)")
+                        }
+
+                        // Cosmetic only — the main/NAS wire sends `hasPin`
+                        // (`Boolean(p.pinHash)` in `serializeProfile`); this
+                        // branch's wire omits it entirely, so the badge never
+                        // renders against a branch server, by design.
+                        // Selection never gates on it either way: the pad
+                        // opens off the 403 pin_required from attempt-select.
+                        if profile.hasPin == true {
+                            Image(systemName: "lock.fill")
+                                .font(.caption.bold())
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(OrbixColor.surface2, in: Capsule())
+                                .foregroundStyle(OrbixColor.text)
+                                .accessibilityIdentifier("pinBadge_\(profile.id)")
+                        }
                     }
+                    .offset(x: 8, y: -8)
                 }
 
                 Text(profile.name)
