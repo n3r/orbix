@@ -326,6 +326,44 @@ final class AppModel {
         }
     }
 
+    /// Account "Switch Profile": back to the picker. The token and client stay;
+    /// the shell data is cleared so the bar never renders a stale avatar/menu
+    /// while picking. Re-entry runs the normal profileSelected() → loadShellData().
+    func switchProfile() {
+        activeProfile = nil
+        menuItems = []
+        phase = .needsProfile
+    }
+
+    /// Account "Unlink Device": clears the persisted device token and resets to
+    /// pairing — the same teardown the 401 path in checkActiveProfile performs
+    /// (store.clear() → token = nil → .needsPairing), plus shell-data reset and
+    /// detaching the token from the live client. Client-side only by design
+    /// (spec §7.11 "clear token → onboarding"): the server-side revoke lives on
+    /// the web admin Devices page, so the token itself remains valid server-side.
+    func unlinkDevice() async {
+        await tokenStore.clear()
+        if let client { await client.setToken(nil) }
+        token = nil
+        activeProfile = nil
+        menuItems = []
+        phase = .needsPairing
+    }
+
+    /// Account menu editor saved: PUT /me/menu already returned the fresh items —
+    /// apply them directly (the TV's analogue of the web's ["menu"] query invalidation).
+    func applyMenu(_ items: [MenuItem]) {
+        menuItems = items
+    }
+
+    /// Account language switch: mirror the PATCHed language onto the local
+    /// activeProfile (so the switcher + Task 5's uiLanguage recompute read the
+    /// new value) and refresh the shell nav. Task 5 extends this with applyUILanguage().
+    func profileLanguageChanged(_ language: String) {
+        if var me = activeProfile { me.language = language; activeProfile = me }
+        Task { await loadShellData() }
+    }
+
     /// Scans the local subnet for Orbix servers (matching the `service:
     /// "orbix"` marker on `GET /health`) and publishes the results for the
     /// server-selection UI. A no-op while a scan is already in flight. The

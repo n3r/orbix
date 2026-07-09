@@ -12,10 +12,12 @@ import SwiftUI
 /// left/right movement in the bar and drops into the section's content on a
 /// down press.
 ///
-/// Each section hosts its own `NavigationStack`: `HomeView` and `SearchView`
-/// already do internally; the placeholder sections wrap their
-/// `ContentUnavailableView` in one so a later phase can push detail routes
-/// onto it without restructuring the shell.
+/// Each section hosts its own `NavigationStack` — `HomeView`, `SearchView`,
+/// `LibraryBrowseView`, `WishlistView`, `TvHomeView`, and (Phase 5 Task 3)
+/// `AccountView` all own one directly, so a later phase can push detail
+/// routes from any of them without restructuring the shell. As of Task 3
+/// there are no more bare-`ContentUnavailableView` placeholder sections left
+/// in this switch.
 ///
 /// `isScrolled` is owned here and driven by `HomeView`'s scroll offset (the
 /// bar goes transparent → near-solid). Only Home scrolls its content under the
@@ -83,10 +85,11 @@ import SwiftUI
 ///    each now take an `onMenuExit: () -> Void` and attach their *own*
 ///    `.onExitCommand` internally: pop `path.removeLast()` when it's
 ///    non-empty, else call `onMenuExit` (set to `{ selection = .home }`
-///    below). `.account` (still a bare `ContentUnavailableView` placeholder
-///    with no `navigationDestination`, hence no `path` that could ever be
-///    non-empty) doesn't need this — a plain `.onExitCommand { selection =
-///    .home }` on `content`'s case is always correct for it.
+///    below). `.account` (Phase 5 Task 3: `AccountView`) follows the same
+///    per-section pattern but simpler — its `NavigationStack` has no
+///    `navigationDestination` at all, hence no `path` that could ever be
+///    non-empty, so its own `.onExitCommand` calls `onMenuExit`
+///    unconditionally rather than checking `path.isEmpty` first.
 ///
 /// Verified live: Menu from Wishlist's root content → Home; Menu with focus
 /// on the bar at Wishlist → Home (not background); pushing a `TitlePage` from
@@ -163,13 +166,12 @@ struct ShellView: View {
         case .wishlist:
             WishlistView(model: model, onMenuExit: { selection = .home })
         case .account:
-            placeholder(
-                title: "Account",
-                systemImage: "person.crop.circle",
-                message: "Profile and account settings are coming to the TV app in a later phase.",
-                id: "section_account"
-            )
-            .onExitCommand { selection = .home }
+            // Pops nothing (this section pushes no routes at all) — falls
+            // straight to `.home` on Menu; see the type doc comment for why
+            // this section's own `.onExitCommand` can be unconditional,
+            // unlike `SearchView`/`LibraryBrowseView`/`WishlistView`/
+            // `TvHomeView`'s `path.isEmpty` check.
+            AccountView(model: model, onMenuExit: { selection = .home })
         }
     }
 
@@ -181,21 +183,6 @@ struct ShellView: View {
     /// `menuItems` (e.g. a stale/removed category).
     private func categoryName(for libraryId: String) -> String {
         model.menuItems.first { $0.libraryId == libraryId }?.name ?? "Browse"
-    }
-
-    /// A section placeholder for the not-yet-built destinations. Wrapped in a
-    /// `NavigationStack` so each section keeps its own navigation state (the
-    /// same shape `HomeView`/`SearchView` already have internally).
-    private func placeholder(title: String, systemImage: String, message: String, id: String) -> some View {
-        NavigationStack {
-            ContentUnavailableView {
-                Label(title, systemImage: systemImage)
-            } description: {
-                Text(message)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .accessibilityIdentifier(id)
-        }
     }
 }
 

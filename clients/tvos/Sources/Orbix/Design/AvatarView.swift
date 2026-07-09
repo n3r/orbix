@@ -7,6 +7,16 @@ import SwiftUI
 /// hue-hash tile from `ChannelLogo`/`tv.ts` (`channelHue`/`channelInitials`,
 /// ported to OrbixKit as `avatarHue`/`avatarInitials` — see AvatarHue.swift).
 ///
+/// **User decision (2026-07-06, Phase 5 planning):** the hue-hashed tile
+/// stays — a deliberate TV adaptation, not a bug to reconcile back to the
+/// web's flat single-accent fallback (`Avatar.tsx`'s plain `bg-[var(--accent)]`
+/// square). Ten-foot viewing and a handful of profile tiles per household
+/// reward the extra differentiation a per-name hue gives at a glance; it also
+/// means this view shares its hash function with `ChannelLogoView` (see that
+/// type's doc comment), so a given name/channel id resolves to the *same*
+/// identity color everywhere it appears across the app, not just within one
+/// screen.
+///
 /// Deliberately does *not* thread the shared `ImageLoader` actor through
 /// (unlike `PosterCard`/`ProfilePickerView`'s `RemoteAvatarImage`, which
 /// share it for memory/disk caching across a whole poster grid): the
