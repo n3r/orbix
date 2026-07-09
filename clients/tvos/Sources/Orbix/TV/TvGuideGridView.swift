@@ -466,22 +466,27 @@ struct TvGuideGridView: View {
 
     /// Locale HH:MM (ruler ticks + window-label edges) — the `DateFormatter`
     /// analog of web `toLocaleTimeString({hour:"2-digit", minute:"2-digit"})`.
-    private static let timeFormatter: DateFormatter = {
+    /// Computed (not a cached `static let`) so it always reads the *current*
+    /// `L10n.locale` rather than whatever was in effect at first access —
+    /// see `ChannelNowNextView.displayFormatter`'s doc comment for why a
+    /// `static let` would go stale across a profile language change.
+    private static var timeFormatter: DateFormatter {
         let f = DateFormatter()
-        f.locale = .current
+        f.locale = L10n.locale
         f.dateStyle = .none
         f.timeStyle = .short
         return f
-    }()
+    }
 
     /// Locale "weekday day month" (window label) — web
     /// `toLocaleDateString({weekday:"short", day:"numeric", month:"short"})`.
-    private static let dateFormatter: DateFormatter = {
+    /// Computed for the same reason as `timeFormatter` above.
+    private static var dateFormatter: DateFormatter {
         let f = DateFormatter()
-        f.locale = .current
+        f.locale = L10n.locale
         f.setLocalizedDateFormatFromTemplate("EEE d MMM")
         return f
-    }()
+    }
 }
 
 // MARK: - Button styles (own focus treatment, `.focusEffectDisabled()` — same

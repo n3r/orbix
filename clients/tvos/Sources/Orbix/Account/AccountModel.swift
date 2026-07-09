@@ -25,12 +25,22 @@ import SwiftUI
 /// thrown `updateProfile`, to call it again with the pre-change value to
 /// revert. The PATCH triggers `ensureMetadataLanguage` server-side (catalog
 /// re-localization, which runs to completion independently of this call
-/// returning) — "optimistic" here means the local chip selection and
-/// `activeProfile.language` flip the moment the PATCH itself succeeds,
-/// without waiting to observe that re-localization finish. **UI-string
-/// flipping is Task 5**: until `AppModel` grows `applyUILanguage()`, a
-/// successful switch here persists the choice and re-localizes the catalog,
-/// but every label in the TV chrome (including this screen) stays English.
+/// returning) — "optimistic" here means the local chip selection,
+/// `activeProfile.language`, and (Task 5) the whole UI chrome (via
+/// `AppModel.uiLanguage`/`RootView`'s `.id`) flip the moment the PATCH
+/// itself *starts*, without waiting to observe that re-localization finish.
+///
+/// **Shell-data refresh order (Task 5, folding in a Task 3 review
+/// carryover).** `profileLanguageChanged(_:)` itself only flips
+/// `activeProfile.language` + recomputes `uiLanguage` — it does **not**
+/// call `loadShellData()`. This method calls `loadShellData()` itself,
+/// *only after* `updateProfile` has actually returned successfully: the
+/// previous version fired it from inside `profileLanguageChanged`, i.e.
+/// before the PATCH landed, which raced the re-localization and could bring
+/// back menu/category names in the *old* language. On a thrown
+/// `updateProfile`, there's nothing to refresh — `menuItems` was never
+/// touched by the optimistic step, so reverting is just the mirrored
+/// `profileLanguageChanged(previous)` call.
 @MainActor
 @Observable
 final class AccountModel {
@@ -96,9 +106,12 @@ final class AccountModel {
     /// active profile's language (selecting the already-selected chip PATCHes
     /// nothing). Otherwise: flip `appModel.activeProfile?.language` to `code`
     /// immediately via `profileLanguageChanged` (the optimistic step — see
-    /// the type doc comment), PATCH the server, and on failure call
-    /// `profileLanguageChanged` again with the pre-change value to revert,
-    /// surfacing `languageError` for the screen to show.
+    /// the type doc comment), PATCH the server, and — only once that PATCH
+    /// has succeeded — refresh the shell's menu/category names via
+    /// `loadShellData()` so they come back already re-localized. On failure,
+    /// call `profileLanguageChanged` again with the pre-change value to
+    /// revert (no shell refresh needed — nothing was fetched in the new
+    /// language yet), surfacing `languageError` for the screen to show.
     func changeLanguage(to code: String, client: OrbixClient, appModel: AppModel) async {
         guard let profileId = appModel.activeProfile?.id else { return }
         let previous = appModel.activeProfile?.language ?? "en"
@@ -108,6 +121,7 @@ final class AccountModel {
         appModel.profileLanguageChanged(code)
         do {
             _ = try await client.updateProfile(id: profileId, language: code)
+            await appModel.loadShellData()
         } catch {
             appModel.profileLanguageChanged(previous)
             if case OrbixError.http(_, let code) = error, let code {

@@ -277,7 +277,7 @@ struct TvGuideView: View {
                 }
                 ForEach(guideModel.countries, id: \.self) { code in
                     guideChip(
-                        label: tvRegionName(code) ?? code,
+                        label: tvRegionName(code, locale: L10n.locale) ?? code,
                         isSelected: filter == .country(code),
                         id: "tvGuideFilterChip_country_\(code)"
                     ) {

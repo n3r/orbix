@@ -55,12 +55,18 @@ struct ChannelNowNextView: View {
 
     // MARK: - ISO → local HH:MM
 
-    private static let displayFormatter: DateFormatter = {
+    /// A computed property (not a cached `static let`): a `static let` would
+    /// capture whatever `L10n.locale` was at first access and outlive any
+    /// later profile language change, since `RootView`'s `.id(uiLanguage)`
+    /// rebuild recreates *views*, not this type's static storage. Rebuilt on
+    /// every call instead, always reading the current `L10n.locale`.
+    private static var displayFormatter: DateFormatter {
         let f = DateFormatter()
+        f.locale = L10n.locale
         f.timeStyle = .short
         f.dateStyle = .none
         return f
-    }()
+    }
 
     private static let isoFractional: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()

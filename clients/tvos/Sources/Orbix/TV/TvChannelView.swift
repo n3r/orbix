@@ -174,7 +174,7 @@ struct TvChannelView: View {
             if let quality = detail.quality {
                 QualityChip(label: quality)
             }
-            if let region = tvRegionName(detail.country) {
+            if let region = tvRegionName(detail.country, locale: L10n.locale) {
                 badgeChip(region)
             }
             ForEach(detail.categories, id: \.self) { category in

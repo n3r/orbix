@@ -17,16 +17,32 @@ struct RootView: View {
     @FocusState private var isTextFieldFocused: Bool
 
     var body: some View {
-        switch model.phase {
-        case .needsServer:
-            serverSelectionView
-        case .needsPairing:
-            pairingOrFallback
-        case .needsProfile:
-            profilePickerOrFallback
-        case .ready:
-            ShellView(model: model)
+        // `.id(model.uiLanguage)` forces a full teardown/rebuild of every
+        // visible screen whenever the resolved UI language changes (profile
+        // switch, language chip, sign-out to a languageless onboarding
+        // phase, …) — SwiftUI treats a changed `.id` as "this is a new
+        // view", not an update, so every `.task` loader underneath re-runs
+        // from scratch. That's exactly what re-fetches the now-re-localized
+        // catalog (server-side, keyed off the active profile's language) —
+        // the TV analogue of the web's query refetch on
+        // `useSyncProfileLanguage`. `.environment(\.locale, …)` makes
+        // SwiftUI's own locale-aware formatting (e.g. any `Text(date:)`/
+        // `.formatted()` call) follow the same resolved language, not the
+        // system one.
+        Group {
+            switch model.phase {
+            case .needsServer:
+                serverSelectionView
+            case .needsPairing:
+                pairingOrFallback
+            case .needsProfile:
+                profilePickerOrFallback
+            case .ready:
+                ShellView(model: model)
+            }
         }
+        .id(model.uiLanguage)
+        .environment(\.locale, L10n.locale)
     }
 
     /// `.needsPairing`/`.needsProfile` are only reached once

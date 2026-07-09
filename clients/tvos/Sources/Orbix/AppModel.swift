@@ -78,6 +78,13 @@ final class AppModel {
     /// empty on fetch failure, so the bar simply renders without categories).
     private(set) var menuItems: [MenuItem] = []
 
+    /// The resolved UI language, recomputed from the active profile (spec §9:
+    /// profile language overrides; system fallback). Drives RootView's `.id`
+    /// (full re-render on change) and L10n.override (string resolution).
+    private(set) var uiLanguage: String = "en"
+
+    private static let supportedLanguages = ["en", "es", "de", "pt", "ru", "fr"]
+
     private let tokenStore: TokenStore
 
     init(tokenStore: TokenStore = TokenStore()) {
@@ -241,6 +248,7 @@ final class AppModel {
                 // path — the `.ready`/`.needsProfile` decision and all of the
                 // retry/401 handling below are unchanged.
                 activeProfile = me
+                applyUILanguage()
                 phase = (me.id != nil) ? .ready : .needsProfile
                 if phase == .ready {
                     Task { await self.loadShellData() }
@@ -322,6 +330,7 @@ final class AppModel {
             if let me = try? await client.meProfile() {
                 guard self.client === client else { return }
                 activeProfile = me
+                applyUILanguage()
             }
         }
     }
@@ -333,6 +342,7 @@ final class AppModel {
         activeProfile = nil
         menuItems = []
         phase = .needsProfile
+        applyUILanguage()
     }
 
     /// Account "Unlink Device": clears the persisted device token and resets to
@@ -348,6 +358,7 @@ final class AppModel {
         activeProfile = nil
         menuItems = []
         phase = .needsPairing
+        applyUILanguage()
     }
 
     /// Account menu editor saved: PUT /me/menu already returned the fresh items —
@@ -357,11 +368,40 @@ final class AppModel {
     }
 
     /// Account language switch: mirror the PATCHed language onto the local
-    /// activeProfile (so the switcher + Task 5's uiLanguage recompute read the
-    /// new value) and refresh the shell nav. Task 5 extends this with applyUILanguage().
+    /// activeProfile (so the switcher + `uiLanguage` recompute read the new
+    /// value) and recompute `uiLanguage` immediately — the optimistic UI flip
+    /// (chips + the whole chrome via RootView's `.id(uiLanguage)`). Deliberately
+    /// does **not** refresh shell data (`menuItems`) itself: `AccountModel
+    /// .changeLanguage` calls `loadShellData()` separately, only after its PATCH
+    /// has actually landed server-side, so the re-fetched category names come
+    /// back already re-localized instead of racing the PATCH (Task 5 fold-in of
+    /// the Task 3 review carryover — the previous version fired `loadShellData`
+    /// from here, i.e. before the PATCH, which raced it).
     func profileLanguageChanged(_ language: String) {
         if var me = activeProfile { me.language = language; activeProfile = me }
-        Task { await loadShellData() }
+        applyUILanguage()
+    }
+
+    /// The resolved UI language, recomputed from the active profile (spec §9:
+    /// profile language overrides; system fallback). Called after every
+    /// `activeProfile` write (`checkActiveProfile`'s success path,
+    /// `loadShellData`'s `meProfile` fetch, `profileLanguageChanged`,
+    /// `switchProfile()`, `unlinkDevice()`) so `uiLanguage` — and therefore
+    /// `RootView`'s `.id(uiLanguage)` full-chrome rebuild — always reflects
+    /// the *current* profile (or the system, once there is none).
+    private func applyUILanguage() {
+        if let code = activeProfile?.language, Self.supportedLanguages.contains(code) {
+            L10n.override = code
+            uiLanguage = code
+        } else {
+            // No profile / unsupported value → follow the system (web
+            // detectInitialLanguage parity); uiLanguage still tracks the
+            // resolved 2-letter code so `.id` changes if the effective
+            // language does.
+            L10n.override = nil
+            let sys = Locale.current.language.languageCode?.identifier ?? "en"
+            uiLanguage = Self.supportedLanguages.contains(sys) ? sys : "en"
+        }
     }
 
     /// Scans the local subnet for Orbix servers (matching the `service:

@@ -161,7 +161,7 @@ struct TvHomeView: View {
                 if !country.channels.isEmpty {
                     ChannelRailView(
                         id: "country_\(country.code)",
-                        title: tvRegionName(country.code) ?? country.code,
+                        title: tvRegionName(country.code, locale: L10n.locale) ?? country.code,
                         channels: country.channels,
                         baseURL: model.baseURL,
                         imageLoader: imageLoader,
