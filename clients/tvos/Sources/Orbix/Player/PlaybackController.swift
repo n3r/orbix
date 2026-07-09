@@ -105,13 +105,15 @@ final class PlaybackController {
             // (`HomeModel.load`, `LibraryModel.performLoad`, etc.) — a coded
             // HTTP failure (e.g. a kids-restricted item, `not_allowed_for_kids`)
             // gets its own translated message; anything else (offline, DNS,
-            // timeout) falls back to the player-specific network string
-            // rather than a raw interpolated Swift error description, which
-            // was neither localized nor user-presentable.
+            // timeout) falls back to the decision-specific string — this catch
+            // wraps exactly the `/playback/info` negotiation (the web's
+            // "decision" step), which is what `player.error.decision` was
+            // authored for — rather than a raw interpolated Swift error
+            // description, which was neither localized nor user-presentable.
             if case OrbixError.http(_, let code) = error, let code {
                 loadState = .error(L10n.errorMessage(code))
             } else {
-                loadState = .error(L10n.t("player.error.network"))
+                loadState = .error(L10n.t("player.error.decision"))
             }
         }
     }
