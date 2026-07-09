@@ -138,6 +138,12 @@ struct LiveTvPlayerView: UIViewControllerRepresentable {
             observedPlayer?.replaceCurrentItem(with: nil)
             observedPlayer = nil
             observedItem = nil
+            // Belt-and-braces for the idle-timer suppression (a global,
+            // OLED-burn-class flag): viewWillDisappear resets it on the normal
+            // close path, but this is the one hook guaranteed to fire (the same
+            // reason observer teardown lives here) — never leave the screensaver
+            // disabled app-wide because a disappearance callback was skipped.
+            UIApplication.shared.isIdleTimerDisabled = false
         }
 
         private func handleItemStatus() {
