@@ -91,13 +91,40 @@ public actor OrbixClient {
         return try await send(method: "POST", url: baseURL.appending(path: "api/profiles"), body: data)
     }
 
-    /// `POST /api/profiles/:id/select`. The response body is `{ profileId }`;
-    /// callers only need success/failure, hence `Void` rather than a decoded type.
-    public func selectProfile(id: String) async throws {
+    /// `PATCH /api/profiles/:id` body `{language}`. This branch's handler
+    /// selects only `{id,name,kind,language}` in its response (`avatar`/
+    /// `maturityCap`/`hasPin` decode to `nil` on the shared `Profile` DTO,
+    /// same convention as `createProfile`); `origin/main`'s
+    /// `serializeProfile` sends the full shape, which also decodes cleanly.
+    /// The handler triggers `ensureMetadataLanguage` server-side — the
+    /// catalog re-localization the web client relies on for language
+    /// switches. **400** `{error:"invalid_profile"}` on a non-supported
+    /// language; **404** `{error:"not_found"}` for an unknown id.
+    public func updateProfile(id: String, language: String) async throws -> Profile {
+        struct Body: Encodable {
+            let language: String
+        }
+        let data = try encodeBody(Body(language: language))
+        return try await send(method: "PATCH", url: baseURL.appending(path: "api/profiles/\(id)"), body: data)
+    }
+
+    /// `POST /api/profiles/:id/select` body `{}` or `{pin}`. `pin` is
+    /// omitted from the wire when `nil` (Codable's synthesized
+    /// `encodeIfPresent` for an `Optional` stored property), so the default
+    /// `nil` still encodes to the same `{}` body this method sent before it
+    /// gained this parameter. The response body is `{ profileId }`; callers
+    /// only need success/failure, hence `Void` rather than a decoded type.
+    /// **403** `{error:"pin_required"}` when the profile has a pin and the
+    /// supplied pin is missing or wrong (same code both cases, both wires).
+    public func selectProfile(id: String, pin: String? = nil) async throws {
+        struct Body: Encodable {
+            let pin: String?
+        }
+        let data = try encodeBody(Body(pin: pin))
         _ = try await perform(
             method: "POST",
             url: baseURL.appending(path: "api/profiles/\(id)/select"),
-            body: Data("{}".utf8)
+            body: data
         )
     }
 
@@ -109,6 +136,31 @@ public actor OrbixClient {
     /// envelope, same convention as `similar(id:)`/`search(query:)`.
     public func menu() async throws -> [MenuItem] {
         let response: MenuResponse = try await send(method: "GET", url: baseURL.appending(path: "api/me/menu"))
+        return response.items
+    }
+
+    /// `GET /api/me/menu/config` (see `menu.ts:30-38`) — every library
+    /// (unfiltered) plus the active profile's ordered enabled ids, for the
+    /// menu editor screen.
+    public func menuConfig() async throws -> MenuConfig {
+        try await send(method: "GET", url: baseURL.appending(path: "api/me/menu/config"))
+    }
+
+    /// `PUT /api/me/menu` body `{libraryIds}` (see `menu.ts:40-77`) —
+    /// replaces the active profile's ordered enabled libraries. Unwrapped to
+    /// the bare array from the `{items: [...]}` envelope (reusing
+    /// `MenuResponse`), same convention as `menu()`. The server rejects an
+    /// empty array (**400** `{error:"empty"}` — zero entries would mean
+    /// "show all", so an empty save can't represent "show nothing"),
+    /// duplicate ids (`{error:"duplicate"}`), and unknown ids
+    /// (`{error:"unknown_library"}`); no active profile is
+    /// `{error:"no_active_profile"}`.
+    public func saveMenu(libraryIds: [String]) async throws -> [MenuItem] {
+        struct Body: Encodable {
+            let libraryIds: [String]
+        }
+        let data = try encodeBody(Body(libraryIds: libraryIds))
+        let response: MenuResponse = try await send(method: "PUT", url: baseURL.appending(path: "api/me/menu"), body: data)
         return response.items
     }
 
@@ -490,7 +542,7 @@ public actor OrbixClient {
             throw OrbixError.transport(URLError(.badServerResponse))
         }
         guard (200..<300).contains(http.statusCode) else {
-            throw OrbixError.http(http.statusCode)
+            throw OrbixError.http(http.statusCode, code: OrbixError.apiCode(from: data))
         }
         return (data, http)
     }
@@ -504,7 +556,19 @@ public actor OrbixClient {
 /// diagnostics after being thrown — never mutated or shared — so moving it
 /// across an actor boundary as part of a thrown `OrbixError` is safe.
 public enum OrbixError: Error, @unchecked Sendable {
-    case http(Int)
+    /// `code` is the machine-readable `{error: "<code>"}` body the API sends
+    /// on most non-2xx responses (e.g. "pin_required", "no_active_profile"),
+    /// or nil when the body has no such shape. Carried on the same case
+    /// (rather than a new one) so the compiler forces every existing
+    /// `case .http(N)` match site to acknowledge it — no silent misses.
+    case http(Int, code: String?)
     case decoding(Error)
     case transport(Error)
+
+    /// Extracts `{error: "<code>"}` from a non-2xx body. Public + pure so
+    /// it's directly unit-testable (perform() itself is private actor API).
+    public static func apiCode(from data: Data) -> String? {
+        struct ErrorBody: Decodable { let error: String }
+        return (try? JSONDecoder().decode(ErrorBody.self, from: data))?.error
+    }
 }

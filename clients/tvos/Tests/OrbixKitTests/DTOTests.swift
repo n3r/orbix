@@ -816,4 +816,70 @@ final class DTOTests: XCTestCase {
         XCTAssertEqual(res.favorites.first?.id, "ch1")
         XCTAssertNil(res.favorites.first?.now) // absent key decodes to nil (decode-safe)
     }
+
+    // MARK: - Account/PIN (Phase 5 Task 1)
+
+    func testDecodeMenuConfig() throws {
+        // GET /api/me/menu/config's real shape (see apps/api/src/routes/menu.ts's
+        // "/me/menu/config" handler): {libraries: <every library, unfiltered>,
+        // enabled: <ordered enabled ids>}, for the menu editor.
+        let json = """
+        {"libraries":[{"libraryId":"lib-1","name":"Movies"},
+                       {"libraryId":"lib-2","name":"TV Shows"}],
+         "enabled":["lib-2"]}
+        """.data(using: .utf8)!
+        let config = try JSONDecoder().decode(MenuConfig.self, from: json)
+        XCTAssertEqual(config.libraries.count, 2)
+        XCTAssertEqual(config.libraries.first?.libraryId, "lib-1")
+        XCTAssertEqual(config.enabled, ["lib-2"])
+    }
+
+    func testDecodePatchProfileResponseThisBranchWire() throws {
+        // PATCH /api/profiles/:id's real select shape on THIS branch
+        // (apps/api/src/routes/profiles.ts:64): {id,name,kind,language}
+        // only — no avatar/maturityCap/hasPin key at all, which must still
+        // decode cleanly (all nil) against the shared Profile DTO.
+        let json = """
+        {"id":"p1","name":"Katya","kind":"standard","language":"ru"}
+        """.data(using: .utf8)!
+        let profile = try JSONDecoder().decode(Profile.self, from: json)
+        XCTAssertEqual(profile.id, "p1")
+        XCTAssertEqual(profile.name, "Katya")
+        XCTAssertEqual(profile.language, "ru")
+        XCTAssertNil(profile.avatar)
+        XCTAssertNil(profile.hasPin)
+    }
+
+    func testDecodeProfileMainWireHasPinTrueAndUnmodeledKeysIgnored() throws {
+        // origin/main's serializeProfile shape (apps/api/src/routes/profiles.ts):
+        // adds isGroup/hasPin/members on top of this branch's fields. isGroup
+        // and members are NOT modeled on the Swift Profile DTO — unknown keys
+        // are ignored by Codable, so this must still decode cleanly, with
+        // hasPin picked up as true. Group profiles are out of scope until
+        // the Phase 6 merge.
+        let json = """
+        {"id":"p2","name":"Nikita","avatar":null,"kind":"standard","maturityCap":null,
+         "language":"en","isGroup":false,"hasPin":true,"members":[]}
+        """.data(using: .utf8)!
+        let profile = try JSONDecoder().decode(Profile.self, from: json)
+        XCTAssertEqual(profile.id, "p2")
+        XCTAssertEqual(profile.hasPin, true)
+    }
+
+    func testApiCodeExtractsErrorFromJSONBody() {
+        // {error: "<code>"} is the machine-readable body most non-2xx
+        // responses send (e.g. profiles.ts's 403 pin_required).
+        let data = Data(#"{"error":"pin_required"}"#.utf8)
+        XCTAssertEqual(OrbixError.apiCode(from: data), "pin_required")
+    }
+
+    func testApiCodeNilForNonJSONBody() {
+        let data = Data("not json".utf8)
+        XCTAssertNil(OrbixError.apiCode(from: data))
+    }
+
+    func testApiCodeNilWhenErrorFieldIsNotAString() {
+        let data = Data(#"{"error":123}"#.utf8)
+        XCTAssertNil(OrbixError.apiCode(from: data))
+    }
 }

@@ -166,16 +166,10 @@ public func tvRegionName(_ code: String?, locale: Locale = .current) -> String? 
 // MARK: - ISO parsing
 
 /// The server sends timestamps via `Date.toISOString()` (always fractional
-/// ".000Z"). Try fractional first, then plain, so either shape parses — same
-/// two-formatter idiom as `Billboard.parseISODate`. `nil` on unparseable
-/// input, mirroring the web's `Date.parse` → `NaN` guard (callers here guard
-/// on the `Optional` instead).
+/// ".000Z"). Delegates to the shared two-formatter idiom in
+/// `ISODate.swift`'s `orbixParseISODate`. `nil` on unparseable input,
+/// mirroring the web's `Date.parse` → `NaN` guard (callers here guard on the
+/// `Optional` instead).
 func tvParseMs(_ iso: String) -> Double? {
-    let fractional = ISO8601DateFormatter()
-    fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    if let date = fractional.date(from: iso) { return date.timeIntervalSince1970 * 1000 }
-    let plain = ISO8601DateFormatter()
-    plain.formatOptions = [.withInternetDateTime]
-    if let date = plain.date(from: iso) { return date.timeIntervalSince1970 * 1000 }
-    return nil
+    orbixParseISODate(iso).map { $0.timeIntervalSince1970 * 1000 }
 }

@@ -677,7 +677,7 @@ final class TvChannelModel {
         do {
             channel = try await client.tvChannel(id: id)
         } catch {
-            if let orbixError = error as? OrbixError, case .http(404) = orbixError {
+            if let orbixError = error as? OrbixError, case .http(404, _) = orbixError {
                 notFound = true
             } else {
                 loadError = "Couldn't load channel: \(error)"

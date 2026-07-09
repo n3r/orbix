@@ -249,7 +249,7 @@ final class AppModel {
             } catch {
                 guard self.client === client else { return }
 
-                if let orbixError = error as? OrbixError, case .http(401) = orbixError {
+                if let orbixError = error as? OrbixError, case .http(401, _) = orbixError {
                     let store = tokenStore
                     await store.clear()
                     guard self.client === client else { return }

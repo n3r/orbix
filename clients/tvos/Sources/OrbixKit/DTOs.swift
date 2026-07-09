@@ -620,6 +620,12 @@ public struct Profile: Codable, Sendable, Equatable {
     public var kind: String?
     public var maturityCap: Int?
     public var language: String?
+    /// Present (`true`/`false`) on `origin/main`'s `serializeProfile` wire
+    /// (`Boolean(p.pinHash)`); absent (→ `nil`) on this branch's wire, which
+    /// doesn't compute it at all. `isGroup`/`members` are deliberately not
+    /// modeled here — unknown keys are ignored by `Codable`, and group
+    /// profiles are out of scope until the Phase 6 merge.
+    public var hasPin: Bool?
 
     public init(
         id: String,
@@ -627,7 +633,8 @@ public struct Profile: Codable, Sendable, Equatable {
         avatar: String? = nil,
         kind: String? = nil,
         maturityCap: Int? = nil,
-        language: String? = nil
+        language: String? = nil,
+        hasPin: Bool? = nil
     ) {
         self.id = id
         self.name = name
@@ -635,6 +642,7 @@ public struct Profile: Codable, Sendable, Equatable {
         self.kind = kind
         self.maturityCap = maturityCap
         self.language = language
+        self.hasPin = hasPin
     }
 }
 
@@ -667,6 +675,22 @@ public struct MenuResponse: Codable, Sendable, Equatable {
 
     public init(items: [MenuItem]) {
         self.items = items
+    }
+}
+
+/// Response of `GET /api/me/menu/config` (see `apps/api/src/routes/menu.ts`'s
+/// `/me/menu/config` handler) — every library, unfiltered
+/// (`resolveProfileMenu(libraries, [])`), plus the active profile's ordered
+/// enabled library ids. Powers the menu editor: `libraries` is the full
+/// candidate list to choose from, `enabled` is which of them (and in what
+/// order) the profile currently shows.
+public struct MenuConfig: Codable, Sendable, Equatable {
+    public var libraries: [MenuItem]
+    public var enabled: [String]
+
+    public init(libraries: [MenuItem], enabled: [String]) {
+        self.libraries = libraries
+        self.enabled = enabled
     }
 }
 
@@ -1049,8 +1073,9 @@ public struct TvStreamRef: Codable, Sendable, Equatable {
 
 /// Response of `GET /api/tv/channels/:id` (`tv-catalog.ts:339-363`) — full
 /// channel detail incl. its ordered `streams`. **404** `{error:"not_found"}`
-/// when the channel is missing or hidden (surfaced as `OrbixError.http(404)`
-/// by `perform`, same as any other 404).
+/// when the channel is missing or hidden (surfaced as
+/// `OrbixError.http(404, code: "not_found")` by `perform`, same as any
+/// other 404).
 public struct TvChannelDetail: Codable, Sendable, Equatable {
     public var id: String
     public var number: Int

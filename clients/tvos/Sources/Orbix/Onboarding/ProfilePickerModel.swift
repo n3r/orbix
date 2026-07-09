@@ -67,7 +67,7 @@ final class ProfilePickerModel {
         do {
             try await client.selectProfile(id: id)
             return true
-        } catch OrbixError.http(403) {
+        } catch OrbixError.http(403, _) {
             // Web parity (`ProfilesPage.handleSelectProfile`): the only 403
             // `POST /profiles/:id/select` ever sends is `{error:
             // "pin_required"}` (see `apps/api/src/routes/profiles.ts` — a

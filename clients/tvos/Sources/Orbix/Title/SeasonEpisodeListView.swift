@@ -513,7 +513,7 @@ final class SeasonEpisodeModel {
             episodes = fetched
         } catch {
             guard !Task.isCancelled, loadedSeason == season else { return }
-            if let orbixError = error as? OrbixError, case .http(404) = orbixError {
+            if let orbixError = error as? OrbixError, case .http(404, _) = orbixError {
                 notFound = true
             } else {
                 loadError = "Couldn't load episodes: \(error)"

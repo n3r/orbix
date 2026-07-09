@@ -109,7 +109,7 @@ final class PairingModel {
                 // .pending — keep polling.
             } catch {
                 guard !Task.isCancelled else { return }
-                if let orbixError = error as? OrbixError, case .http(404) = orbixError {
+                if let orbixError = error as? OrbixError, case .http(404, _) = orbixError {
                     // The server's PairingStore already swept this entry
                     // (unknown_or_expired) — same user-facing outcome as our
                     // own local deadline check above, just discovered a

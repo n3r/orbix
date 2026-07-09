@@ -36,7 +36,7 @@ private let newWindowSeconds: TimeInterval = 14 * 24 * 60 * 60
 /// spotlight.ts `isNew`. No lower bound (a future addedAt still reads as new,
 /// matching the web); an unparseable/absent date is never new.
 public func isNew(addedAt: String?, now: Date) -> Bool {
-    guard let addedAt, let added = parseISODate(addedAt) else { return false }
+    guard let addedAt, let added = orbixParseISODate(addedAt) else { return false }
     return now.timeIntervalSince(added) <= newWindowSeconds
 }
 
@@ -47,15 +47,4 @@ public func resumeLabel(_ resume: MediaCard.Resume?) -> String? {
     let base = "S\(resume.seasonNumber) E\(resume.episodeNumber)"
     if let title = resume.episodeTitle, !title.isEmpty { return "\(base) · \(title)" }
     return base
-}
-
-/// The server sends addedAt via `Date.toISOString()` (always fractional ".000Z").
-/// Try fractional first, then plain, so either shape parses.
-private func parseISODate(_ string: String) -> Date? {
-    let fractional = ISO8601DateFormatter()
-    fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    if let date = fractional.date(from: string) { return date }
-    let plain = ISO8601DateFormatter()
-    plain.formatOptions = [.withInternetDateTime]
-    return plain.date(from: string)
 }
