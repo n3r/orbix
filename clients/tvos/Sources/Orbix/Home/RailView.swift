@@ -17,9 +17,9 @@ import SwiftUI
 /// on-screen as the remote's D-pad moves focus within the `.focusSection()`).
 ///
 /// Heading text mirrors the web's `LOCALIZED_ROW_KEYS` override
-/// (`MediaRow.tsx:19,53-54`): the three static UI-chrome row keys are
-/// localized by key via `L10n.t("catalog.rows.\(row.key)")`; every other
-/// (data-bearing) row falls back to the server-provided `row.title`.
+/// (`MediaRow.tsx:22-30`): the static UI-chrome row keys are localized by
+/// key via `L10n.t("catalog.rows.\(row.key)")`; every other (data-bearing)
+/// row falls back to the server-provided `row.title`.
 struct RailView: View {
     let row: HomeRow
     let baseURL: URL?
@@ -27,11 +27,14 @@ struct RailView: View {
     var onSelect: (MediaCard) -> Void
 
     /// Home-row keys whose headings are static UI chrome and can be
-    /// localized by key. Data-bearing rows (e.g. "becauseYouWatched", whose
-    /// heading embeds a media title) are not listed and fall back to the
-    /// server-provided `row.title`. Mirrors the web's `LOCALIZED_ROW_KEYS`
-    /// (`MediaRow.tsx:19`).
-    private static let localizedRowKeys: Set<String> = ["continue", "hiddenGems", "tonight"]
+    /// localized by key. Data-bearing rows (e.g. "becauseYouWatched" and
+    /// "genre:*", whose headings embed a media title / localized genre name)
+    /// are not listed and fall back to the server-provided `row.title`.
+    /// Kept byte-for-byte in sync with the web's `LOCALIZED_ROW_KEYS`
+    /// (`MediaRow.tsx:22-30`).
+    private static let localizedRowKeys: Set<String> = [
+        "continue", "wishlist", "recentlyAdded", "hiddenGems", "tonight", "topRated", "series",
+    ]
 
     private var heading: String {
         Self.localizedRowKeys.contains(row.key) ? L10n.t("catalog.rows.\(row.key)") : row.title
