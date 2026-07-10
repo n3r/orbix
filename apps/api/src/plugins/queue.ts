@@ -10,6 +10,7 @@ import type { Env } from "@orbix/config";
 import { Prisma, type PrismaClient } from "@orbix/db";
 import { buildMountRuntime, type MountRuntime } from "../lib/mount-runtime";
 import { extractKeyframes, keyframeProbeRunner } from "../jobs/extract-keyframes";
+import { sweepKeyframeBackfill } from "../jobs/keyframe-backfill";
 import { extractSubtitles, subtitleExtractRunner } from "../jobs/extract-subtitles";
 import type { ScanProgress } from "../lib/scan-status";
 import {
@@ -221,7 +222,13 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
 
       // Best-effort keyframe-index enqueue for a just-(up)serted file. Only
       // probed video files without an existing index need the (expensive,
-      // full-file) scan; failures here must never fail the scan itself.
+      // full-file) scan; failures here must never fail the scan itself. This
+      // only fires for files the scan just touched — the scanner skips files
+      // that are unchanged since the last scan, so it can never backfill a
+      // library that predates keyframe pre-extraction on its own. The
+      // end-of-scan keyframe backfill sweep (sweepKeyframeBackfill, below)
+      // closes that gap by re-checking every probed video file in the library,
+      // changed or not.
       const enqueueKeyframesIfNeeded = async (
         filePath: string,
         tech: MediaFileTechnical,
@@ -1435,6 +1442,18 @@ export function queuePlugin(env: Env, deps?: { runtime?: MountRuntime }) {
           }
         }
       }
+
+      // ── Keyframe backfill sweep ──────────────────────────────────────
+      // Guarantees this scan (fresh or a rescan of an unchanged library)
+      // leaves no probed video file without a keyframe index, closing the
+      // gap left by enqueueKeyframesIfNeeded only covering just-(up)serted
+      // files. Best-effort internally — never throws.
+      await sweepKeyframeBackfill({
+        prisma: { mediaFile: { findMany: (args) => prisma.mediaFile.findMany(args as never) } },
+        queue: app.keyframesQueue,
+        log: app.log,
+        libraryId,
+      });
 
       // ── Done ──────────────────────────────────────────────────────────
 
