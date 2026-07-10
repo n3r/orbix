@@ -441,6 +441,11 @@ struct PlayerScreen: View {
                     .font(.title3)
                     .tint(.white)
                     .foregroundStyle(.white)
+                    // `.focusable` is load-bearing: `.onExitCommand` fires only
+                    // when its subtree can hold focus. Without it, Menu here
+                    // would background the APP mid-negotiation — stranding the
+                    // cover and leaking the just-minted play session/ffmpeg.
+                    .focusable(true)
                     // Menu during negotiation still collapses the cover. Scoped
                     // to this branch (not an ancestor of the ready-state player)
                     // so AVKit's transport is never starved of remote input.
@@ -476,7 +481,10 @@ struct PlayerScreen: View {
                         // the player. This branch vanishes the instant the
                         // player exists, so its Menu catcher never sits above
                         // `AVPlayerViewController` in the ready state.
+                        // `.focusable` for the same reason as `.loading`'s:
+                        // a non-focusable subtree's `.onExitCommand` never fires.
                         Color.clear
+                            .focusable(true)
                             .onExitCommand { dismiss() }
                     }
                 }
