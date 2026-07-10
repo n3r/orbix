@@ -55,4 +55,13 @@ describe("MediaRow", () => {
     expect(container.querySelector("img")).toBeNull();
     expect(screen.getByText("Unknown File")).toBeTruthy();
   });
+
+  it("renders an optional right-aligned header action", () => {
+    renderWithProviders(
+      <MediaRow title="Drama" items={items} action={<a href="/library/l1?genre=18">See all (9)</a>} />,
+    );
+    expect(screen.getByRole("link", { name: "See all (9)" }).getAttribute("href")).toBe(
+      "/library/l1?genre=18",
+    );
+  });
 });

@@ -8,5 +8,6 @@ export * from "./components/Skeleton";
 export * from "./components/Select";
 export * from "./components/Checkbox";
 export * from "./components/Toggle";
+export * from "./components/Tabs";
 export * from "./components/ConfirmDialog";
 export * from "./hooks/useFocusTrap";

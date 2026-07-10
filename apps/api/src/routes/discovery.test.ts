@@ -59,6 +59,8 @@ describe("GET /home/rows — continue-watching enrichment", () => {
       findUnique: async () => ({ id: "s1", accountId: "a1", expiresAt: new Date(Date.now() + 3_600_000) }),
     };
     app.prisma.profile = { findUnique: async () => profile };
+    // Default: empty wishlist — tests that exercise the row override this.
+    app.prisma.wishlistEntry = { findMany: async () => [] };
   }
 
   const cookies = { orbix_session: "s1", orbix_profile: "p1" };
@@ -122,6 +124,68 @@ describe("GET /home/rows — continue-watching enrichment", () => {
       progress: { positionSec: 300, durationSec: 6000 },
       resume: null,
     });
+    await app.close();
+  });
+});
+
+describe("GET /home/rows — wishlist + genre rows", () => {
+  function authed(app: any, profile: unknown = { id: "p1", name: "A", avatar: null, kind: "standard", maturityCap: null }) {
+    app.prisma.session = {
+      findUnique: async () => ({ id: "s1", accountId: "a1", expiresAt: new Date(Date.now() + 3_600_000) }),
+    };
+    app.prisma.profile = { findUnique: async () => profile };
+  }
+
+  const cookies = { orbix_session: "s1", orbix_profile: "p1" };
+
+  /** Bare unplayed catalog item; genre ids/names optional. */
+  const bare = (id: string, genres: { id: number; name: string }[] = []) => ({
+    id, title: `Title ${id}`, year: null, posterPath: null, backdropPath: null,
+    addedAt: new Date("2026-01-01T00:00:00Z"),
+    translations: [], keywords: [], credits: [],
+    genres: genres.map((genre) => ({ genre })),
+  });
+
+  it("emits a wishlist row in stored order between continue and the discovery rows", async () => {
+    const app = await buildApp(env);
+    authed(app as any);
+    (app as any).prisma.mediaItem = {
+      findMany: async () => [bare("m1"), bare("m2"), bare("m3")],
+    };
+    (app as any).prisma.playbackState = { findMany: async () => [] };
+    (app as any).prisma.playEvent = { findMany: async () => [] };
+    (app as any).prisma.episode = { findMany: async () => [] };
+    (app as any).prisma.wishlistEntry = {
+      findMany: async () => [{ mediaItemId: "m3" }, { mediaItemId: "m1" }],
+    };
+
+    const res = await app.inject({ method: "GET", url: "/api/home/rows", cookies });
+    expect(res.statusCode).toBe(200);
+    const wl = res.json().rows.find((r: any) => r.key === "wishlist");
+    expect(wl.items.map((i: any) => i.id)).toEqual(["m3", "m1"]);
+    await app.close();
+  });
+
+  it("localizes genre-row titles via GenreTranslation for non-en profiles", async () => {
+    const app = await buildApp(env);
+    authed(app as any, { id: "p1", name: "A", avatar: null, kind: "standard", maturityCap: null, language: "ru" });
+    const comedy = { id: 7, name: "Comedy" };
+    (app as any).prisma.mediaItem = {
+      findMany: async () => [bare("c1", [comedy]), bare("c2", [comedy]), bare("c3", [comedy]), bare("c4", [comedy])],
+    };
+    (app as any).prisma.playbackState = { findMany: async () => [] };
+    (app as any).prisma.playEvent = { findMany: async () => [] };
+    (app as any).prisma.episode = { findMany: async () => [] };
+    (app as any).prisma.wishlistEntry = { findMany: async () => [] };
+    (app as any).prisma.genreTranslation = {
+      findMany: async () => [{ genreId: 7, name: "Комедия" }],
+    };
+
+    const res = await app.inject({ method: "GET", url: "/api/home/rows", cookies });
+    expect(res.statusCode).toBe(200);
+    const genreRow = res.json().rows.find((r: any) => r.key === "genre:Comedy");
+    expect(genreRow.title).toBe("Комедия");
+    expect(genreRow.items).toHaveLength(4);
     await app.close();
   });
 });

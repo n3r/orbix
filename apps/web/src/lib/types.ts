@@ -55,6 +55,19 @@ export interface Profile {
   avatar: string | null;
   kind: string;
   maturityCap: number | null;
+  language?: string | null;
+  isGroup?: boolean;
+  hasPin?: boolean;
+  members?: ProfileMember[];
+}
+
+export interface ProfileMember {
+  id: string;
+  name: string;
+  avatar: string | null;
+  kind: string;
+  maturityCap: number | null;
+  isGroup?: boolean;
 }
 
 /** One catalog category in the profile's nav (one per library). */
@@ -96,6 +109,15 @@ export interface HomeCard extends MediaCard {
 export interface HomeRow {
   key: string;
   title: string;
+  items: HomeCard[];
+}
+
+/** One genre rail on the library Categories tab. */
+export interface LibraryRow {
+  key: string;
+  genreId: number;
+  title: string;
+  total: number;
   items: HomeCard[];
 }
 

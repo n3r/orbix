@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { cn, focusRing } from "@orbix/ui";
 import BoxArtCard from "./BoxArtCard";
@@ -11,18 +11,29 @@ interface MediaRowProps {
   /** Stable home-row key from the API, used to localize the heading. */
   rowKey?: string;
   items: HomeCard[];
+  /** Optional right-aligned header control (e.g. a "See all" link). */
+  action?: ReactNode;
 }
 
 // Home-row keys whose headings are static UI chrome and can be localized by
-// key. Data-bearing rows (e.g. "becauseYouWatched", whose heading embeds a
-// media title) are not listed and fall back to the server-provided `title`.
-const LOCALIZED_ROW_KEYS = new Set(["continue", "hiddenGems", "tonight"]);
+// key. Data-bearing rows (e.g. "becauseYouWatched" and "genre:*", whose
+// headings embed a media title / localized genre name) are not listed and
+// fall back to the server-provided `title`.
+const LOCALIZED_ROW_KEYS = new Set([
+  "continue",
+  "wishlist",
+  "recentlyAdded",
+  "hiddenGems",
+  "tonight",
+  "topRated",
+  "series",
+]);
 
 /**
  * Netflix-style row: tight strip of landscape cards, hidden scrollbar, and
  * gutter-width chevron paddles that page the strip and appear on row hover.
  */
-export default function MediaRow({ title, rowKey, items }: MediaRowProps) {
+export default function MediaRow({ title, rowKey, items, action }: MediaRowProps) {
   const { t } = useTranslation();
   const scroller = useRef<HTMLDivElement>(null);
   const [canScroll, setCanScroll] = useState({ left: false, right: false });
@@ -58,9 +69,10 @@ export default function MediaRow({ title, rowKey, items }: MediaRowProps) {
 
   return (
     <section className="group/row w-full">
-      <h2 className="mb-2 px-[4vw] text-base font-semibold text-[var(--text)] md:text-xl">
-        {heading}
-      </h2>
+      <div className="mb-2 flex items-baseline justify-between gap-4 px-[4vw]">
+        <h2 className="text-base font-semibold text-[var(--text)] md:text-xl">{heading}</h2>
+        {action}
+      </div>
       <div className="relative">
         <div
           ref={scroller}

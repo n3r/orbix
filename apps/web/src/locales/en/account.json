@@ -7,7 +7,21 @@
   },
   "profileKind": {
     "standard": "Standard profile",
-    "kids": "Kids profile"
+    "kids": "Kids profile",
+    "group": "Group profile",
+    "groupKids": "Kids group profile"
+  },
+  "pin": {
+    "label": "Profile code",
+    "enabled": "Enabled",
+    "disabled": "Not set",
+    "placeholder": "4-6 digits",
+    "save": "Save code",
+    "remove": "Remove code",
+    "saved": "Code saved.",
+    "removed": "Code removed.",
+    "invalid": "Use 4-6 digits.",
+    "saveFailed": "Failed to save code."
   },
   "menu": {
     "intro": "Choose which categories show in your menu and put them in order.",

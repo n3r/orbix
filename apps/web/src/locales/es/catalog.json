@@ -1,20 +1,26 @@
 {
   "rows": {
     "continue": "Seguir viendo",
+    "wishlist": "De tu lista",
+    "recentlyAdded": "Añadido recientemente",
     "hiddenGems": "Joyas ocultas",
     "tonight": "Elige algo para esta noche",
+    "topRated": "Aclamadas por la crítica",
+    "series": "Series para maratonear",
     "scrollLeft": "Desplazar a la izquierda",
     "scrollRight": "Desplazar a la derecha"
   },
   "browse": {
     "title": "Explorar",
     "searchPlaceholder": "Buscar títulos…",
-    "empty": "No se encontraron elementos.",
-    "sort": {
-      "title": "Título (A–Z)",
-      "added": "Añadido recientemente",
-      "year": "Año"
-    }
+    "empty": "No se encontraron elementos."
+  },
+  "library": {
+    "tabs": { "categories": "Categorías", "browse": "Explorar" },
+    "viewSwitcher": "Vistas de la biblioteca",
+    "seeAll": "Ver todo ({{total}})",
+    "back": "Volver a categorías",
+    "emptyCategories": "Aún no hay categorías: los títulos aparecerán aquí cuando tengan información de género. En la pestaña Explorar está todo."
   },
   "hero": {
     "play": "Reproducir",

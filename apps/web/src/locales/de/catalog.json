@@ -1,20 +1,26 @@
 {
   "rows": {
     "continue": "Weiterschauen",
+    "wishlist": "Aus deiner Liste",
+    "recentlyAdded": "Kürzlich hinzugefügt",
     "hiddenGems": "Verborgene Schätze",
     "tonight": "Etwas für heute Abend",
+    "topRated": "Von der Kritik gefeiert",
+    "series": "Serien zum Bingen",
     "scrollLeft": "Nach links scrollen",
     "scrollRight": "Nach rechts scrollen"
   },
   "browse": {
     "title": "Durchstöbern",
     "searchPlaceholder": "Titel suchen…",
-    "empty": "Keine Einträge gefunden.",
-    "sort": {
-      "title": "Titel (A–Z)",
-      "added": "Kürzlich hinzugefügt",
-      "year": "Jahr"
-    }
+    "empty": "Keine Einträge gefunden."
+  },
+  "library": {
+    "tabs": { "categories": "Kategorien", "browse": "Durchsuchen" },
+    "viewSwitcher": "Bibliotheksansichten",
+    "seeAll": "Alle anzeigen ({{total}})",
+    "back": "Zurück zu den Kategorien",
+    "emptyCategories": "Noch keine Kategorien — Titel erscheinen hier, sobald sie Genre-Informationen haben. Im Tab „Durchsuchen“ sehen Sie alles."
   },
   "hero": {
     "play": "Abspielen",

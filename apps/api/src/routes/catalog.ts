@@ -1,13 +1,16 @@
 import type { FastifyInstance } from "fastify";
-import { localizeItem, localizeGenres, localizeName } from "@orbix/core";
+import {
+  localizeItem, localizeGenres, localizeName,
+  buildLibraryGenreRows, compareDisplayTitles, compareByRating,
+} from "@orbix/core";
 import { requireAuth } from "../lib/auth";
 import { activeProfile, kidsRatingWhere, profileAllowsItem } from "../lib/catalog-filter";
 
 export default async function catalogRoute(app: FastifyInstance) {
-  // GET /libraries/:id/items?sort=&q=
+  // GET /libraries/:id/items?sort=&q=&genre=
   app.get<{
     Params: { id: string };
-    Querystring: { sort?: string; q?: string };
+    Querystring: { sort?: string; q?: string; genre?: string };
   }>(
     "/libraries/:id/items",
     { preHandler: requireAuth(app) },
@@ -16,11 +19,20 @@ export default async function catalogRoute(app: FastifyInstance) {
       const sort = req.query.sort ?? "title";
       const q = req.query.q?.trim();
 
-      const allowedSorts = ["title", "added", "year"];
+      const allowedSorts = ["title", "added", "year", "alpha", "rating"];
       if (!allowedSorts.includes(sort)) {
         return reply.code(400).send({ error: "invalid_sort" });
       }
+      let genreId: number | undefined;
+      if (req.query.genre !== undefined) {
+        if (!/^\d+$/.test(req.query.genre)) {
+          return reply.code(400).send({ error: "invalid_genre" });
+        }
+        genreId = Number(req.query.genre);
+      }
 
+      // alpha/rating sort in-memory below; the DB keeps a deterministic
+      // sortTitle order so the item cap truncates stably.
       const orderBy =
         sort === "added"
           ? [{ addedAt: "desc" as const }]
@@ -32,32 +44,120 @@ export default async function catalogRoute(app: FastifyInstance) {
       const ratingFilter = kidsRatingWhere(profile);
       const lang = profile?.language ?? "en";
 
-      // MVP cap at 500 items
       // NOTE: the `q` filter matches the base (en) title only; localized-title
       // search is a deliberate Phase-2 follow-up, not required here.
       const items = await app.prisma.mediaItem.findMany({
         where: {
           libraryId: id,
           ...(q ? { title: { contains: q, mode: "insensitive" } } : {}),
+          ...(genreId !== undefined ? { genres: { some: { genreId } } } : {}),
           ...(ratingFilter ?? {}),
         },
         select: {
           id: true,
           title: true,
+          sortTitle: true,
           year: true,
           posterPath: true,
           matchState: true,
+          imdbRating: true,
+          tmdbScore: true,
           translations: { where: { language: lang }, select: { title: true } },
         },
         orderBy,
-        take: 500,
+        take: 2000,
       });
 
-      // Coalesce title → requested-language translation, else base.
-      return items.map(({ translations, ...rest }) => ({
-        ...rest,
-        title: localizeItem({ title: rest.title }, translations[0]).title,
+      // Coalesce title → requested-language translation, else base; the
+      // sort fields stay behind — the response is plain MediaCards.
+      const enriched = items.map(({ translations, sortTitle, imdbRating, tmdbScore, ...rest }) => ({
+        sortTitle,
+        imdbRating,
+        tmdbScore,
+        card: { ...rest, title: localizeItem({ title: rest.title }, translations[0]).title },
       }));
+
+      if (sort === "alpha") {
+        // Browse order: script-bucketed A→Z/А→Я over the *displayed* title.
+        const cmp = compareDisplayTitles(lang);
+        enriched.sort((a, b) => cmp(a.card.title, b.card.title) || a.sortTitle.localeCompare(b.sortTitle));
+      } else if (sort === "rating") {
+        enriched.sort((a, b) => compareByRating({ id: a.card.id, ...a }, { id: b.card.id, ...b }));
+      }
+
+      return enriched.map((e) => e.card);
+    },
+  );
+
+  // GET /libraries/:id/rows — genre-grouped rails for the Categories tab.
+  // Every genre in the library gets a row (count desc); each rail is the
+  // genre's top-rated slice, with `total` sizing the "See all" grid.
+  app.get<{ Params: { id: string } }>(
+    "/libraries/:id/rows",
+    { preHandler: requireAuth(app) },
+    async (req) => {
+      const profile = await activeProfile(app, req);
+      const ratingFilter = kidsRatingWhere(profile);
+      const lang = profile?.language ?? "en";
+
+      const items = await app.prisma.mediaItem.findMany({
+        where: { libraryId: req.params.id, ...(ratingFilter ?? {}) },
+        select: {
+          id: true, title: true, sortTitle: true, year: true,
+          posterPath: true, backdropPath: true, matchState: true, addedAt: true,
+          imdbRating: true, tmdbScore: true,
+          translations: { where: { language: lang }, select: { title: true } },
+          genres: { select: { genre: { select: { id: true, name: true } } } },
+        },
+        orderBy: [{ sortTitle: "asc" }, { id: "asc" }],
+        take: 2000,
+      });
+
+      const rows = buildLibraryGenreRows(
+        items.map((it) => ({
+          id: it.id, sortTitle: it.sortTitle,
+          imdbRating: it.imdbRating, tmdbScore: it.tmdbScore,
+          genres: it.genres.map((g) => g.genre),
+        })),
+      );
+
+      // Genre headings are data-bearing (like home's genre:* rows), so the
+      // server owns their localization; base Genre.name is the en fallback.
+      let headingByGenreId = new Map<number, string>();
+      if (lang !== "en" && rows.length > 0) {
+        const trs = await app.prisma.genreTranslation.findMany({
+          where: { language: lang, genreId: { in: rows.map((r) => r.genreId) } },
+          select: { genreId: true, name: true },
+        });
+        headingByGenreId = new Map(
+          trs.filter((t) => t.name.trim()).map((t) => [t.genreId, t.name]),
+        );
+      }
+
+      const cardById = new Map(
+        items.map((it) => [
+          it.id,
+          {
+            id: it.id,
+            title: localizeItem({ title: it.title }, it.translations[0]).title,
+            year: it.year,
+            posterPath: it.posterPath,
+            backdropPath: it.backdropPath,
+            matchState: it.matchState,
+            addedAt: it.addedAt.toISOString(),
+          },
+        ]),
+      );
+
+      return {
+        rows: rows.map((row) => ({
+          key: `genre:${row.genreId}`,
+          genreId: row.genreId,
+          title: headingByGenreId.get(row.genreId) ?? row.name,
+          total: row.total,
+          items: row.itemIds.map((id) => cardById.get(id)!),
+        })),
+      };
     },
   );
 

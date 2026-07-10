@@ -24,7 +24,7 @@ The MVP targets **movies** (the data model leaves room for TV later), with multi
 ## 2. Personas & key journeys
 
 - **Admin (you):** installs Orbix on the NAS, runs the setup wizard, adds libraries/sources, fixes the occasional bad match, manages profiles.
-- **Household member (Personal/Family profile):** picks their profile, browses smart rows, searches by mood, plays a movie, resumes later.
+- **Household member (Personal/Group/Family profile):** picks their profile, browses smart rows, searches by mood, plays a movie, resumes later.
 - **Kid (Kids profile):** sees only age-appropriate titles; PIN-gated exit from the profile.
 
 **Headline journey — "find something for tonight":** Open Orbix → pick profile → home shows *Continue Watching*, *Because you watched X*, *Pick something for tonight* → or type "something tense and under 2 hours" → get a ranked shortlist → press play → it streams (transcoding transparently if needed) → resume tomorrow where you stopped. All of this works with the internet down.
@@ -86,7 +86,9 @@ orbix/
 ```prisma
 // Identity & profiles
 model Account   { id, email, passwordHash, isAdmin, createdAt }
-model Profile   { id, name, avatar, kind /*standard|kids*/, pinHash?, maturityCap?, createdAt }
+model Profile   { id, name, avatar, kind /*standard|kids*/, pinHash?, maturityCap?,
+                  language, isGroup, createdAt }
+model ProfileGroupMember { id, groupProfileId, memberProfileId, position }
 // (MVP: one Account = the household; multiple Profiles selected after login)
 
 // Libraries & sources
@@ -123,7 +125,7 @@ Indexes: `MediaFile.path` unique; `MediaItem(sectionId, sortTitle)`; `PlaybackSt
 
 ### 6.1 Auth & profiles
 - **First-run setup wizard** (`/setup`): create admin (email + argon2 password), set TMDB token, name the first library. Idempotent; blocked once an admin exists.
-- **Login** → cookie session. **"Who's watching?"** screen lists profiles; selecting one sets the active-profile cookie. **Kids** profiles and PIN-protected profiles prompt for the 4-digit PIN.
+- **Login** → cookie session. **"Who's watching?"** screen lists personal and co-watching group profiles; selecting one sets the active-profile cookie. PIN-protected profiles prompt for a 4-6 digit code. Group profiles have their own watch state; groups containing kids are stored kids-safe and clamped to the strictest included kids cap.
 - **Authorization:** admin-only routes (sources, settings, manual fix, profile management) gated by `isAdmin`. Active profile scopes all per-profile reads/writes.
 - **Kids enforcement:** server-side filter — kids profiles only see `MediaItem.rating <= maturityCap`; the filter lives in the data-access layer, not just the UI.
 

@@ -10,7 +10,7 @@ Runs on your NAS via Docker/Portainer. Web-first (responsive); no native apps re
 
 ## Features
 
-- **Profiles** — Netflix-style household profiles (Personal / Family / Kids…) selected after login, each with its own watch history, resume positions, recommendations, and "My List". Kids profiles are **server-enforced** by maturity rating across every route.
+- **Profiles** — Netflix-style personal and co-watching group profiles (Personal / Couple / Family / Kids…) selected after login, each with its own watch history, resume positions, recommendations, and "My List". Profiles can be protected with a 4-6 digit code. Kids profiles, including groups that include kids, are **server-enforced** by maturity rating across every route.
 - **Multi-source libraries** — libraries → sections → sources (folders); add/scan/manage from the admin UI. Incremental rescans.
 - **Metadata enrichment** — TMDB metadata + locally-cached posters/backdrops (offline after scan). Manual match/poster fix UI for the inevitable mismatch. Periodic refresh job.
 - **In-browser playback** — direct play for compatible files; on-the-fly **remux/transcode to fMP4 HLS** (ffmpeg) for MKV/HEVC/etc., with seek, subtitles (text → WebVTT), and per-profile resume + Continue Watching.

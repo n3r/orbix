@@ -1,20 +1,26 @@
 {
   "rows": {
     "continue": "Continue Watching",
+    "wishlist": "From your wishlist",
+    "recentlyAdded": "Recently added",
     "hiddenGems": "Hidden gems",
     "tonight": "Pick something for tonight",
+    "topRated": "Critically acclaimed",
+    "series": "Binge-worthy series",
     "scrollLeft": "Scroll left",
     "scrollRight": "Scroll right"
   },
   "browse": {
     "title": "Browse",
     "searchPlaceholder": "Search titles…",
-    "empty": "No items found.",
-    "sort": {
-      "title": "Title (A–Z)",
-      "added": "Recently Added",
-      "year": "Year"
-    }
+    "empty": "No items found."
+  },
+  "library": {
+    "tabs": { "categories": "Categories", "browse": "Browse" },
+    "viewSwitcher": "Library views",
+    "seeAll": "See all ({{total}})",
+    "back": "Back to categories",
+    "emptyCategories": "No categories yet — titles appear here once they have genre info. See the Browse tab for everything."
   },
   "hero": {
     "play": "Play",

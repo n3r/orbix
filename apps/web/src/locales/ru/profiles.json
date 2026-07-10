@@ -4,7 +4,23 @@
   "form": {
     "title": "Новый профиль",
     "nameLabel": "Имя",
-    "namePlaceholder": "Имя профиля"
+    "namePlaceholder": "Имя профиля",
+    "mode": {
+      "personal": "Личный",
+      "group": "Вместе"
+    }
+  },
+  "group": {
+    "badge": "Вместе",
+    "membersLabel": "Смотрят вместе",
+    "notEnoughProfiles": "Сначала создайте как минимум два личных профиля."
+  },
+  "pin": {
+    "badge": "PIN",
+    "label": "Код профиля",
+    "placeholder": "4-6 цифр",
+    "dialogTitle": "Код для {{name}}",
+    "unlock": "Открыть"
   },
   "language": {
     "label": "Язык",
@@ -13,7 +29,10 @@
   "errors": {
     "loadFailed": "Не удалось загрузить профили.",
     "selectFailed": "Не удалось выбрать профиль.",
-    "pinNotSupported": "Для этого профиля требуется PIN-код. Ввод PIN-кода пока не поддерживается."
+    "pinNotSupported": "Для этого профиля требуется PIN-код. Ввод PIN-кода пока не поддерживается.",
+    "pinRequired": "Введите код профиля.",
+    "invalidPin": "Используйте 4-6 цифр.",
+    "groupMembersRequired": "Выберите как минимум два профиля."
   },
   "emptyHint": "Создайте первый профиль, чтобы начать просмотр."
 }

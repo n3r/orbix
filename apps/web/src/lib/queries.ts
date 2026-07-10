@@ -1,7 +1,7 @@
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { apiJson, apiFetch, ApiError } from "./api";
 import type {
-  AuthMe, HomeRow, MediaCard, MenuConfig, MenuItem, Profile, TitleDetail,
+  AuthMe, HomeRow, LibraryRow, MediaCard, MenuConfig, MenuItem, Profile, TitleDetail,
   TvChannelCard, TvGridResponse, TvGuideResponse, TvHome, TvProgramme,
 } from "./types";
 
@@ -9,6 +9,7 @@ export interface SetupStatus { complete: boolean }
 export interface ActiveProfile {
   id: string | null; name: string | null; avatar: string | null;
   kind: string | null; maturityCap: number | null; language?: string | null;
+  isGroup?: boolean; hasPin?: boolean; members?: Profile["members"];
 }
 
 export function useSetupStatus() {
@@ -25,15 +26,30 @@ export function useHomeRows() {
   return useQuery({ queryKey: ["home-rows"], queryFn: () => apiJson<{ rows: HomeRow[] }>("/home/rows") });
 }
 
-export function useLibraryItems(libraryId: string | undefined, sort: string, q: string) {
+export function useLibraryItems(
+  libraryId: string | undefined,
+  sort: string,
+  q: string,
+  genreId?: number,
+) {
   return useQuery({
-    queryKey: ["library-items", libraryId, sort, q],
+    queryKey: ["library-items", libraryId, sort, q, genreId ?? null],
     enabled: !!libraryId,
     queryFn: () => {
       const qs = new URLSearchParams({ sort });
       if (q) qs.set("q", q);
+      if (genreId != null) qs.set("genre", String(genreId));
       return apiJson<MediaCard[]>(`/libraries/${libraryId}/items?${qs}`);
     },
+  });
+}
+
+/** Genre rails for the library Categories tab. */
+export function useLibraryRows(libraryId: string | undefined) {
+  return useQuery({
+    queryKey: ["library-rows", libraryId],
+    enabled: !!libraryId,
+    queryFn: () => apiJson<{ rows: LibraryRow[] }>(`/libraries/${libraryId}/rows`),
   });
 }
 

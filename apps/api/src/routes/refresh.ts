@@ -5,6 +5,11 @@
  *   Triggers an immediate TMDB metadata refresh for all stale items.
  *   Returns { refreshed, skipped } or { reason: "no_token" }.
  *
+ * POST /maintenance/extract-subtitles
+ *   Backfills pre-extracted WebVTT for the existing library: enqueues an
+ *   (idempotent) subtitle-extraction job for every probed file with at least
+ *   one text subtitle track. Returns { enqueued }.
+ *
  * DELETE /maintenance/cache
  *   Clears all cached poster/backdrop images from disk and nulls out
  *   posterPath/backdropPath on every MediaItem. Strictly path-guarded:
@@ -17,7 +22,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { requireAuth, requireAdmin } from "../lib/auth";
 import { requireNonKids } from "../lib/catalog-filter";
-import { TmdbClient, getSetting } from "@orbix/core";
+import {
+  TmdbClient,
+  getSetting,
+  selectTextSubtitleTracks,
+  type SubtitleTrackLike,
+} from "@orbix/core";
 import type { Env } from "@orbix/config";
 import { refreshMetadata } from "../jobs/refresh-metadata.js";
 import { rebuildMetadata } from "../jobs/rebuild-metadata.js";
@@ -78,6 +88,36 @@ export function refreshRoute(env: Env) {
         });
 
         return reply.send(result);
+      },
+    );
+
+    // ── POST /maintenance/extract-subtitles ──────────────────────────────────
+    // Backfill: pre-extract text subtitles for the already-scanned library so
+    // the first manual selection is instant and the master playlist can
+    // AUTOSELECT them. Needs no TMDB token (ffmpeg-only, offline). Enqueues an
+    // idempotent job per file — the worker skips tracks already on disk, and
+    // jobId=fileId dedups against any in-flight scan enqueue.
+
+    app.post(
+      "/maintenance/extract-subtitles",
+      { preHandler: [requireAuth(app), requireAdmin(app), requireNonKids(app)] },
+      async (_req, reply) => {
+        const files = await app.prisma.mediaFile.findMany({
+          where: { probedOk: true },
+          select: { id: true, subtitleTracks: true },
+        });
+
+        let enqueued = 0;
+        for (const f of files) {
+          const tracks = Array.isArray(f.subtitleTracks)
+            ? (f.subtitleTracks as unknown as SubtitleTrackLike[])
+            : [];
+          if (selectTextSubtitleTracks(tracks).length === 0) continue;
+          await app.subtitlesQueue.add("subtitles", { fileId: f.id }, { jobId: f.id });
+          enqueued++;
+        }
+
+        return reply.send({ enqueued });
       },
     );
 

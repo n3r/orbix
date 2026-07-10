@@ -1,18 +1,17 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
-import { Button, Card, Input, Avatar, Select, Skeleton, cn, focusRing } from "@orbix/ui";
+import { Button, Card, Input, Avatar, Select, Skeleton, Checkbox, cn, focusRing } from "@orbix/ui";
 import { apiFetch } from "@/lib/api";
 import { errorMessage } from "@/lib/i18n/tError";
 import { SUPPORTED_LANGUAGES, LANGUAGE_LABELS, isLanguageCode } from "@/lib/i18n/languages";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
+import type { Profile } from "@/lib/types";
 
-interface Profile {
-  id: string;
-  name: string;
-  avatar?: string | null;
-  kind: string;
-  maturityCap?: number | null;
+type NewProfileMode = "personal" | "group";
+
+function pinIsValid(pin: string) {
+  return /^\d{4,6}$/.test(pin);
 }
 
 export default function ProfilesPage() {
@@ -22,15 +21,21 @@ export default function ProfilesPage() {
   const [loading, setLoading] = useState(true);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [newMode, setNewMode] = useState<NewProfileMode>("personal");
   const [newName, setNewName] = useState("");
   const [newLanguage, setNewLanguage] = useState(
     isLanguageCode(i18n.language) ? i18n.language : "en",
   );
+  const [newPin, setNewPin] = useState("");
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [selectError, setSelectError] = useState<string | null>(null);
+  const [pinProfile, setPinProfile] = useState<Profile | null>(null);
+  const [pinValue, setPinValue] = useState("");
+  const [pinError, setPinError] = useState<string | null>(null);
 
-  async function loadProfiles() {
+  const loadProfiles = useCallback(async () => {
     try {
       const res = await apiFetch("/profiles");
       if (res.ok) {
@@ -48,23 +53,69 @@ export default function ProfilesPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [navigate, t]);
 
   useEffect(() => {
-    loadProfiles();
-  }, []);
+    void loadProfiles();
+  }, [loadProfiles]);
+
+  function resetForm() {
+    setNewMode("personal");
+    setNewName("");
+    setNewPin("");
+    setSelectedMemberIds([]);
+    setFormError(null);
+    setNewLanguage(isLanguageCode(i18n.language) ? i18n.language : "en");
+  }
+
+  function toggleMember(profileId: string) {
+    setSelectedMemberIds((ids) =>
+      ids.includes(profileId) ? ids.filter((id) => id !== profileId) : [...ids, profileId],
+    );
+  }
 
   async function handleAddProfile(e: React.FormEvent) {
     e.preventDefault();
     setFormError(null);
+
+    if (newPin && !pinIsValid(newPin)) {
+      setFormError(t("profiles:errors.invalidPin"));
+      return;
+    }
+
+    const groupMembers = profiles.filter((profile) => selectedMemberIds.includes(profile.id) && !profile.isGroup);
+    if (newMode === "group" && groupMembers.length < 2) {
+      setFormError(t("profiles:errors.groupMembersRequired"));
+      return;
+    }
+
+    let kind: "standard" | "kids" = "standard";
+    let maturityCap: number | undefined;
+    const kidsCaps = groupMembers
+      .filter((profile) => profile.kind === "kids")
+      .map((profile) => profile.maturityCap ?? 0);
+    if (kidsCaps.length > 0) {
+      kind = "kids";
+      maturityCap = Math.min(...kidsCaps);
+    }
+
     setSaving(true);
     try {
+      const payload: Record<string, unknown> = {
+        name: newName.trim(),
+        kind,
+        language: newLanguage,
+        isGroup: newMode === "group",
+      };
+      if (maturityCap !== undefined) payload.maturityCap = maturityCap;
+      if (newPin) payload.pin = newPin;
+      if (newMode === "group") payload.memberProfileIds = groupMembers.map((profile) => profile.id);
       const res = await apiFetch("/profiles", {
         method: "POST",
-        body: JSON.stringify({ name: newName, kind: "standard", language: newLanguage }),
+        body: JSON.stringify(payload),
       });
       if (res.ok) {
-        setNewName("");
+        resetForm();
         setShowForm(false);
         await loadProfiles();
       } else {
@@ -78,13 +129,14 @@ export default function ProfilesPage() {
     }
   }
 
-  async function handleSelectProfile(profile: Profile) {
+  async function selectProfile(profile: Profile, pin?: string) {
     if (pendingId) return;
     setSelectError(null);
+    setPinError(null);
     setPendingId(profile.id);
-    const res = await apiFetch(`/profiles/${profile.id}/select`, {
-      method: "POST",
-    });
+    const init: RequestInit = { method: "POST" };
+    if (pin !== undefined) init.body = JSON.stringify({ pin });
+    const res = await apiFetch(`/profiles/${profile.id}/select`, init);
     if (res.ok) {
       // Full reload (like logout) so the TanStack Query cache is dropped and the
       // guard re-reads the new orbix_profile cookie. A client navigate would
@@ -96,12 +148,41 @@ export default function ProfilesPage() {
       setPendingId(null);
       const body = (await res.json()) as { error?: string };
       if (body.error === "pin_required") {
-        setSelectError(t("profiles:errors.pinNotSupported"));
+        if (pinProfile) {
+          setPinError(t("profiles:errors.pinRequired"));
+        } else {
+          setSelectError(t("profiles:errors.pinRequired"));
+        }
       } else {
-        setSelectError(t("profiles:errors.selectFailed"));
+        const message = t("profiles:errors.selectFailed");
+        if (pinProfile) setPinError(message);
+        else setSelectError(message);
       }
     }
   }
+
+  async function handleSelectProfile(profile: Profile) {
+    if (profile.hasPin) {
+      setPinProfile(profile);
+      setPinValue("");
+      setPinError(null);
+      setSelectError(null);
+      return;
+    }
+    await selectProfile(profile);
+  }
+
+  async function handlePinSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!pinProfile) return;
+    if (!pinIsValid(pinValue)) {
+      setPinError(t("profiles:errors.invalidPin"));
+      return;
+    }
+    await selectProfile(pinProfile, pinValue);
+  }
+
+  const memberOptions = profiles.filter((profile) => !profile.isGroup);
 
   return (
     <main className="relative flex min-h-screen flex-col items-center justify-center gap-8 p-8">
@@ -130,13 +211,32 @@ export default function ProfilesPage() {
                 disabled={pending}
                 aria-busy={pending}
                 className={cn(
-                  "flex flex-col items-center gap-3 rounded-[var(--radius)] p-4 hover:bg-[var(--surface)] transition-colors cursor-pointer",
+                  "relative flex min-h-40 w-32 flex-col items-center justify-start gap-3 rounded-[var(--radius)] p-4 hover:bg-[var(--surface)] transition-colors cursor-pointer",
                   pending && "pointer-events-none opacity-50",
                   focusRing,
                 )}
               >
+                {profile.hasPin && (
+                  <span className="absolute right-2 top-2 rounded-full border border-[var(--surface-2)] px-2 py-0.5 text-[10px] font-semibold tracking-wide text-[var(--text-dim)]">
+                    {t("profiles:pin.badge")}
+                  </span>
+                )}
                 <Avatar name={profile.name} src={profile.avatar ?? undefined} size={80} />
-                <span className="text-[var(--text)] font-medium">{profile.name}</span>
+                <span className="line-clamp-2 text-center text-[var(--text)] font-medium">{profile.name}</span>
+                {profile.isGroup && (
+                  <span className="rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-xs text-[var(--text-dim)]">
+                    {t("profiles:group.badge")}
+                  </span>
+                )}
+                {profile.isGroup && profile.members && profile.members.length > 0 && (
+                  <span className="flex -space-x-2" aria-label={t("profiles:group.membersLabel")}>
+                    {profile.members.slice(0, 4).map((member) => (
+                      <span key={member.id} className="rounded-full border border-[var(--bg)]">
+                        <Avatar name={member.name} src={member.avatar ?? undefined} size={24} />
+                      </span>
+                    ))}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -152,8 +252,7 @@ export default function ProfilesPage() {
           variant="ghost"
           onClick={() => {
             setShowForm(true);
-            setFormError(null);
-            setNewName("");
+            resetForm();
           }}
         >
           {t("profiles:addProfile")}
@@ -162,6 +261,25 @@ export default function ProfilesPage() {
         <Card className="w-full max-w-sm">
           <h2 className="mb-4 text-lg font-semibold text-[var(--text)]">{t("profiles:form.title")}</h2>
           <form onSubmit={handleAddProfile} className="flex flex-col gap-4">
+            <div className="grid grid-cols-2 gap-2 rounded-[var(--radius-sm)] bg-[var(--bg)] p-1">
+              {(["personal", "group"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setNewMode(mode)}
+                  aria-pressed={newMode === mode}
+                  className={cn(
+                    "min-h-10 rounded-[var(--radius-sm)] px-3 text-sm font-medium transition-colors",
+                    newMode === mode
+                      ? "bg-[var(--surface-2)] text-[var(--text)]"
+                      : "text-[var(--text-dim)] hover:text-[var(--text)]",
+                    focusRing,
+                  )}
+                >
+                  {t(`profiles:form.mode.${mode}`)}
+                </button>
+              ))}
+            </div>
             <div className="flex flex-col gap-1">
               <label htmlFor="profile-name" className="text-sm font-medium text-[var(--text-dim)]">
                 {t("profiles:form.nameLabel")}
@@ -176,6 +294,35 @@ export default function ProfilesPage() {
                 autoFocus
               />
             </div>
+            {newMode === "group" && (
+              <fieldset className="flex flex-col gap-2">
+                <legend className="text-sm font-medium text-[var(--text-dim)]">{t("profiles:group.membersLabel")}</legend>
+                {memberOptions.length >= 2 ? (
+                  <div className="grid gap-2">
+                    {memberOptions.map((profile) => (
+                      <label
+                        key={profile.id}
+                        className="flex min-h-11 items-center gap-3 rounded-[var(--radius-sm)] border border-[var(--surface-2)] px-3 py-2"
+                      >
+                        <Checkbox
+                          checked={selectedMemberIds.includes(profile.id)}
+                          onChange={() => toggleMember(profile.id)}
+                        />
+                        <Avatar name={profile.name} src={profile.avatar ?? undefined} size={28} />
+                        <span className="min-w-0 flex-1 truncate text-sm text-[var(--text)]">{profile.name}</span>
+                        {profile.kind === "kids" && (
+                          <span className="rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-xs text-[var(--text-dim)]">
+                            {t("account:profileKind.kids")}
+                          </span>
+                        )}
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-[var(--text-dim)]">{t("profiles:group.notEnoughProfiles")}</p>
+                )}
+              </fieldset>
+            )}
             <div className="flex flex-col gap-1">
               <label htmlFor="profile-language" className="text-sm font-medium text-[var(--text-dim)]">
                 {t("profiles:language.label")}
@@ -195,6 +342,22 @@ export default function ProfilesPage() {
               </Select>
               <p className="text-xs text-[var(--text-dim)]">{t("profiles:language.help")}</p>
             </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="profile-pin" className="text-sm font-medium text-[var(--text-dim)]">
+                {t("profiles:pin.label")}
+              </label>
+              <Input
+                id="profile-pin"
+                type="password"
+                inputMode="numeric"
+                autoComplete="new-password"
+                pattern="[0-9]{4,6}"
+                maxLength={6}
+                value={newPin}
+                onChange={(e) => setNewPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder={t("profiles:pin.placeholder")}
+              />
+            </div>
             {formError && <p className="text-sm text-red-400">{formError}</p>}
             <div className="flex gap-2">
               <Button type="submit" disabled={saving}>
@@ -210,6 +373,49 @@ export default function ProfilesPage() {
             </div>
           </form>
         </Card>
+      )}
+      {pinProfile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6">
+          <Card
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="profile-pin-title"
+            className="w-full max-w-xs border border-[var(--surface-2)]"
+          >
+            <h2 id="profile-pin-title" className="text-lg font-semibold text-[var(--text)]">
+              {t("profiles:pin.dialogTitle", { name: pinProfile.name })}
+            </h2>
+            <form onSubmit={handlePinSubmit} className="mt-4 flex flex-col gap-4">
+              <Input
+                value={pinValue}
+                onChange={(e) => setPinValue(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                type="password"
+                inputMode="numeric"
+                autoComplete="current-password"
+                pattern="[0-9]{4,6}"
+                maxLength={6}
+                autoFocus
+                aria-label={t("profiles:pin.label")}
+                placeholder={t("profiles:pin.placeholder")}
+              />
+              {pinError && <p className="text-sm text-red-400">{pinError}</p>}
+              <div className="flex gap-2">
+                <Button type="submit" disabled={pendingId === pinProfile.id}>
+                  {pendingId === pinProfile.id ? t("common:status.saving") : t("profiles:pin.unlock")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    if (!pendingId) setPinProfile(null);
+                  }}
+                >
+                  {t("common:actions.cancel")}
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </div>
       )}
     </main>
   );
