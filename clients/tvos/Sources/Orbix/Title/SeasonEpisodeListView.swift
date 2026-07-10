@@ -39,8 +39,9 @@ import UIKit
 /// the next episode can never skip that teardown or leak an
 /// `AVPlayer`/observer from the episode just finished. `onDismiss` then looks
 /// at whether *this* dismissal was the end-of-item one (`reachedEnd`) versus
-/// an early Menu-exit (`PlayerScreen`'s existing `.onExitCommand { dismiss() }`,
-/// untouched) and only in the former case looks up `episodeNumber + 1` and,
+/// an early Menu-exit (`PlayerScreen`'s Menu-press `dismiss()`, which collapses
+/// the cover exactly as this view's own end-of-item clear does) and only in the
+/// former case looks up `episodeNumber + 1` and,
 /// if it exists and has a `fileId`, immediately presents it — a fresh
 /// `PlaybackController`/play session per episode, same as tapping a card by
 /// hand.
@@ -405,8 +406,8 @@ struct SeasonEpisodeListView: View {
     }
 
     /// Runs once the `.fullScreenCover`'s dismissal completes — whether
-    /// that was the user backing out early (`PlayerScreen`'s own
-    /// `.onExitCommand { dismiss() }`) or this view clearing
+    /// that was the user backing out early (`PlayerScreen`'s own Menu-press
+    /// `dismiss()`) or this view clearing
     /// `playbackTarget` itself after observing end-of-item (`body`'s
     /// `.task(id:)`). Only the latter (`reachedEnd == true`) looks up and
     /// presents `episodeNumber + 1`, and only when it exists *and* has a
