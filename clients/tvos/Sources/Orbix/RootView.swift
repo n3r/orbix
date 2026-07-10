@@ -7,56 +7,42 @@ import OrbixKit
 ///   falls back to a manual address field (with `http://` made optional).
 /// - `.needsPairing` — the M2 pairing screen (`PairingView`).
 /// - `.needsProfile` — the M2 profile picker (`ProfilePickerView`).
-/// - `.ready` — the tvOS top tab bar: "Home" (`HomeView`) and "Search"
-///   (`SearchView`), each owning its own `NavigationStack`.
+/// - `.ready` — the custom web-parity shell (`ShellView`): a top bar
+///   (`OrbixTopBar`) overlaid on the selected section (Home / Search /
+///   placeholders), replacing the stock `TabView`.
 struct RootView: View {
-    /// The `.ready`-state top tabs. A binding lets a Top Shelf deep link snap
-    /// the app back to Home (where the title page pushes) regardless of which
-    /// tab was last focused.
-    private enum Tab: Hashable {
-        case home
-        case search
-    }
-
     @State private var model = AppModel()
     @State private var baseURLText = ""
     @State private var showManualEntry = false
-    @State private var selectedTab: Tab = .home
     @FocusState private var isTextFieldFocused: Bool
 
     var body: some View {
-        content
-            // A Top Shelf item opens `orbix://item/<id>`; stash the target for
-            // `HomeView` to push and make sure Home is the visible tab. Handled
-            // at the root so a cold-launch deep link (arriving mid-onboarding)
-            // is still captured and replayed once the app reaches `.ready`.
-            .onOpenURL { url in
-                model.handleDeepLink(url)
-                selectedTab = .home
-            }
-    }
-
-    @ViewBuilder
-    private var content: some View {
-        switch model.phase {
-        case .needsServer:
-            serverSelectionView
-        case .needsPairing:
-            pairingOrFallback
-        case .needsProfile:
-            profilePickerOrFallback
-        case .ready:
-            TabView(selection: $selectedTab) {
-                HomeView(model: model)
-                    .tag(Tab.home)
-                    .tabItem { Label("Home", systemImage: "house.fill") }
-                    .accessibilityIdentifier("tab_home")
-                SearchView(model: model)
-                    .tag(Tab.search)
-                    .tabItem { Label("Search", systemImage: "magnifyingglass") }
-                    .accessibilityIdentifier("tab_search")
+        // `.id(model.uiLanguage)` forces a full teardown/rebuild of every
+        // visible screen whenever the resolved UI language changes (profile
+        // switch, language chip, sign-out to a languageless onboarding
+        // phase, …) — SwiftUI treats a changed `.id` as "this is a new
+        // view", not an update, so every `.task` loader underneath re-runs
+        // from scratch. That's exactly what re-fetches the now-re-localized
+        // catalog (server-side, keyed off the active profile's language) —
+        // the TV analogue of the web's query refetch on
+        // `useSyncProfileLanguage`. `.environment(\.locale, …)` makes
+        // SwiftUI's own locale-aware formatting (e.g. any `Text(date:)`/
+        // `.formatted()` call) follow the same resolved language, not the
+        // system one.
+        Group {
+            switch model.phase {
+            case .needsServer:
+                serverSelectionView
+            case .needsPairing:
+                pairingOrFallback
+            case .needsProfile:
+                profilePickerOrFallback
+            case .ready:
+                ShellView(model: model)
             }
         }
+        .id(model.uiLanguage)
+        .environment(\.locale, L10n.locale)
     }
 
     /// `.needsPairing`/`.needsProfile` are only reached once
@@ -75,9 +61,7 @@ struct RootView: View {
     // MARK: - Server selection (.needsServer)
 
     private var serverSelectionView: some View {
-        VStack(spacing: 48) {
-            Text("Orbix").font(.system(size: 96, weight: .bold))
-
+        OnboardingChrome {
             Group {
                 if model.isScanning {
                     scanningView
@@ -89,7 +73,6 @@ struct RootView: View {
             }
             .frame(maxWidth: 1000)
         }
-        .padding(80)
         .task {
             // Auto-scan once on first appearance when no server is configured.
             if model.baseURL == nil && !model.didScan {
@@ -101,16 +84,16 @@ struct RootView: View {
     private var scanningView: some View {
         VStack(spacing: 24) {
             ProgressView().scaleEffect(1.5)
-            Text("Searching your network for Orbix…")
+            Text(L10n.t("server.scanning"))
                 .font(.title2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(OrbixColor.textDim)
         }
         .accessibilityIdentifier("scanningIndicator")
     }
 
     private var serverListView: some View {
         VStack(spacing: 24) {
-            Text("Select your server").font(.title2)
+            Text(L10n.t("server.selectTitle")).font(.title2)
 
             ForEach(model.discoveredServers) { server in
                 Button {
@@ -120,18 +103,21 @@ struct RootView: View {
                         Image(systemName: "server.rack").font(.title2)
                         VStack(alignment: .leading, spacing: 4) {
                             Text(server.name).font(.title3)
-                            Text(server.baseURL).font(.callout).foregroundStyle(.secondary)
+                            Text(server.baseURL).font(.callout).foregroundStyle(OrbixColor.textDim)
                         }
                         Spacer()
                     }
                     .frame(maxWidth: 760)
                 }
+                .buttonStyle(OrbixButtonStyle(.ghost))
                 .accessibilityIdentifier("server_\(server.host)")
             }
 
             HStack(spacing: 24) {
-                Button("Enter address manually") { showManualEntry = true }
-                Button("Scan again") { Task { await model.scanForServers() } }
+                Button(L10n.t("server.manualEntry")) { showManualEntry = true }
+                    .buttonStyle(OrbixButtonStyle(.ghost))
+                Button(L10n.t("server.scanAgain")) { Task { await model.scanForServers() } }
+                    .buttonStyle(OrbixButtonStyle(.ghost))
             }
             .padding(.top, 8)
 
@@ -142,32 +128,35 @@ struct RootView: View {
     private var manualEntryView: some View {
         VStack(spacing: 24) {
             if model.didScan && model.discoveredServers.isEmpty {
-                Text("No Orbix servers found on your network")
+                Text(L10n.t("server.notFound"))
                     .font(.title2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(OrbixColor.textDim)
             }
 
-            TextField("192.168.1.10:8080", text: $baseURLText)
+            TextField(L10n.t("server.addressPlaceholder"), text: $baseURLText)
                 .textFieldStyle(.plain)
                 .focused($isTextFieldFocused)
                 .frame(maxWidth: 900)
                 .onSubmit(checkServer)
                 .accessibilityIdentifier("baseURLField")
 
-            Text("No need to type http:// — it's added for you.")
+            Text(L10n.t("server.httpHint"))
                 .font(.callout)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(OrbixColor.textDim)
 
             HStack(spacing: 24) {
-                Button("Connect", action: checkServer)
+                Button(L10n.t("server.connect"), action: checkServer)
+                    .buttonStyle(OrbixButtonStyle(.primary))
                     .disabled(trimmedBaseURLText.isEmpty)
                     .accessibilityIdentifier("checkServerButton")
-                Button("Scan again") {
+                Button(L10n.t("server.scanAgain")) {
                     showManualEntry = false
                     Task { await model.scanForServers() }
                 }
+                .buttonStyle(OrbixButtonStyle(.ghost))
                 if !model.discoveredServers.isEmpty {
-                    Button("Back to list") { showManualEntry = false }
+                    Button(L10n.t("server.backToList")) { showManualEntry = false }
+                        .buttonStyle(OrbixButtonStyle(.ghost))
                 }
             }
 
@@ -185,18 +174,18 @@ struct RootView: View {
     private var statusView: some View {
         if let reachable = model.reachable {
             if reachable {
-                Label("Server reachable", systemImage: "checkmark.circle.fill")
+                Label(L10n.t("server.reachable"), systemImage: "checkmark.circle.fill")
                     .font(.title3)
-                    .foregroundStyle(.green)
+                    .foregroundStyle(OrbixColor.success)
             } else {
-                Label("Couldn't reach that server", systemImage: "xmark.circle.fill")
+                Label(L10n.t("server.unreachable"), systemImage: "xmark.circle.fill")
                     .font(.title3)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(OrbixColor.danger)
             }
         } else if model.isChecking {
-            Text("Checking…")
+            Text(L10n.t("server.checking"))
                 .font(.title3)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(OrbixColor.textDim)
         }
     }
 

@@ -1,27 +1,36 @@
 import OrbixKit
 import SwiftUI
 
-/// SP2 M3 home screen: Netflix-style rails loaded from `GET /api/home/rows`
-/// (see `apps/api/src/routes/discovery.ts`'s smart-rows hydration), replacing
-/// the M1 `SpikeListView` flat poster grid. Each row renders as a titled,
-/// horizontally-scrolling, independently focus-sectioned rail of
-/// `PosterCard`s. Owns the `NavigationStack` for the whole home→title→
-/// season flow: selecting a card pushes a `TitleRoute` (M3 Task 2);
-/// `TitlePage`'s own "More Like This" rail is handed the same `path`
-/// binding, so selecting a similar title there pushes another `TitlePage`
-/// onto this same stack rather than needing a stack of its own; a series'
-/// season chip likewise pushes a `SeasonRoute` (M3 Task 4) onto this same
-/// stack. `path` is a type-erased `NavigationPath` (rather than
-/// `[TitleRoute]`) specifically so it can carry both route types — each
-/// route is still a distinct `Hashable` type with its own
-/// `.navigationDestination(for:)` below, so `TitleRoute` and `SeasonRoute`
-/// can never collide with each other on the same stack.
+/// SP2 Phase 2 Home screen: a Netflix-style full-bleed `HomeBillboardView`
+/// over box-art `RailView` rails loaded from `GET /api/home/rows` (see
+/// `apps/web/src/pages/HomePage.tsx` for the web composition this ports). The
+/// billboard and rails live in **one** `ScrollView`; the first rail rides up
+/// into the billboard's bottom dissolve (`.padding(.top, -80)`, the tvOS
+/// analogue of web's `-mt-12 md:-mt-20`), and scrolling the whole thing flips
+/// the shell's transparent top bar to solid via `isScrolled`.
+///
+/// Owns the `NavigationStack` for the whole home→title flow: selecting a card
+/// pushes a `TitleRoute` (M3 Task 2); the billboard's **Play** pushes a
+/// `TitleRoute(autoplay: true)` (the web `?play=1` direct-play deep-link),
+/// **More info** a plain `TitleRoute`. `TitlePage`'s own "More Like This" rail
+/// is handed the same `path` binding, so selecting a similar title there
+/// pushes another `TitlePage` onto this same stack; a series' seasons and
+/// episodes render inline on the title page (no separate pushed destination).
+/// `path` is a type-erased `NavigationPath` so it can arbitrarily deep-stack
+/// `TitleRoute`s via its `.navigationDestination(for:)` below.
 struct HomeView: View {
     let model: AppModel
+    /// Driven from this view's scroll offset; `ShellView` owns the state and
+    /// its top bar reacts (transparent → near-solid). See `scrollOffsetReader`.
+    @Binding var isScrolled: Bool
 
     @State private var homeModel = HomeModel()
     @State private var imageLoader = ImageLoader()
     @State private var path = NavigationPath()
+
+    /// tvOS 17 has no `onScrollGeometryChange` (18+), so scroll offset is read
+    /// via a `GeometryReader` + `PreferenceKey` in this named coordinate space.
+    private static let scrollSpace = "homeScroll"
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -37,24 +46,8 @@ struct HomeView: View {
                 }
             }
             .navigationDestination(for: TitleRoute.self) { route in
-                TitlePage(itemId: route.itemId, model: model, path: $path)
+                TitlePage(itemId: route.itemId, model: model, path: $path, autoplay: route.autoplay)
             }
-            .navigationDestination(for: SeasonRoute.self) { route in
-                SeasonEpisodeView(seriesId: route.seriesId, seasonNumber: route.seasonNumber, model: model)
-            }
-            // Replay a Top Shelf deep link (`orbix://item/<id>`): `onAppear`
-            // covers a cold-launch link stashed during onboarding, `onChange`
-            // a warm one arriving while Home is already on screen. Consuming
-            // clears it so it pushes exactly once.
-            .onAppear { pushPendingDeepLinkIfNeeded() }
-            .onChange(of: model.pendingDeepLinkItemId) { _, _ in pushPendingDeepLinkIfNeeded() }
-        }
-    }
-
-    /// Pushes the title page for a pending Top Shelf deep-link item id, if any.
-    private func pushPendingDeepLinkIfNeeded() {
-        if let itemId = model.consumePendingDeepLink() {
-            path.append(TitleRoute(itemId: itemId))
         }
     }
 
@@ -62,64 +55,110 @@ struct HomeView: View {
     private func content(client: OrbixClient) -> some View {
         switch homeModel.loadState {
         case .loading:
-            ProgressView("Loading…")
-                .font(.title3)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            homeSkeleton
         case .error(let message):
             errorView(message: message, client: client)
         case .empty:
             emptyView
         case .loaded(let rows):
-            rails(rows)
+            loaded(rows)
         }
     }
 
-    private func rails(_ rows: [HomeRow]) -> some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 56) {
-                ForEach(rows, id: \.key) { row in
-                    railView(row)
+    // MARK: - Loaded (billboard + rails)
+
+    private func loaded(_ rows: [HomeRow]) -> some View {
+        // One featured title on the billboard (rotates daily); every row
+        // (continue watching included) still renders below it, Netflix-style
+        // (web `HomePage.tsx` lines 73-84).
+        let featured = pickBillboard(rows: rows, seed: dailySeed())
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                if let featured {
+                    HomeBillboardView(
+                        card: featured,
+                        model: model,
+                        imageLoader: imageLoader,
+                        onPlay: { play(featured) },
+                        onMoreInfo: { select(featured) }
+                    )
                 }
-            }
-            .padding(.horizontal, 64)
-            .padding(.vertical, 48)
-        }
-    }
 
-    @ViewBuilder
-    private func railView(_ row: HomeRow) -> some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text(row.title)
-                .font(.title3.bold())
-                .padding(.leading, 4)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 32) {
-                    ForEach(row.items, id: \.id) { card in
-                        PosterCard(card: card, baseURL: model.baseURL, imageLoader: imageLoader) {
+                LazyVStack(alignment: .leading, spacing: OrbixSpacing.railGap) {
+                    ForEach(rows, id: \.key) { row in
+                        RailView(row: row, baseURL: model.baseURL, imageLoader: imageLoader) { card in
                             select(card)
                         }
                     }
                 }
-                // Vertical headroom so a card's scale-on-focus growth
-                // doesn't visually clip against the rail above/below.
-                .padding(.horizontal, 4)
-                .padding(.vertical, 16)
+                .padding(.horizontal, 64)
+                // First rail rides up into the billboard's dissolve (web's
+                // `-mt-12 md:-mt-20`); without a billboard, plain top padding.
+                .padding(.top, featured != nil ? -80 : 48)
+                .padding(.bottom, 80)
             }
-            // Each rail is its own focus section: the tvOS focus engine
-            // moves within a rail on left/right and hands off to the
-            // adjacent rail on up/down, rather than treating every poster
-            // on screen as one flat focus group.
-            .focusSection()
+            .background(scrollOffsetReader)
         }
-        .accessibilityIdentifier("homeRail_\(row.key)")
+        // Billboard art bleeds edge-to-edge under the transparent top bar
+        // (web pulls the billboard up under the fixed nav with `-mt-14`).
+        .ignoresSafeArea(edges: .top)
+        .coordinateSpace(name: Self.scrollSpace)
+        .modifier(SectionScrollDetector(isScrolled: $isScrolled))
+        .accessibilityIdentifier("homeScroll")
     }
+
+    /// Measures the content's top edge in the named coordinate space; the
+    /// value goes negative as the user scrolls up. `isScrolled = offset < -10`.
+    /// Feeds `SectionScrollDetector`'s tvOS-17 fallback path.
+    private var scrollOffsetReader: some View {
+        GeometryReader { proxy in
+            Color.clear.preference(
+                key: ScrollOffsetKey.self,
+                value: proxy.frame(in: .named(Self.scrollSpace)).minY
+            )
+        }
+    }
+
+    // MARK: - Skeleton (web `HomeSkeleton`, HomePage.tsx lines 12-30)
+
+    private var homeSkeleton: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                SkeletonView(cornerRadius: 0)
+                    .frame(height: 820)
+                    .frame(maxWidth: .infinity)
+
+                VStack(alignment: .leading, spacing: OrbixSpacing.railGap) {
+                    ForEach(0..<3, id: \.self) { _ in
+                        VStack(alignment: .leading, spacing: 20) {
+                            SkeletonView()
+                                .frame(width: 320, height: 30)
+                            HStack(spacing: OrbixSpacing.cardGap) {
+                                ForEach(0..<6, id: \.self) { _ in
+                                    SkeletonView(cornerRadius: OrbixRadius.md)
+                                        .frame(width: BoxArtCard.width, height: BoxArtCard.height)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 64)
+                .padding(.top, -80)
+                .padding(.bottom, 80)
+            }
+        }
+        .ignoresSafeArea(edges: .top)
+        .allowsHitTesting(false)
+        .accessibilityIdentifier("homeSkeleton")
+    }
+
+    // MARK: - Empty / error
 
     private var emptyView: some View {
         ContentUnavailableView(
-            "No titles yet",
+            L10n.t("catalog.home.emptyTitle"),
             systemImage: "film.stack",
-            description: Text("Scan a library on the server to see titles here.")
+            description: Text(L10n.t("catalog.home.emptyBody"))
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityIdentifier("homeEmptyState")
@@ -127,11 +166,11 @@ struct HomeView: View {
 
     private func errorView(message: String, client: OrbixClient) -> some View {
         ContentUnavailableView {
-            Label("Couldn't load titles", systemImage: "exclamationmark.triangle")
+            Label(L10n.t("catalog.home.errorTitle"), systemImage: "exclamationmark.triangle")
         } description: {
             Text(message)
         } actions: {
-            Button("Retry") {
+            Button(L10n.t("common.actions.retry")) {
                 Task { await homeModel.load(client: client) }
             }
             .accessibilityIdentifier("homeRetryButton")
@@ -140,10 +179,20 @@ struct HomeView: View {
         .accessibilityIdentifier("homeErrorState")
     }
 
-    /// Pushes the title/detail page (`TitlePage`) for the selected card
-    /// onto `path`.
+    // MARK: - Navigation
+
+    /// Pushes the title/detail page (`TitlePage`) for the selected card onto
+    /// `path`.
     private func select(_ card: MediaCard) {
         path.append(TitleRoute(itemId: card.id))
+    }
+
+    /// The billboard's **Play**: pushes the title page with `autoplay` set —
+    /// the tvOS analogue of the web `?play=1` direct-play deep-link.
+    /// `TitlePage` presents the player once on load for a movie (a series
+    /// autoplay route just shows the page — see `TitlePage.autoplayIfNeeded`).
+    private func play(_ card: MediaCard) {
+        path.append(TitleRoute(itemId: card.id, autoplay: true))
     }
 }
 
@@ -194,7 +243,11 @@ final class HomeModel {
             let homeRows = try await client.homeRows()
             rows = homeRows.rows
         } catch {
-            loadError = "Couldn't load titles: \(error)"
+            if case OrbixError.http(_, let code) = error, let code {
+                loadError = L10n.errorMessage(code)
+            } else {
+                loadError = L10n.t("errors.network")
+            }
         }
         isLoading = false
         hasLoaded = true
@@ -202,5 +255,5 @@ final class HomeModel {
 }
 
 #Preview {
-    HomeView(model: AppModel())
+    HomeView(model: AppModel(), isScrolled: .constant(false))
 }

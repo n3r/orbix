@@ -36,9 +36,20 @@ final class PlaybackController {
 
     private(set) var loadState: LoadState = .loading
 
+    /// The quality/audio-leveling ladder for the *current* session, captured
+    /// from `start()`'s (and later `renegotiate`'s) `playbackInfo` response and
+    /// read by `PlayerScreen` to build the transport-bar Quality/Audio menus.
+    /// Defaults keep the menu inert (a single implicit "source"/"standard"
+    /// entry, so neither submenu is shown) until `start()` fills them in.
+    private(set) var quality: String = "source"
+    private(set) var audioMode: String = "standard"
+    private(set) var qualities: [QualityOption] = []
+    private(set) var audioModes: [AudioModeOption] = []
+
     private let client: OrbixClient
     private let baseURL: URL
     private var playSessionId: String?
+    private var isRenegotiating = false
 
     /// Chains progress PUTs so a slow periodic report can never complete
     /// *after* (and clobber) a later one with a stale position — each new
@@ -69,9 +80,16 @@ final class PlaybackController {
         do {
             let info = try await client.playbackInfo(fileId: fileId, capabilities: .appleTV)
             playSessionId = info.playSessionId
+            quality = info.quality ?? "source"
+            audioMode = info.audioMode ?? "standard"
+            qualities = info.qualities ?? []
+            audioModes = info.audioModes ?? []
 
             guard let streamURL = URL(string: info.streamUrl, relativeTo: baseURL)?.absoluteURL else {
-                loadState = .error(String(localized: "Couldn't resolve the stream URL."))
+                // Malformed `streamUrl` from a well-formed response — not a
+                // network/permission failure, so the generic player-load
+                // string fits better than a server error code.
+                loadState = .error(L10n.t("player.error.generic"))
                 return
             }
 
@@ -83,7 +101,73 @@ final class PlaybackController {
             }
             loadState = .ready(streamURL: streamURL, resumeSeconds: resumeSeconds)
         } catch {
-            loadState = .error("Couldn't start playback: \(error)")
+            // Same server-code-first idiom every other model in the app uses
+            // (`HomeModel.load`, `LibraryModel.performLoad`, etc.) — a coded
+            // HTTP failure (e.g. a kids-restricted item, `not_allowed_for_kids`)
+            // gets its own translated message; anything else (offline, DNS,
+            // timeout) falls back to the decision-specific string — this catch
+            // wraps exactly the `/playback/info` negotiation (the web's
+            // "decision" step), which is what `player.error.decision` was
+            // authored for — rather than a raw interpolated Swift error
+            // description, which was neither localized nor user-presentable.
+            if case OrbixError.http(_, let code) = error, let code {
+                loadState = .error(L10n.errorMessage(code))
+            } else {
+                loadState = .error(L10n.t("player.error.decision"))
+            }
+        }
+    }
+
+    /// Web `renegotiate` (`apps/web/src/components/Player.tsx`): switches the
+    /// playing stream to a new quality rung and/or audio mode mid-playback.
+    /// Fetches a fresh session at the requested `(quality, audioMode)`, updates
+    /// `playSessionId` and UI state *before* stopping the previous session
+    /// (fire-and-forget, non-blocking) to prevent the periodic progress observer
+    /// from PUTting with a stale session ID during the stop window. Re-emits
+    /// `.ready` with the caller-captured position as the resume seek, so the
+    /// existing `Coordinator.seekToResumeIfReady` path restores position on the
+    /// new stream once its rebuilt `AVPlayerItem` is ready.
+    ///
+    /// `positionSec` is supplied by the Coordinator, which owns the `AVPlayer`
+    /// — this type never touches it (keeping the split from the doc comment and
+    /// this type independently testable). The same instance's `reportChain`
+    /// carries across the switch untouched: itemId/episodeId are unchanged, so
+    /// only `playSessionId` moves forward and every enqueued (and the final
+    /// teardown) report targets the newest session.
+    ///
+    /// Serialized: concurrent renegotiations are coalesced into a no-op
+    /// (the first in-flight call completes before the next can proceed).
+    ///
+    /// A failure is a deliberate no-op: the current session keeps playing
+    /// rather than tearing down a working stream. The menu selection reverts on
+    /// the next `updateUIViewController` pass because `quality`/`audioMode` are
+    /// left unchanged (documented divergence from web, which surfaces an error).
+    func renegotiate(quality newQuality: String, audioMode newMode: String, positionSec: Double) async {
+        guard newQuality != quality || newMode != audioMode else { return }
+        guard !isRenegotiating else { return }
+        isRenegotiating = true
+        defer { isRenegotiating = false }
+
+        let previousSessionId = playSessionId
+        do {
+            let info = try await client.playbackInfo(
+                fileId: fileId, capabilities: .appleTV, quality: newQuality, audioMode: newMode
+            )
+            guard let streamURL = URL(string: info.streamUrl, relativeTo: baseURL)?.absoluteURL else { return }
+            // Assign the new session ID and UI state *before* stopping the old session,
+            // so progress reports enqueued during the stop use the new session ID.
+            playSessionId = info.playSessionId
+            quality = info.quality ?? newQuality
+            audioMode = info.audioMode ?? newMode
+            qualities = info.qualities ?? qualities
+            audioModes = info.audioModes ?? audioModes
+            // Stop the previous session non-blocking (fire-and-forget), mirroring web's behavior.
+            if let previousSessionId, previousSessionId != info.playSessionId {
+                Task { await client.stopPlayback(playSessionId: previousSessionId) }
+            }
+            loadState = .ready(streamURL: streamURL, resumeSeconds: max(0, positionSec))
+        } catch {
+            // no-op — keep the current session playing (see doc comment).
         }
     }
 

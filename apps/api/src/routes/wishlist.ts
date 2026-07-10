@@ -1,13 +1,13 @@
 import type { FastifyInstance } from "fastify";
 import { localizeItem } from "@orbix/core";
 import { requireAuth } from "../lib/auth";
-import { activeProfile, kidsRatingWhere, profileAllowsItem } from "../lib/catalog-filter";
+import { activeProfile, activeProfileId, kidsRatingWhere, profileAllowsItem } from "../lib/catalog-filter";
 
 export default async function wishlistRoute(app: FastifyInstance) {
   // GET /wishlist — the active profile's saved titles as poster cards,
   // newest-first. Kids-filtered server-side like every other list route.
   app.get("/wishlist", { preHandler: requireAuth(app) }, async (req, reply) => {
-    const profileId = req.cookies["orbix_profile"];
+    const profileId = await activeProfileId(app, req);
     if (!profileId) return reply.code(400).send({ error: "no_profile" });
 
     const entries = await app.prisma.wishlistEntry.findMany({
@@ -47,7 +47,7 @@ export default async function wishlistRoute(app: FastifyInstance) {
   // GET /wishlist/ids — membership ids for UI state (title-page toggle).
   // Fail-safe: never leak ids of titles the profile can't see.
   app.get("/wishlist/ids", { preHandler: requireAuth(app) }, async (req, reply) => {
-    const profileId = req.cookies["orbix_profile"];
+    const profileId = await activeProfileId(app, req);
     if (!profileId) return reply.code(400).send({ error: "no_profile" });
 
     const entries = await app.prisma.wishlistEntry.findMany({
@@ -73,7 +73,7 @@ export default async function wishlistRoute(app: FastifyInstance) {
     "/wishlist/:itemId",
     { preHandler: requireAuth(app) },
     async (req, reply) => {
-      const profileId = req.cookies["orbix_profile"];
+      const profileId = await activeProfileId(app, req);
       if (!profileId) return reply.code(400).send({ error: "no_profile" });
 
       const [profile, item] = await Promise.all([
@@ -101,7 +101,7 @@ export default async function wishlistRoute(app: FastifyInstance) {
     "/wishlist/:itemId",
     { preHandler: requireAuth(app) },
     async (req, reply) => {
-      const profileId = req.cookies["orbix_profile"];
+      const profileId = await activeProfileId(app, req);
       if (!profileId) return reply.code(400).send({ error: "no_profile" });
 
       await app.prisma.wishlistEntry.deleteMany({

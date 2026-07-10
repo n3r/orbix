@@ -64,18 +64,30 @@ final class AppModel {
     private(set) var discoveredServers: [DiscoveredServer] = []
     private(set) var didScan = false
 
-    /// An item id a Top Shelf deep link (`orbix://item/<id>`) asked to open,
-    /// awaiting consumption by `HomeView` once the app is `.ready`. Stashed
-    /// here (rather than pushed immediately) because a cold-launch deep link
-    /// arrives before onboarding has finished and the home stack exists.
-    private(set) var pendingDeepLinkItemId: String?
+    /// The device's currently-active profile, as last returned by
+    /// `meProfile()` — captured on the `checkActiveProfile` success path and
+    /// (for the `profileSelected()` path) by `loadShellData()`. Drives the
+    /// shell's kids gating (`kind == "kids"` hides the TV item) and the top
+    /// bar's avatar; `nil` until a profile is resolved. Distinct from `phase`
+    /// so the shell can read the profile without re-deriving it.
+    private(set) var activeProfile: MeProfile?
+
+    /// The active profile's resolved nav categories (`GET /api/me/menu`), one
+    /// per enabled library, in display order — the source for the top bar's
+    /// category items. Empty until `loadShellData()` populates it (and left
+    /// empty on fetch failure, so the bar simply renders without categories).
+    private(set) var menuItems: [MenuItem] = []
+
+    /// The resolved UI language, recomputed from the active profile (spec §9:
+    /// profile language overrides; system fallback). Drives RootView's `.id`
+    /// (full re-render on change) and L10n.override (string resolution).
+    private(set) var uiLanguage: String = "en"
+
+    private static let supportedLanguages = ["en", "es", "de", "pt", "ru", "fr"]
 
     private let tokenStore: TokenStore
 
-    /// The default `TokenStore` is pointed at the shared Keychain access group
-    /// so the Top Shelf extension (a separate process) can read the paired
-    /// device token; tests inject their own store with no group.
-    init(tokenStore: TokenStore = TokenStore(accessGroup: OrbixSharedStore.keychainAccessGroup)) {
+    init(tokenStore: TokenStore = TokenStore()) {
         self.tokenStore = tokenStore
 
         let resolvedBaseURL = Self.resolveBaseURLString()
@@ -137,9 +149,6 @@ final class AppModel {
         }
 
         baseURL = url
-        // Publish the reachable server address to the App Group so the Top
-        // Shelf extension can talk to the same server without re-onboarding.
-        OrbixSharedStore.saveBaseURL(url)
         let newClient = OrbixClient(baseURL: url)
         client = newClient
         reachable = nil
@@ -234,12 +243,21 @@ final class AppModel {
             do {
                 let me = try await client.meProfile()
                 guard self.client === client else { return }
+                // Capture the resolved profile for the shell (kids gating,
+                // avatar). This is the only addition to this method's success
+                // path — the `.ready`/`.needsProfile` decision and all of the
+                // retry/401 handling below are unchanged.
+                activeProfile = me
+                applyUILanguage()
                 phase = (me.id != nil) ? .ready : .needsProfile
+                if phase == .ready {
+                    Task { await self.loadShellData() }
+                }
                 return
             } catch {
                 guard self.client === client else { return }
 
-                if let orbixError = error as? OrbixError, case .http(401) = orbixError {
+                if let orbixError = error as? OrbixError, case .http(401, _) = orbixError {
                     let store = tokenStore
                     await store.clear()
                     guard self.client === client else { return }
@@ -284,25 +302,106 @@ final class AppModel {
     }
 
     /// Called by `ProfilePickerView` once `ProfilePickerModel.select`
-    /// succeeds: advances to the M3 home screen (`HomeView`).
+    /// succeeds: advances to the shell (`ShellView`) and loads the shell's
+    /// nav data (menu + the now-active profile) for the top bar.
     func profileSelected() {
         phase = .ready
+        Task { await loadShellData() }
     }
 
-    /// Handles an `orbix://item/<id>` deep link opened from the Apple TV Top
-    /// Shelf (see `RootView`'s `.onOpenURL`). Records the target item id for
-    /// `HomeView` to push once it's on screen; a malformed link is ignored.
-    func handleDeepLink(_ url: URL) {
-        guard let itemId = orbixItemId(from: url) else { return }
-        pendingDeepLinkItemId = itemId
+    /// Loads the data the shell's top bar needs: the profile's nav
+    /// categories (`menu()`) and — only when not already known — the active
+    /// profile (`meProfile()`). Called on both `.ready` entry paths (the
+    /// `checkActiveProfile` success path, which has already captured
+    /// `activeProfile`, so the profile fetch is skipped there; and
+    /// `profileSelected()`, which hasn't). Tolerant of failure by design:
+    /// either fetch failing simply leaves that piece empty (the bar renders
+    /// without categories / with a placeholder avatar) rather than blocking
+    /// the shell — nav chrome is not worth failing the whole screen over.
+    func loadShellData() async {
+        guard let client else { return }
+
+        if let items = try? await client.menu() {
+            guard self.client === client else { return }
+            menuItems = items
+        }
+
+        if activeProfile?.id == nil {
+            if let me = try? await client.meProfile() {
+                guard self.client === client else { return }
+                activeProfile = me
+                applyUILanguage()
+            }
+        }
     }
 
-    /// Returns and clears any pending deep-link item id — `HomeView` calls
-    /// this when it's ready to push the title page, so the link fires exactly
-    /// once rather than re-triggering on every re-render.
-    func consumePendingDeepLink() -> String? {
-        defer { pendingDeepLinkItemId = nil }
-        return pendingDeepLinkItemId
+    /// Account "Switch Profile": back to the picker. The token and client stay;
+    /// the shell data is cleared so the bar never renders a stale avatar/menu
+    /// while picking. Re-entry runs the normal profileSelected() → loadShellData().
+    func switchProfile() {
+        activeProfile = nil
+        menuItems = []
+        phase = .needsProfile
+        applyUILanguage()
+    }
+
+    /// Account "Unlink Device": clears the persisted device token and resets to
+    /// pairing — the same teardown the 401 path in checkActiveProfile performs
+    /// (store.clear() → token = nil → .needsPairing), plus shell-data reset and
+    /// detaching the token from the live client. Client-side only by design
+    /// (spec §7.11 "clear token → onboarding"): the server-side revoke lives on
+    /// the web admin Devices page, so the token itself remains valid server-side.
+    func unlinkDevice() async {
+        await tokenStore.clear()
+        if let client { await client.setToken(nil) }
+        token = nil
+        activeProfile = nil
+        menuItems = []
+        phase = .needsPairing
+        applyUILanguage()
+    }
+
+    /// Account menu editor saved: PUT /me/menu already returned the fresh items —
+    /// apply them directly (the TV's analogue of the web's ["menu"] query invalidation).
+    func applyMenu(_ items: [MenuItem]) {
+        menuItems = items
+    }
+
+    /// Account language switch: mirror the PATCHed language onto the local
+    /// activeProfile (so the switcher + `uiLanguage` recompute read the new
+    /// value) and recompute `uiLanguage` immediately — the optimistic UI flip
+    /// (chips + the whole chrome via RootView's `.id(uiLanguage)`). Deliberately
+    /// does **not** refresh shell data (`menuItems`) itself: `AccountModel
+    /// .changeLanguage` calls `loadShellData()` separately, only after its PATCH
+    /// has actually landed server-side, so the re-fetched category names come
+    /// back already re-localized instead of racing the PATCH (Task 5 fold-in of
+    /// the Task 3 review carryover — the previous version fired `loadShellData`
+    /// from here, i.e. before the PATCH, which raced it).
+    func profileLanguageChanged(_ language: String) {
+        if var me = activeProfile { me.language = language; activeProfile = me }
+        applyUILanguage()
+    }
+
+    /// The resolved UI language, recomputed from the active profile (spec §9:
+    /// profile language overrides; system fallback). Called after every
+    /// `activeProfile` write (`checkActiveProfile`'s success path,
+    /// `loadShellData`'s `meProfile` fetch, `profileLanguageChanged`,
+    /// `switchProfile()`, `unlinkDevice()`) so `uiLanguage` — and therefore
+    /// `RootView`'s `.id(uiLanguage)` full-chrome rebuild — always reflects
+    /// the *current* profile (or the system, once there is none).
+    private func applyUILanguage() {
+        if let code = activeProfile?.language, Self.supportedLanguages.contains(code) {
+            L10n.override = code
+            uiLanguage = code
+        } else {
+            // No profile / unsupported value → follow the system (web
+            // detectInitialLanguage parity); uiLanguage still tracks the
+            // resolved 2-letter code so `.id` changes if the effective
+            // language does.
+            L10n.override = nil
+            let sys = Locale.current.language.languageCode?.identifier ?? "en"
+            uiLanguage = Self.supportedLanguages.contains(sys) ? sys : "en"
+        }
     }
 
     /// Scans the local subnet for Orbix servers (matching the `service:

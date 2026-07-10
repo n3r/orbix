@@ -2,18 +2,17 @@ import OrbixKit
 import SwiftUI
 import UIKit
 
-/// A single focusable poster in a `HomeView` rail: 2:3 art (via
+/// A single focusable poster in a catalog/search/wishlist grid: 2:3 art (via
 /// `ImageLoader`, with a placeholder while loading or on a missing/failed
-/// poster), title + year below, and — when `card.progress` is present — a
-/// thin resume-progress bar along the poster's bottom edge.
+/// poster) and title + year below.
 ///
 /// Built as a `Button` styled `.card`, the same lockup convention already
 /// proven in this codebase for tvOS focusable art (the M1 `SpikeListView`'s
 /// poster grid, `ProfilePickerView`'s avatar row): `.card` is Apple's own
 /// "enlarges slightly + adds a shadow when focused" button style — i.e.
 /// scale-on-focus is inherited for free rather than hand-rolled, and the
-/// label can still be arbitrarily rich content (here, the artwork + resume
-/// bar overlay + title/year stack).
+/// label can still be arbitrarily rich content (here, the artwork +
+/// title/year stack).
 struct PosterCard: View {
     let card: MediaCard
     let baseURL: URL?
@@ -26,7 +25,7 @@ struct PosterCard: View {
     var body: some View {
         Button(action: onSelect) {
             VStack(alignment: .leading, spacing: 10) {
-                artwork
+                PosterArtwork(url: posterURL, imageLoader: imageLoader)
                     .frame(width: Self.posterWidth, height: Self.posterHeight)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
 
@@ -47,29 +46,9 @@ struct PosterCard: View {
         .accessibilityIdentifier("posterCard_\(card.id)")
     }
 
-    @ViewBuilder
-    private var artwork: some View {
-        ZStack(alignment: .bottom) {
-            PosterArtwork(url: posterURL, imageLoader: imageLoader)
-            if let resumeFraction {
-                ResumeProgressBar(fraction: resumeFraction)
-                    .accessibilityIdentifier("posterCardResumeBar_\(card.id)")
-            }
-        }
-    }
-
     private var posterURL: URL? {
         guard let posterPath = card.posterPath, let baseURL else { return nil }
         return baseURL.appending(path: "api/images/\(posterPath)")
-    }
-
-    /// `positionSec / durationSec` clamped to `0...1`; `nil` (no bar drawn)
-    /// when there's no `progress` or a non-positive `durationSec` — the
-    /// server shouldn't send the latter, but this defends against a
-    /// divide-by-zero/negative-width overlay rather than trusting it.
-    private var resumeFraction: Double? {
-        guard let progress = card.progress, progress.durationSec > 0 else { return nil }
-        return min(1, max(0, Double(progress.positionSec) / Double(progress.durationSec)))
     }
 }
 
@@ -110,26 +89,6 @@ private struct PosterArtwork: View {
     }
 }
 
-/// A thin bar along the bottom of the poster showing resume progress
-/// (`fraction` in `0...1`) — filled portion vs. remaining, Netflix-style.
-private struct ResumeProgressBar: View {
-    let fraction: Double
-
-    private static let barHeight: CGFloat = 6
-
-    var body: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .leading) {
-                Rectangle().fill(.white.opacity(0.35))
-                Rectangle()
-                    .fill(.red)
-                    .frame(width: geometry.size.width * fraction)
-            }
-        }
-        .frame(height: Self.barHeight)
-    }
-}
-
 #Preview {
     HStack(spacing: 32) {
         PosterCard(
@@ -143,8 +102,7 @@ private struct ResumeProgressBar: View {
                 id: "2",
                 title: "Some Series With A Rather Long Title",
                 year: 2020,
-                posterPath: nil,
-                progress: MediaCard.Progress(positionSec: 900, durationSec: 1500)
+                posterPath: nil
             ),
             baseURL: nil,
             imageLoader: ImageLoader(),

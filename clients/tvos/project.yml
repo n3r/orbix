@@ -20,21 +20,14 @@ targets:
     sources:
       - path: Sources/Orbix
       - path: Resources/Assets.xcassets
-      # EN/RU String Catalog for the app's own UI strings (OrbixKit carries a
-      # separate catalog for the strings its Top Shelf extension shares).
       - path: Resources/Localizable.xcstrings
+        buildPhase: resources
     dependencies:
       - target: OrbixKit
-      # Embed the Top Shelf content extension into the app's PlugIns folder.
-      - target: OrbixTopShelf
     settings:
       base:
         INFOPLIST_FILE: Resources/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: dev.orbix.tvos
-        # App Group (baseURL) + shared Keychain group (device token) so the
-        # Top Shelf extension can reach the same server. Inert on the
-        # Simulator (no entitlement sandbox) but correct for device.
-        CODE_SIGN_ENTITLEMENTS: Resources/Orbix.entitlements
         # tvOS "Brand Assets" App Icon & Top Shelf Image — see
         # Resources/Assets.xcassets/App Icon & Top Shelf Image.brandassets.
         ASSETCATALOG_COMPILER_APPICON_NAME: "App Icon & Top Shelf Image"
@@ -48,31 +41,6 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.orbix.tvos.kit
         GENERATE_INFOPLIST_FILE: "YES" # embedded framework needs an Info.plist to pass app-bundle validation
-  OrbixTopShelf:
-    # tvOS Top Shelf content extension: renders Continue Watching + Recommended
-    # above the app icon on the Apple TV home screen. Separate process — reads
-    # baseURL (App Group) + device token (shared Keychain) the app published.
-    type: app-extension
-    platform: tvOS
-    sources:
-      - path: Sources/OrbixTopShelf
-    dependencies:
-      # Link (don't embed) OrbixKit — the app already embeds it; the extension
-      # resolves it from the containing app's Frameworks folder at runtime.
-      - target: OrbixKit
-        embed: false
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: dev.orbix.tvos.topshelf
-        INFOPLIST_FILE: Sources/OrbixTopShelf/Info.plist
-        CODE_SIGN_ENTITLEMENTS: Sources/OrbixTopShelf/OrbixTopShelf.entitlements
-        # Explicit even though the project base sets it — an app extension is a
-        # distinct bundle and the unsigned Simulator build must stay unsigned.
-        CODE_SIGNING_ALLOWED: "NO"
-        # Load OrbixKit from the containing app's Frameworks folder.
-        LD_RUNPATH_SEARCH_PATHS:
-          - "$(inherited)"
-          - "@executable_path/../../Frameworks"
   OrbixKitTests:
     type: bundle.unit-test
     platform: tvOS

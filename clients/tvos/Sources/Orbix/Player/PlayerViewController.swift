@@ -2,6 +2,7 @@ import AVFoundation
 import AVKit
 import OrbixKit
 import SwiftUI
+import UIKit
 
 /// `UIViewControllerRepresentable` wrapping a stock `AVPlayerViewController`
 /// — the production player (SP2 M3 Task 3), expanding the M1 spike's thin
@@ -32,6 +33,18 @@ struct PlayerViewController: UIViewControllerRepresentable {
     let playbackController: PlaybackController
     let resumeSeconds: Double
 
+    /// The quality/audio-leveling ladder + current selection, read from the
+    /// (observable) `PlaybackController` in `PlayerScreen.body` and passed
+    /// through as plain values so SwiftUI observes them there and re-runs
+    /// `updateUIViewController` — and thus rebuilds the transport-bar menu —
+    /// whenever the ladder or the current selection changes (e.g. after a
+    /// re-negotiation swaps rungs). The Coordinator owns the `AVPlayer` used
+    /// to capture the live position, so the menu actions route through it.
+    let qualities: [QualityOption]
+    let audioModes: [AudioModeOption]
+    let selectedQuality: String
+    let selectedAudioMode: String
+
     /// Shown via `AVPlayerItem.externalMetadata` so tvOS's transport/info UI
     /// displays a real title instead of the raw stream URL.
     var videoTitle: String?
@@ -45,6 +58,7 @@ struct PlayerViewController: UIViewControllerRepresentable {
         controller.player = player
         applyExternalMetadata(to: controller)
         context.coordinator.attach(to: player, resumeSeconds: resumeSeconds)
+        updateTransportMenu(on: controller, coordinator: context.coordinator)
         return controller
     }
 
@@ -54,6 +68,17 @@ struct PlayerViewController: UIViewControllerRepresentable {
             context.coordinator.attach(to: player, resumeSeconds: resumeSeconds)
         }
         applyExternalMetadata(to: uiViewController)
+        updateTransportMenu(on: uiViewController, coordinator: context.coordinator)
+    }
+
+    private func updateTransportMenu(on controller: AVPlayerViewController, coordinator: Coordinator) {
+        coordinator.updateTransportMenu(
+            on: controller,
+            qualities: qualities,
+            audioModes: audioModes,
+            selectedQuality: selectedQuality,
+            selectedAudioMode: selectedAudioMode
+        )
     }
 
     /// Runs when SwiftUI removes this representable from the hierarchy
@@ -226,6 +251,90 @@ struct PlayerViewController: UIViewControllerRepresentable {
             guard positionSec.isFinite, durationSec.isFinite, durationSec > 0 else { return }
             playbackController.reportProgress(positionSec: positionSec, durationSec: durationSec)
         }
+
+        /// Builds the transport-bar's custom menu (`transportBarCustomMenuItems`,
+        /// tvOS 15+): a **Quality** submenu (shown only when there's more than
+        /// one rung to pick — a lone `source` has nothing to switch) and an
+        /// **Audio** submenu (shown only when the server offers leveling). Each
+        /// action re-negotiates at the *other* dimension's current selection —
+        /// picking a quality keeps the current audio mode and vice-versa — the
+        /// tvOS analogue of the web player's `handleQualityChange` /
+        /// `handleAudioModeChange`. The current selection is marked `.on`. Track
+        /// (audio/subtitle rendition) pickers are left to `AVPlayerViewController`'s
+        /// stock UI, which reads them off the in-manifest HLS renditions.
+        func updateTransportMenu(
+            on controller: AVPlayerViewController,
+            qualities: [QualityOption],
+            audioModes: [AudioModeOption],
+            selectedQuality: String,
+            selectedAudioMode: String
+        ) {
+            var items: [UIMenuElement] = []
+
+            if qualities.count > 1 {
+                let actions = qualities.map { option in
+                    UIAction(
+                        title: option.label,
+                        state: option.id == selectedQuality ? .on : .off
+                    ) { [weak self] _ in
+                        self?.renegotiate(quality: option.id, audioMode: selectedAudioMode)
+                    }
+                }
+                // A transport-bar custom menu is presented as an *icon* button;
+                // tvOS renders no visible button for a title-only `UIMenu`, so an
+                // `image` is required for the Quality control to actually appear.
+                items.append(UIMenu(
+                    title: "Quality",
+                    image: UIImage(systemName: "slider.horizontal.3"),
+                    children: actions
+                ))
+            }
+
+            if audioModes.contains(where: { $0.id == "leveled" }) {
+                let actions = audioModes.map { option in
+                    UIAction(
+                        title: option.label,
+                        state: option.id == selectedAudioMode ? .on : .off
+                    ) { [weak self] _ in
+                        self?.renegotiate(quality: selectedQuality, audioMode: option.id)
+                    }
+                }
+                // Icon required for the same reason as Quality above. P5 Task 6
+                // tried `waveform` here (hoping it would read more distinctly
+                // than `speaker.wave.2`) but live-verified against the real
+                // transport bar it collides *worse*: tvOS's own native "Audio
+                // Adjustments → Reduce Loud Sounds" button (present whenever
+                // the platform offers loudness reduction) renders as the exact
+                // same vertical-bars `waveform` glyph, and it sits right next
+                // to this one — two adjacent buttons with an identical icon,
+                // one of which is *also* about audio loudness/leveling, reads
+                // as far more confusing than the original `speaker.wave.2`
+                // collision this was meant to fix. Reverted to `speaker.wave.2`
+                // per the brief's fallback instruction; see
+                // `.superpowers/sdd/p5-task-6-report.md` for the screenshot.
+                items.append(UIMenu(
+                    title: "Audio",
+                    image: UIImage(systemName: "speaker.wave.2"),
+                    children: actions
+                ))
+            }
+
+            controller.transportBarCustomMenuItems = items
+        }
+
+        /// Captures the live position off the `AVPlayer` this Coordinator owns
+        /// and hands it to `PlaybackController.renegotiate` — keeping all
+        /// `AVPlayer` access on this side of the split so `PlaybackController`
+        /// stays player-free and independently testable. The controller does the
+        /// rest: fresh session, stop the previous one, re-emit `.ready` with this
+        /// position as the resume seek (which `PlayerScreen`'s `.task(id:)`
+        /// player rebuild + `seekToResumeIfReady` restore on the new stream).
+        private func renegotiate(quality: String, audioMode: String) {
+            let position = attachedPlayer?.currentItem?.currentTime().seconds ?? 0
+            let safePosition = position.isFinite ? max(0, position) : 0
+            let controller = playbackController
+            Task { await controller.renegotiate(quality: quality, audioMode: audioMode, positionSec: safePosition) }
+        }
     }
 }
 
@@ -279,38 +388,51 @@ struct PlayerScreen: View {
 
             switch controller.loadState {
             case .loading:
-                ProgressView("Loading…")
+                ProgressView(L10n.t("common.status.loading"))
                     .font(.title3)
                     .tint(.white)
                     .foregroundStyle(.white)
             case .error(let message):
                 errorView(message: message)
             case .ready(let streamURL, let resumeSeconds):
-                if let player {
-                    PlayerViewController(
-                        player: player,
-                        playbackController: controller,
-                        resumeSeconds: resumeSeconds,
-                        videoTitle: title
-                    )
-                    .ignoresSafeArea()
-                    // Belt-and-suspenders alongside the identical modifier
-                    // on the outer `ZStack` below: once playback is ready,
-                    // `AVPlayerViewController`'s own view is what actually
-                    // holds focus, so if its responder chain ever consumes
-                    // the Menu press before it reaches an ancestor's
-                    // `onExitCommand`, this closer copy still catches it.
-                    // `dismiss()` is idempotent, so having both is harmless.
-                    .onExitCommand { dismiss() }
-                } else {
-                    // One-frame gap before the `.task(id:)` below constructs
-                    // the player — deliberately not built inline in this
-                    // `switch` (which re-evaluates on every body pass and
-                    // would construct a fresh, throwaway `AVPlayer` each
-                    // time).
-                    Color.clear
-                        .task(id: streamURL) { player = AVPlayer(url: streamURL) }
+                Group {
+                    if let player {
+                        PlayerViewController(
+                            player: player,
+                            playbackController: controller,
+                            resumeSeconds: resumeSeconds,
+                            qualities: controller.qualities,
+                            audioModes: controller.audioModes,
+                            selectedQuality: controller.quality,
+                            selectedAudioMode: controller.audioMode,
+                            videoTitle: title
+                        )
+                        .ignoresSafeArea()
+                        // Belt-and-suspenders alongside the identical modifier
+                        // on the outer `ZStack` below: once playback is ready,
+                        // `AVPlayerViewController`'s own view is what actually
+                        // holds focus, so if its responder chain ever consumes
+                        // the Menu press before it reaches an ancestor's
+                        // `onExitCommand`, this closer copy still catches it.
+                        // `dismiss()` is idempotent, so having both is harmless.
+                        .onExitCommand { dismiss() }
+                    } else {
+                        // One-frame gap before the `.task(id:)` below constructs
+                        // the player.
+                        Color.clear
+                    }
                 }
+                // Rebuild the `AVPlayer` whenever the negotiated stream URL
+                // changes — the tvOS analogue of the web player's
+                // `key={info.streamUrl}` remount. Attached to the outer `Group`
+                // (not the `else`-branch `Color.clear` as before) so it re-runs
+                // on a mid-playback quality/audio re-negotiation too, not only
+                // the initial nil→url transition. `.task(id:)` fires solely when
+                // `streamURL` changes, so it never builds a throwaway player on
+                // an ordinary body pass. Handing `updateUIViewController` the new
+                // player detaches the old player's observers and attaches to the
+                // new one, seeking to `resumeSeconds` (the captured position).
+                .task(id: streamURL) { player = AVPlayer(url: streamURL) }
             }
         }
         .task { await controller.start() }
@@ -329,11 +451,11 @@ struct PlayerScreen: View {
 
     private func errorView(message: String) -> some View {
         ContentUnavailableView {
-            Label("Couldn't play title", systemImage: "exclamationmark.triangle")
+            Label(L10n.t("player.error.generic"), systemImage: "exclamationmark.triangle")
         } description: {
             Text(message)
         } actions: {
-            Button("Close") { dismiss() }
+            Button(L10n.t("player.close")) { dismiss() }
                 .accessibilityIdentifier("playerScreenCloseButton")
         }
         .foregroundStyle(.white)

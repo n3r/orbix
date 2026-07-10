@@ -78,7 +78,11 @@ final class PairingModel {
             initiate = try await client.pairInitiate(name: name)
         } catch {
             guard !Task.isCancelled else { return }
-            finish(.error("Couldn't start pairing: \(error)"))
+            if case OrbixError.http(_, let code) = error, let code {
+                finish(.error(L10n.errorMessage(code)))
+            } else {
+                finish(.error(L10n.t("pairing.errors.startFailed")))
+            }
             return
         }
         // stop() may have been called while pairInitiate was in flight.
@@ -94,7 +98,7 @@ final class PairingModel {
         while true {
             guard !Task.isCancelled else { return }
             guard Date() < deadline else {
-                finish(.error("Pairing code expired. Try again."))
+                finish(.error(L10n.t("pairing.errors.expired")))
                 return
             }
 
@@ -109,12 +113,12 @@ final class PairingModel {
                 // .pending — keep polling.
             } catch {
                 guard !Task.isCancelled else { return }
-                if let orbixError = error as? OrbixError, case .http(404) = orbixError {
+                if let orbixError = error as? OrbixError, case .http(404, _) = orbixError {
                     // The server's PairingStore already swept this entry
                     // (unknown_or_expired) — same user-facing outcome as our
                     // own local deadline check above, just discovered a
                     // different way. Retrying can't help: terminal.
-                    finish(.error("Pairing failed: \(error)"))
+                    finish(.error(L10n.t("pairing.errors.failed")))
                     return
                 }
                 // Any other error (rate limit, transport, decoding) may be
@@ -122,7 +126,7 @@ final class PairingModel {
                 // single blip doesn't kill the whole attempt.
                 consecutiveFailures += 1
                 if consecutiveFailures >= 3 {
-                    finish(.error("Pairing failed: \(error)"))
+                    finish(.error(L10n.t("pairing.errors.failed")))
                     return
                 }
                 // Fewer than 3 in a row so far — fall through to the sleep

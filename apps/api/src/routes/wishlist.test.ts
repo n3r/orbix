@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildApp } from "../app";
+import { hashDeviceToken } from "@orbix/core";
 import type { Env } from "@orbix/config";
 
 const env: Env = {
@@ -26,6 +27,31 @@ const cookies = { orbix_session: "s1", orbix_profile: "p1" };
 const card = (id: string, title: string) => ({
   id, title, year: 2020, posterPath: `poster/${id}.jpg`, matchState: "matched", translations: [],
 });
+
+// Device (bearer) auth: mirrors stream.token.test.ts's stubAuth — the
+// DeviceToken row carries its own activeProfileId instead of a cookie.
+const RAW = "orb_wishlist-device";
+const HASH = hashDeviceToken(RAW);
+
+function deviceAuthed(app: any) {
+  app.prisma.deviceToken = {
+    findUnique: async ({ where }: any) =>
+      where.tokenHash === HASH || where.id === "dev1"
+        ? { id: "dev1", accountId: "a1", activeProfileId: "p1", revokedAt: null, lastSeenAt: new Date() }
+        : null,
+    update: async () => ({}),
+  };
+  // resolveDeviceToken (apps/api/src/lib/device-auth.ts) also looks up the
+  // sole account after the device row resolves — without this stub it falls
+  // through to the real Prisma client and throws (no DATABASE_URL in tests),
+  // which the session plugin swallows into "not authenticated" (401) rather
+  // than the 400 no_profile this test means to exercise. Mirrors
+  // stream.token.test.ts's stubAuth.
+  app.prisma.account = { findFirst: async () => ({ id: "a1" }) };
+  app.prisma.profile = {
+    findUnique: async () => ({ id: "p1", name: "A", avatar: null, kind: "standard", maturityCap: null, language: "en" }),
+  };
+}
 
 describe("GET /wishlist", () => {
   it("rejects unauthenticated requests with 401", async () => {
@@ -142,6 +168,22 @@ describe("DELETE /wishlist/:itemId", () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ ok: true });
     expect(deleteWhere).toEqual({ profileId: "p1", mediaItemId: "m1" });
+    await app.close();
+  });
+});
+
+describe("GET /wishlist (device bearer)", () => {
+  it("resolves the device row's active profile (no cookie) and returns cards", async () => {
+    const app = await buildApp(env);
+    deviceAuthed(app as any);
+    (app as any).prisma.wishlistEntry = { findMany: async () => [{ mediaItemId: "m1" }] };
+    (app as any).prisma.mediaItem = { findMany: async () => [card("m1", "Alpha")] };
+    const res = await app.inject({
+      method: "GET", url: "/api/wishlist",
+      headers: { authorization: `Bearer ${RAW}` },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().map((i: any) => i.id)).toEqual(["m1"]);
     await app.close();
   });
 });

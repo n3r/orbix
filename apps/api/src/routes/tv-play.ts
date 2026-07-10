@@ -11,6 +11,7 @@ import {
 } from "@orbix/core";
 import { requireAuth } from "../lib/auth";
 import { requireTvAccess } from "../lib/tv-access";
+import { queryTokenAuth, tokenSuffix } from "../lib/device-auth";
 import { makeTvUpstream, type TvUpstream, type UpstreamResult } from "../lib/tv-upstream";
 import { loadNowNext } from "../lib/tv-now-next";
 import { nextStreamHealth } from "../lib/tv-health-state";
@@ -43,10 +44,14 @@ export default function tvPlayRoute(
     });
 
     const guards = { preHandler: [requireAuth(app), requireTvAccess(app)] };
+    // Proxy + playback-negotiation routes also accept a device's ?token= query
+    // param (AVPlayer and friends follow generated URIs with no headers/cookies).
+    const playerGuards = { preHandler: [queryTokenAuth(app), requireAuth(app), requireTvAccess(app)] };
 
-    const toProxy = (streamId: string) => (absUrl: string, kind: "playlist" | "bytes") =>
+    const toProxy = (streamId: string, tokenQuery: string) => (absUrl: string, kind: "playlist" | "bytes") =>
       `/api/tv/proxy/${streamId}/${kind === "playlist" ? "p" : "s"}` +
-      `?u=${encodeUpstream(absUrl)}&sig=${signProxyPayload(env.SESSION_SECRET, streamId, absUrl)}`;
+      `?u=${encodeUpstream(absUrl)}&sig=${signProxyPayload(env.SESSION_SECRET, streamId, absUrl)}` +
+      tokenQuery;
 
     /** Load a proxyable stream row; sends 404 and returns null when absent/hidden. */
     async function loadStream(streamId: string, reply: FastifyReply): Promise<StreamRow | null> {
@@ -95,54 +100,66 @@ export default function tvPlayRoute(
     // ------------------------------------------------------------------
     // GET /tv/channels/:id/play — ordered proxied sources for a channel
     // ------------------------------------------------------------------
-    app.get<{ Params: { id: string } }>("/tv/channels/:id/play", guards, async (req, reply) => {
-      const channel = await app.prisma.tvChannel.findUnique({
-        where: { id: req.params.id },
-        select: {
-          id: true,
-          number: true,
-          name: true,
-          logoPath: true,
-          country: true,
-          quality: true,
-          hidden: true,
-          streams: {
-            select: { id: true, quality: true, label: true, priority: true, protocol: true, status: true },
+    app.get<{ Params: { id: string }; Querystring: { token?: string } }>(
+      "/tv/channels/:id/play",
+      playerGuards,
+      async (req, reply) => {
+        const channel = await app.prisma.tvChannel.findUnique({
+          where: { id: req.params.id },
+          select: {
+            id: true,
+            number: true,
+            name: true,
+            logoPath: true,
+            country: true,
+            quality: true,
+            hidden: true,
+            streams: {
+              select: { id: true, quality: true, label: true, priority: true, protocol: true, status: true },
+            },
           },
-        },
-      });
-      if (!channel || channel.hidden) return reply.code(404).send({ error: "not_found" });
+        });
+        if (!channel || channel.hidden) return reply.code(404).send({ error: "not_found" });
 
-      const ordered = orderStreams(channel.streams);
-      if (ordered.length === 0) return reply.code(409).send({ error: "no_playable_stream" });
+        const ordered = orderStreams(channel.streams);
+        if (ordered.length === 0) return reply.code(409).send({ error: "no_playable_stream" });
 
-      const nowNext = (await loadNowNext(app.prisma, [channel.id])).get(channel.id) ?? { now: null, next: null };
+        const nowNext = (await loadNowNext(app.prisma, [channel.id])).get(channel.id) ?? { now: null, next: null };
 
-      return {
-        channel: {
-          id: channel.id,
-          number: channel.number,
-          name: channel.name,
-          logo: channel.logoPath ? `/api/images/${channel.logoPath}` : null,
-          country: channel.country,
-          quality: channel.quality,
-        },
-        nowNext,
-        sources: ordered.slice(0, MAX_SOURCES).map((s) => ({
-          streamId: s.id,
-          src: `/api/tv/proxy/${s.id}/index.m3u8`,
-          quality: s.quality,
-          label: s.label,
-        })),
-      };
-    });
+        // Device clients authenticate this negotiation with a bearer token (or
+        // ?token=) but the returned proxy URL is followed verbatim by a native
+        // player with no header/cookie support — embed the token so the
+        // subsequent index.m3u8 fetch doesn't 401 (mirrors playback.ts).
+        const auth = req.headers.authorization;
+        const raw = auth?.startsWith("Bearer ") ? auth.slice(7) : req.query.token;
+        const srcSuffix = req.deviceId && raw ? `?token=${encodeURIComponent(raw)}` : "";
+
+        return {
+          channel: {
+            id: channel.id,
+            number: channel.number,
+            name: channel.name,
+            logo: channel.logoPath ? `/api/images/${channel.logoPath}` : null,
+            country: channel.country,
+            quality: channel.quality,
+          },
+          nowNext,
+          sources: ordered.slice(0, MAX_SOURCES).map((s) => ({
+            streamId: s.id,
+            src: `/api/tv/proxy/${s.id}/index.m3u8${srcSuffix}`,
+            quality: s.quality,
+            label: s.label,
+          })),
+        };
+      },
+    );
 
     // ------------------------------------------------------------------
     // GET /tv/proxy/:streamId/index.m3u8 — entry playlist (stream's own URL)
     // ------------------------------------------------------------------
-    app.get<{ Params: { streamId: string } }>(
+    app.get<{ Params: { streamId: string }; Querystring: { token?: string } }>(
       "/tv/proxy/:streamId/index.m3u8",
-      guards,
+      playerGuards,
       async (req, reply) => {
         const stream = await loadStream(req.params.streamId, reply);
         if (!stream) return;
@@ -163,7 +180,7 @@ export default function tvPlayRoute(
           return reply.code(502).send({ error: `upstream_${result.status}` });
         }
 
-        const rewritten = rewritePlaylist(result.text ?? "", result.finalUrl, toProxy(stream.id));
+        const rewritten = rewritePlaylist(result.text ?? "", result.finalUrl, toProxy(stream.id, tokenSuffix(req)));
         return reply
           .code(200)
           .header("content-type", "application/vnd.apple.mpegurl")
@@ -175,9 +192,9 @@ export default function tvPlayRoute(
     // ------------------------------------------------------------------
     // GET /tv/proxy/:streamId/p — nested playlists (variants, alt media)
     // ------------------------------------------------------------------
-    app.get<{ Params: { streamId: string }; Querystring: { u?: string; sig?: string } }>(
+    app.get<{ Params: { streamId: string }; Querystring: { u?: string; sig?: string; token?: string } }>(
       "/tv/proxy/:streamId/p",
-      guards,
+      playerGuards,
       async (req, reply) => {
         const stream = await loadStream(req.params.streamId, reply);
         if (!stream) return;
@@ -197,7 +214,7 @@ export default function tvPlayRoute(
         if (result.status !== 200) return reply.code(502).send({ error: `upstream_${result.status}` });
 
         // Rewrite against THIS playlist's final URL (redirect-hop safe).
-        const rewritten = rewritePlaylist(result.text ?? "", result.finalUrl, toProxy(stream.id));
+        const rewritten = rewritePlaylist(result.text ?? "", result.finalUrl, toProxy(stream.id, tokenSuffix(req)));
         return reply
           .code(200)
           .header("content-type", "application/vnd.apple.mpegurl")
@@ -209,9 +226,9 @@ export default function tvPlayRoute(
     // ------------------------------------------------------------------
     // GET /tv/proxy/:streamId/s — opaque bytes: segments, init sections, keys
     // ------------------------------------------------------------------
-    app.get<{ Params: { streamId: string }; Querystring: { u?: string; sig?: string } }>(
+    app.get<{ Params: { streamId: string }; Querystring: { u?: string; sig?: string; token?: string } }>(
       "/tv/proxy/:streamId/s",
-      guards,
+      playerGuards,
       async (req, reply) => {
         const stream = await loadStream(req.params.streamId, reply);
         if (!stream) return;

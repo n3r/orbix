@@ -37,6 +37,61 @@ final class DTOTests: XCTestCase {
         XCTAssertTrue(info.subtitleTracks.isEmpty)
     }
 
+    // MARK: - PlaybackInfo quality/audio ladder (Phase 3 Task 1)
+
+    func testDecodePlaybackInfoQualityLadder() throws {
+        // apps/api/src/routes/playback.ts:255-279 for a 2160p source: buildPlaybackQualities
+        // (quality.ts) yields source + 1080p/720p/480p; AUDIO_MODES yields standard/leveled.
+        let json = """
+        {"playSessionId":"sess-1","mode":"transcode",
+         "streamUrl":"/api/play/f1/master.m3u8?playSessionId=sess-1&token=orb_x",
+         "container":"matroska,webm","videoCodec":"h264",
+         "quality":"source","audioMode":"standard",
+         "qualities":[
+           {"id":"source","label":"Original (2160p)","width":3840,"height":2160,"bandwidth":24000000},
+           {"id":"1080p","label":"1080p","width":1920,"height":1080,"bandwidth":5500000},
+           {"id":"720p","label":"720p","width":1280,"height":720,"bandwidth":3000000},
+           {"id":"480p","label":"480p","width":854,"height":480,"bandwidth":1600000}],
+         "audioModes":[{"id":"standard","label":"Standard"},{"id":"leveled","label":"Leveling"}],
+         "audioTracks":[{"index":0,"codec":"ac3","channels":6,"language":"en","selected":true}],
+         "subtitleTracks":[]}
+        """.data(using: .utf8)!
+        let info = try JSONDecoder().decode(PlaybackInfo.self, from: json)
+        XCTAssertEqual(info.quality, "source")
+        XCTAssertEqual(info.audioMode, "standard")
+        XCTAssertEqual(info.qualities?.map(\.id), ["source", "1080p", "720p", "480p"])
+        XCTAssertEqual(info.qualities?.first?.label, "Original (2160p)")
+        XCTAssertEqual(info.qualities?.last?.height, 480)
+        XCTAssertEqual(info.audioModes?.map(\.id), ["standard", "leveled"])
+    }
+
+    func testDecodePlaybackInfoToleratesMissingQualityFields() throws {
+        // A response with no quality ladder at all (older/other shape) must still
+        // decode — every new field is Optional.
+        let json = """
+        {"playSessionId":"s2","mode":"direct","streamUrl":"/api/play/f2/direct",
+         "container":null,"videoCodec":null,"audioTracks":[],"subtitleTracks":[]}
+        """.data(using: .utf8)!
+        let info = try JSONDecoder().decode(PlaybackInfo.self, from: json)
+        XCTAssertNil(info.quality)
+        XCTAssertNil(info.qualities)
+        XCTAssertNil(info.audioMode)
+        XCTAssertNil(info.audioModes)
+    }
+
+    func testEncodePlaybackInfoRequestOmitsQualityAudioWhenNil() throws {
+        // nil quality/audioMode must NOT appear on the wire (server applies defaults).
+        let plain = PlaybackInfoRequest(fileId: "f1", capabilities: .appleTV)
+        let plainStr = String(data: try JSONEncoder().encode(plain), encoding: .utf8)!
+        XCTAssertFalse(plainStr.contains("quality"))
+        XCTAssertFalse(plainStr.contains("audioMode"))
+        // Set values round-trip through the wire.
+        let picked = PlaybackInfoRequest(fileId: "f1", capabilities: .appleTV, quality: "720p", audioMode: "leveled")
+        let pickedStr = String(data: try JSONEncoder().encode(picked), encoding: .utf8)!
+        XCTAssertTrue(pickedStr.contains("\"quality\":\"720p\""))
+        XCTAssertTrue(pickedStr.contains("\"audioMode\":\"leveled\""))
+    }
+
     func testAppleCapabilityProfile() {
         XCTAssertEqual(Capabilities.appleTV.subtitleDelivery, "hls")
         XCTAssertTrue(Capabilities.appleTV.videoCodecs.contains("hevc"))
@@ -267,6 +322,41 @@ final class DTOTests: XCTestCase {
         XCTAssertNil(detail.files)
     }
 
+    // MARK: - ItemDetail ratings (Phase 3 Task 1)
+
+    func testDecodeItemDetailRatingsNowModeled() throws {
+        // apps/api/src/routes/catalog.ts:195-200 — ratings + matchState sent on every item.
+        // (Same shape the existing movie fixture already carries; now decoded.)
+        let json = """
+        {"id":"m1","kind":"movie","title":"Arrival","rating":"PG-13",
+         "tmdbScore":7.9,"imdbRating":7.9,"imdbVotes":700000,"rtRating":94,"metacritic":81,
+         "matchState":"matched"}
+        """.data(using: .utf8)!
+        let d = try JSONDecoder().decode(ItemDetail.self, from: json)
+        XCTAssertEqual(d.imdbRating, 7.9)
+        XCTAssertEqual(d.tmdbScore, 7.9)
+        XCTAssertEqual(d.imdbVotes, 700000)
+        XCTAssertEqual(d.rtRating, 94)
+        XCTAssertEqual(d.metacritic, 81)
+        XCTAssertEqual(d.rating, "PG-13")
+    }
+
+    func testDecodeItemDetailRatingsAllNull() throws {
+        // A movie missing every rating (catalog.ts sends explicit nulls) — must
+        // decode to nil, not throw; matchState still present.
+        let json = """
+        {"id":"m2","kind":"movie","title":"Untitled Import",
+         "tmdbScore":null,"imdbRating":null,"imdbVotes":null,"rtRating":null,"metacritic":null,
+         "rating":null,"matchState":"unmatched"}
+        """.data(using: .utf8)!
+        let d = try JSONDecoder().decode(ItemDetail.self, from: json)
+        XCTAssertNil(d.imdbRating)
+        XCTAssertNil(d.rtRating)
+        XCTAssertNil(d.metacritic)
+        XCTAssertNil(d.rating)
+        XCTAssertEqual(d.matchState, "unmatched")
+    }
+
     // MARK: - Playback progress (M3 Task 3)
 
     func testDecodeProgressState() throws {
@@ -455,5 +545,341 @@ final class DTOTests: XCTestCase {
         let response = try JSONDecoder().decode(EpisodesResponse.self, from: json)
         let episode = try XCTUnwrap(response.episodes.first)
         XCTAssertEqual(episode.progress?.finished, true)
+    }
+
+    // MARK: - Menu (Task 5)
+
+    func testDecodeMenuResponseHappyPath() throws {
+        // GET /api/me/menu's real shape (see apps/api/src/routes/menu.ts's
+        // "/me/menu" handler + resolveProfileMenu in
+        // packages/core/src/menu/resolve.ts): {items: [{libraryId, name}]},
+        // one entry per enabled library in resolved order. Matches
+        // apps/web/src/lib/types.ts's MenuItem exactly (no "kind" on the
+        // wire).
+        let json = """
+        {"items":[{"libraryId":"lib-1","name":"Movies"},
+                   {"libraryId":"lib-2","name":"TV Shows"}]}
+        """.data(using: .utf8)!
+        let response = try JSONDecoder().decode(MenuResponse.self, from: json)
+        XCTAssertEqual(response.items.count, 2)
+        XCTAssertEqual(response.items.first?.libraryId, "lib-1")
+        XCTAssertEqual(response.items.first?.name, "Movies")
+        XCTAssertEqual(response.items.last?.libraryId, "lib-2")
+        XCTAssertEqual(response.items.last?.name, "TV Shows")
+    }
+
+    func testDecodeMenuResponseNoActiveProfileIsEmpty() throws {
+        // menu.ts: "if (!profile) return reply.send({ items: [] })" — no
+        // active profile must decode to an empty array, not throw.
+        let json = """
+        {"items":[]}
+        """.data(using: .utf8)!
+        let response = try JSONDecoder().decode(MenuResponse.self, from: json)
+        XCTAssertTrue(response.items.isEmpty)
+    }
+
+    func testDecodeMenuItemWithNullName() throws {
+        // Decode-safety parity with this file's other DTOs: name is
+        // Optional (this file's convention is every non-key field tolerates
+        // null/missing), even though resolveProfileMenu never actually nulls
+        // it today — libraryId is the entry's key and is always present.
+        let json = """
+        {"libraryId":"lib-3","name":null}
+        """.data(using: .utf8)!
+        let item = try JSONDecoder().decode(MenuItem.self, from: json)
+        XCTAssertEqual(item.libraryId, "lib-3")
+        XCTAssertNil(item.name)
+    }
+
+    // MARK: - Create profile (Task 5)
+
+    func testDecodeCreateProfileResponse() throws {
+        // POST /api/profiles's real select shape (see
+        // apps/api/src/routes/profiles.ts): {id, name, kind, language} only
+        // — no avatar/maturityCap key at all (not even null), which must
+        // still decode cleanly against the shared Profile DTO since both
+        // are already Optional there.
+        let json = """
+        {"id":"p2","name":"New Profile","kind":"standard","language":"en"}
+        """.data(using: .utf8)!
+        let profile = try JSONDecoder().decode(Profile.self, from: json)
+        XCTAssertEqual(profile.id, "p2")
+        XCTAssertEqual(profile.name, "New Profile")
+        XCTAssertEqual(profile.kind, "standard")
+        XCTAssertEqual(profile.language, "en")
+        XCTAssertNil(profile.avatar)
+        XCTAssertNil(profile.maturityCap)
+    }
+
+    // MARK: - MeProfile kind/language (Task 5)
+
+    func testDecodeMeProfileCarriesKindAndLanguage() throws {
+        // MeProfile already models kind/language (see activeProfile's select
+        // in apps/api/src/lib/catalog-filter.ts), but no existing test
+        // actually asserted `language` decodes — this closes that gap.
+        let json = """
+        {"id":"p1","name":"Alex","avatar":null,"kind":"standard","maturityCap":null,"language":"es"}
+        """.data(using: .utf8)!
+        let me = try JSONDecoder().decode(MeProfile.self, from: json)
+        XCTAssertEqual(me.kind, "standard")
+        XCTAssertEqual(me.language, "es")
+    }
+
+    func testDecodeMeProfileAllNullOmitsLanguageKeyEntirely() throws {
+        // profiles.ts's "no active profile" branch sends
+        // {id:null,name:null,avatar:null,kind:null,maturityCap:null} —
+        // notably the "language" key is omitted entirely (not even null).
+        // Must still decode language as nil rather than throwing.
+        let json = """
+        {"id":null,"name":null,"avatar":null,"kind":null,"maturityCap":null}
+        """.data(using: .utf8)!
+        let me = try JSONDecoder().decode(MeProfile.self, from: json)
+        XCTAssertNil(me.language)
+    }
+
+    // MARK: - Library items (Phase 2 Task 1) — GET /libraries/:id/items (bare array)
+
+    func testDecodeLibraryItemsBareArray() throws {
+        // apps/api/src/routes/catalog.ts:44-60 select: {id,title,year,posterPath,matchState}
+        // (title localized). Bare array, no envelope. year/posterPath nullable;
+        // an unmatched item carries matchState:"unmatched" and a null poster.
+        let json = """
+        [{"id":"m1","title":"Arrival","year":2016,"posterPath":"/p1.jpg","matchState":"matched"},
+         {"id":"m2","title":"Untitled Import","year":null,"posterPath":null,"matchState":"unmatched"}]
+        """.data(using: .utf8)!
+        let items = try JSONDecoder().decode([MediaCard].self, from: json)
+        XCTAssertEqual(items.count, 2)
+        XCTAssertEqual(items[0].id, "m1")
+        XCTAssertEqual(items[0].matchState, "matched")
+        XCTAssertEqual(items[1].matchState, "unmatched")
+        XCTAssertNil(items[1].year)
+        XCTAssertNil(items[1].posterPath)
+        // Fields not on this wire shape decode to nil, not throw.
+        XCTAssertNil(items[0].backdropPath)
+        XCTAssertNil(items[0].addedAt)
+        XCTAssertNil(items[0].progress)
+    }
+
+    // MARK: - Wishlist (Phase 2 Task 1)
+
+    func testDecodeWishlistItemsBareArray() throws {
+        // apps/api/src/routes/wishlist.ts:38-44 — newest-first, {id,title,year,posterPath,matchState}.
+        let json = """
+        [{"id":"m2","title":"Beta","year":2020,"posterPath":"/p2.jpg","matchState":"matched"},
+         {"id":"m1","title":"Alpha","year":2019,"posterPath":"/p1.jpg","matchState":"manual"}]
+        """.data(using: .utf8)!
+        let items = try JSONDecoder().decode([MediaCard].self, from: json)
+        XCTAssertEqual(items.map(\.id), ["m2", "m1"])
+        XCTAssertEqual(items.first?.matchState, "matched")
+    }
+
+    func testDecodeWishlistEmpty() throws {
+        // wishlist.ts:18 returns [] when there are no entries.
+        let items = try JSONDecoder().decode([MediaCard].self, from: Data("[]".utf8))
+        XCTAssertTrue(items.isEmpty)
+    }
+
+    func testDecodeWishlistIdsResponse() throws {
+        // wishlist.ts:67 → {ids:[...]}; :58 → {ids:[]} when empty.
+        let json = """
+        {"ids":["m2","m1"]}
+        """.data(using: .utf8)!
+        let response = try JSONDecoder().decode(WishlistIdsResponse.self, from: json)
+        XCTAssertEqual(response.ids, ["m2", "m1"])
+        let empty = try JSONDecoder().decode(WishlistIdsResponse.self, from: Data(#"{"ids":[]}"#.utf8))
+        XCTAssertTrue(empty.ids.isEmpty)
+    }
+
+    // MARK: - MediaCard new fields (Phase 2 Task 1)
+
+    func testDecodeHomeCardAddedAtNowModeled() throws {
+        // discovery.ts:285 sends addedAt on every home-row card; it is now modeled
+        // (needed by the billboard/box-art NEW badge — Task 2/3). matchState is
+        // absent on home cards and must decode to nil.
+        let json = """
+        {"id":"m1","title":"Arrival","year":2016,"posterPath":"/p1.jpg",
+         "backdropPath":"/b1.jpg","addedAt":"2026-07-01T00:00:00.000Z",
+         "progress":null,"resume":null}
+        """.data(using: .utf8)!
+        let card = try JSONDecoder().decode(MediaCard.self, from: json)
+        XCTAssertEqual(card.addedAt, "2026-07-01T00:00:00.000Z")
+        XCTAssertEqual(card.backdropPath, "/b1.jpg")
+        XCTAssertNil(card.matchState)
+    }
+
+    // MARK: - TV (Phase 4 Task 1)
+
+    func testDecodeTvHomeRailsAndNowNext() throws {
+        // tv-catalog.ts:167-172 — rails of toCard()+dec() cards; now/next present-or-null.
+        let json = """
+        {"recents":[
+           {"id":"ch1","number":5,"name":"BBC One","country":"UK","categories":["news","general"],
+            "quality":"1080p","logo":"/api/images/channel/ch1.png","healthy":true,"favorite":true,
+            "now":{"title":"News at Six","start":"2026-07-06T17:00:00.000Z","stop":"2026-07-06T17:30:00.000Z"},
+            "next":{"title":"Weather","start":"2026-07-06T17:30:00.000Z","stop":"2026-07-06T17:35:00.000Z"}}],
+         "favorites":[],
+         "countries":[{"code":"UK","channels":[
+           {"id":"ch2","number":6,"name":"ITV","country":"UK","categories":[],"quality":null,
+            "logo":null,"healthy":false,"favorite":false,"now":null,"next":null}]}],
+         "categories":[{"id":"news","channels":[]}]}
+        """.data(using: .utf8)!
+        let home = try JSONDecoder().decode(TvHome.self, from: json)
+        XCTAssertEqual(home.recents.first?.id, "ch1")
+        XCTAssertEqual(home.recents.first?.now?.title, "News at Six")
+        XCTAssertEqual(home.countries.first?.code, "UK")
+        XCTAssertEqual(home.countries.first?.channels.first?.healthy, false)
+        XCTAssertNil(home.countries.first?.channels.first?.now)
+        XCTAssertEqual(home.categories.first?.id, "news")
+    }
+
+    func testDecodeTvGuidePage() throws {
+        // tv-catalog.ts:227 — {total, offset, limit, channels}.
+        let json = """
+        {"total":342,"offset":0,"limit":100,"channels":[
+          {"id":"ch1","number":1,"name":"One","country":"RU","categories":["general"],"quality":"HD",
+           "logo":null,"healthy":true,"favorite":false,"now":null,"next":null}]}
+        """.data(using: .utf8)!
+        let page = try JSONDecoder().decode(TvGuideResponse.self, from: json)
+        XCTAssertEqual(page.total, 342)
+        XCTAssertEqual(page.channels.count, 1)
+    }
+
+    func testDecodeTvGridWindowAndProgrammes() throws {
+        // tv-catalog.ts:301 — {start, hours, total, offset, limit, channels:[{…,programmes}]}.
+        let json = """
+        {"start":"2026-07-06T14:00:00.000Z","hours":4,"total":2,"offset":0,"limit":50,"channels":[
+          {"id":"ch1","number":1,"name":"One","country":"RU","categories":["general"],"quality":null,
+           "logo":null,"healthy":true,"favorite":false,
+           "programmes":[{"id":"p1","title":"Show","start":"2026-07-06T14:30:00.000Z",
+                          "stop":"2026-07-06T15:30:00.000Z","category":"series"}]},
+          {"id":"ch2","number":2,"name":"Two","country":"RU","categories":[],"quality":null,
+           "logo":null,"healthy":true,"favorite":false,"programmes":[]}]}
+        """.data(using: .utf8)!
+        let grid = try JSONDecoder().decode(TvGridResponse.self, from: json)
+        XCTAssertEqual(grid.hours, 4)
+        XCTAssertEqual(grid.channels.first?.programmes.first?.title, "Show")
+        XCTAssertEqual(grid.channels.last?.programmes.count, 0)
+    }
+
+    func testDecodeTvChannelDetailStreamsProtocolKeyword() throws {
+        // tv-catalog.ts:339-363 — note the `protocol` JSON key → backticked Swift prop.
+        let json = """
+        {"id":"ch1","number":5,"name":"BBC One","rawName":"BBC ONE HD","country":"UK",
+         "languages":["eng"],"categories":["news"],"website":"https://bbc.co.uk","epgId":"bbc1",
+         "quality":"1080p","logo":"/api/images/channel/ch1.png","healthy":true,"favorite":true,
+         "streams":[{"id":"st1","quality":"1080p","label":"Main","protocol":"hls","status":"ok","priority":0},
+                    {"id":"st2","quality":null,"label":null,"protocol":"hls","status":"degraded","priority":1}]}
+        """.data(using: .utf8)!
+        let ch = try JSONDecoder().decode(TvChannelDetail.self, from: json)
+        XCTAssertEqual(ch.languages, ["eng"])
+        XCTAssertEqual(ch.streams.first?.`protocol`, "hls")
+        XCTAssertEqual(ch.streams.last?.status, "degraded")
+        XCTAssertEqual(ch.streams.first?.priority, 0)
+    }
+
+    func testDecodeTvProgrammesDaySchedule() throws {
+        let json = """
+        {"programmes":[
+          {"id":"p1","start":"2026-07-06T06:00:00.000Z","stop":"2026-07-06T07:00:00.000Z",
+           "title":"Breakfast","description":"Morning news","category":"news"},
+          {"id":"p2","start":"2026-07-06T07:00:00.000Z","stop":"2026-07-06T08:00:00.000Z",
+           "title":"Cartoons","description":null,"category":null}]}
+        """.data(using: .utf8)!
+        let res = try JSONDecoder().decode(TvProgrammesResponse.self, from: json)
+        XCTAssertEqual(res.programmes.count, 2)
+        XCTAssertNil(res.programmes.last?.description)
+    }
+
+    func testDecodeTvPlayResponseTokenedSources() throws {
+        // tv-play.ts:137-153 — bearer request carries ?token= on each src.
+        let json = """
+        {"channel":{"id":"ch1","number":5,"name":"One","logo":null,"country":"RU","quality":"1080p"},
+         "nowNext":{"now":{"title":"Live","start":"2026-07-06T17:00:00.000Z","stop":"2026-07-06T18:00:00.000Z"},"next":null},
+         "sources":[
+           {"streamId":"st1","src":"/api/tv/proxy/st1/index.m3u8?token=orb_x","quality":"1080p","label":"Main"},
+           {"streamId":"st2","src":"/api/tv/proxy/st2/index.m3u8?token=orb_x","quality":"720p","label":null}]}
+        """.data(using: .utf8)!
+        let play = try JSONDecoder().decode(TvPlayResponse.self, from: json)
+        XCTAssertEqual(play.channel.number, 5)
+        XCTAssertEqual(play.sources.count, 2)
+        XCTAssertTrue(play.sources[0].src.contains("token=orb_x"))
+        XCTAssertEqual(play.nowNext.now?.title, "Live")
+    }
+
+    func testDecodeTvFavoritesEnvelopeWithoutNowNext() throws {
+        // tv-catalog.ts:447-449 — plain toCard(), no now/next keys at all → decode to nil.
+        let json = """
+        {"favorites":[{"id":"ch1","number":5,"name":"One","country":"UK","categories":["news"],
+          "quality":"HD","logo":null,"healthy":true,"favorite":true}]}
+        """.data(using: .utf8)!
+        let res = try JSONDecoder().decode(TvFavoritesResponse.self, from: json)
+        XCTAssertEqual(res.favorites.first?.id, "ch1")
+        XCTAssertNil(res.favorites.first?.now) // absent key decodes to nil (decode-safe)
+    }
+
+    // MARK: - Account/PIN (Phase 5 Task 1)
+
+    func testDecodeMenuConfig() throws {
+        // GET /api/me/menu/config's real shape (see apps/api/src/routes/menu.ts's
+        // "/me/menu/config" handler): {libraries: <every library, unfiltered>,
+        // enabled: <ordered enabled ids>}, for the menu editor.
+        let json = """
+        {"libraries":[{"libraryId":"lib-1","name":"Movies"},
+                       {"libraryId":"lib-2","name":"TV Shows"}],
+         "enabled":["lib-2"]}
+        """.data(using: .utf8)!
+        let config = try JSONDecoder().decode(MenuConfig.self, from: json)
+        XCTAssertEqual(config.libraries.count, 2)
+        XCTAssertEqual(config.libraries.first?.libraryId, "lib-1")
+        XCTAssertEqual(config.enabled, ["lib-2"])
+    }
+
+    func testDecodePatchProfileResponseThisBranchWire() throws {
+        // PATCH /api/profiles/:id's real select shape on THIS branch
+        // (apps/api/src/routes/profiles.ts:64): {id,name,kind,language}
+        // only — no avatar/maturityCap/hasPin key at all, which must still
+        // decode cleanly (all nil) against the shared Profile DTO.
+        let json = """
+        {"id":"p1","name":"Katya","kind":"standard","language":"ru"}
+        """.data(using: .utf8)!
+        let profile = try JSONDecoder().decode(Profile.self, from: json)
+        XCTAssertEqual(profile.id, "p1")
+        XCTAssertEqual(profile.name, "Katya")
+        XCTAssertEqual(profile.language, "ru")
+        XCTAssertNil(profile.avatar)
+        XCTAssertNil(profile.hasPin)
+    }
+
+    func testDecodeProfileMainWireHasPinTrueAndUnmodeledKeysIgnored() throws {
+        // origin/main's serializeProfile shape (apps/api/src/routes/profiles.ts):
+        // adds isGroup/hasPin/members on top of this branch's fields. isGroup
+        // and members are NOT modeled on the Swift Profile DTO — unknown keys
+        // are ignored by Codable, so this must still decode cleanly, with
+        // hasPin picked up as true. Group profiles are out of scope until
+        // the Phase 6 merge.
+        let json = """
+        {"id":"p2","name":"Nikita","avatar":null,"kind":"standard","maturityCap":null,
+         "language":"en","isGroup":false,"hasPin":true,"members":[]}
+        """.data(using: .utf8)!
+        let profile = try JSONDecoder().decode(Profile.self, from: json)
+        XCTAssertEqual(profile.id, "p2")
+        XCTAssertEqual(profile.hasPin, true)
+    }
+
+    func testApiCodeExtractsErrorFromJSONBody() {
+        // {error: "<code>"} is the machine-readable body most non-2xx
+        // responses send (e.g. profiles.ts's 403 pin_required).
+        let data = Data(#"{"error":"pin_required"}"#.utf8)
+        XCTAssertEqual(OrbixError.apiCode(from: data), "pin_required")
+    }
+
+    func testApiCodeNilForNonJSONBody() {
+        let data = Data("not json".utf8)
+        XCTAssertNil(OrbixError.apiCode(from: data))
+    }
+
+    func testApiCodeNilWhenErrorFieldIsNotAString() {
+        let data = Data(#"{"error":123}"#.utf8)
+        XCTAssertNil(OrbixError.apiCode(from: data))
     }
 }

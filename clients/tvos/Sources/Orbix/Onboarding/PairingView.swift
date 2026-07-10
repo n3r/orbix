@@ -16,34 +16,35 @@ struct PairingView: View {
     @State private var pairingModel = PairingModel()
 
     var body: some View {
-        Group {
-            if let client = model.client {
-                pairingContent(client: client)
-                    .onAppear {
-                        pairingModel.start(client: client, name: "Apple TV")
-                    }
-                    .onDisappear {
-                        pairingModel.stop()
-                    }
-                    .onChange(of: pairingModel.state) { _, newState in
-                        if case .approved(let token) = newState {
-                            Task { await model.pairingApproved(token: token) }
+        OnboardingChrome {
+            Group {
+                if let client = model.client {
+                    pairingContent(client: client)
+                        .onAppear {
+                            pairingModel.start(client: client, name: "Apple TV")
                         }
-                    }
-            } else {
-                // Defensive only: RootView only routes to PairingView once
-                // `model.client` is non-nil (see `pairingOrFallback`).
-                ProgressView()
+                        .onDisappear {
+                            pairingModel.stop()
+                        }
+                        .onChange(of: pairingModel.state) { _, newState in
+                            if case .approved(let token) = newState {
+                                Task { await model.pairingApproved(token: token) }
+                            }
+                        }
+                } else {
+                    // Defensive only: RootView only routes to PairingView once
+                    // `model.client` is non-nil (see `pairingOrFallback`).
+                    ProgressView()
+                }
             }
         }
-        .padding(80)
     }
 
     @ViewBuilder
     private func pairingContent(client: OrbixClient) -> some View {
         switch pairingModel.state {
         case .idle:
-            ProgressView("Requesting pairing code…")
+            ProgressView(L10n.t("pairing.requestingCode"))
                 .font(.title3)
         case .waiting(let code):
             waitingView(code: code)
@@ -59,18 +60,29 @@ struct PairingView: View {
 
     private func waitingView(code: String) -> some View {
         VStack(spacing: 40) {
-            Text("Pair This Apple TV")
+            Text(L10n.t("pairing.title"))
                 .font(.title2.bold())
-                .foregroundStyle(.secondary)
+                .foregroundStyle(OrbixColor.textDim)
 
+            // The visual star of the screen: large monospaced-digit code on
+            // an elevated surface2 plate, wide kerning for at-a-glance
+            // legibility from the couch.
             Text(code)
-                .font(.system(size: 120, weight: .bold, design: .monospaced))
-                .tracking(16)
+                .font(.system(size: 120, weight: .bold))
+                .monospacedDigit()
+                .kerning(16)
+                .foregroundStyle(OrbixColor.text)
+                .padding(.horizontal, 56)
+                .padding(.vertical, 28)
+                .background(
+                    RoundedRectangle(cornerRadius: OrbixRadius.md, style: .continuous)
+                        .fill(OrbixColor.surface2)
+                )
                 .accessibilityIdentifier("pairingCode")
 
-            Text("On another device, open Orbix → Account → Devices and enter this code")
+            Text(L10n.t("pairing.instructions"))
                 .font(.title3)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(OrbixColor.textDim)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 1000)
 
@@ -84,18 +96,19 @@ struct PairingView: View {
         VStack(spacing: 32) {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 64))
-                .foregroundStyle(.yellow)
+                .foregroundStyle(OrbixColor.warning)
 
             Text(message)
                 .font(.title3)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(OrbixColor.textDim)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 900)
                 .accessibilityIdentifier("pairingErrorMessage")
 
-            Button("Retry") {
+            Button(L10n.t("common.actions.retry")) {
                 pairingModel.start(client: client, name: "Apple TV")
             }
+            .buttonStyle(OrbixButtonStyle(.primary))
             .accessibilityIdentifier("pairingRetryButton")
         }
     }

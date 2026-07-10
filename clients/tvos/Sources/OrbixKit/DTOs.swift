@@ -44,16 +44,30 @@ public struct Capabilities: Codable, Sendable, Equatable {
 
 // MARK: - Playback negotiation
 
-/// Body of `POST /api/playback/info`.
+/// Body of `POST /api/playback/info`. `quality`/`audioMode` are omitted from
+/// the wire when `nil` (Codable's synthesized `encode(to:)` uses
+/// `encodeIfPresent` for `Optional` stored properties) so the server applies
+/// its own defaults (`"source"` quality, `"standard"` audio mode) on initial
+/// negotiation; a later re-negotiation passes the user's picked values.
 public struct PlaybackInfoRequest: Codable, Sendable, Equatable {
     public var fileId: String
     public var capabilities: Capabilities
     public var audioTrackIndex: Int?
+    public var quality: String?
+    public var audioMode: String?
 
-    public init(fileId: String, capabilities: Capabilities, audioTrackIndex: Int? = nil) {
+    public init(
+        fileId: String,
+        capabilities: Capabilities,
+        audioTrackIndex: Int? = nil,
+        quality: String? = nil,
+        audioMode: String? = nil
+    ) {
         self.fileId = fileId
         self.capabilities = capabilities
         self.audioTrackIndex = audioTrackIndex
+        self.quality = quality
+        self.audioMode = audioMode
     }
 }
 
@@ -89,13 +103,57 @@ public struct SubtitleTrack: Codable, Sendable, Equatable {
     }
 }
 
-/// Response of `POST /api/playback/info`.
+/// One rung of the quality ladder `buildPlaybackQualities` (see
+/// `packages/core/src/playback/quality.ts`) derives from a file's probed
+/// dimensions/bitrate: the source resolution plus any downscale targets below
+/// it (1080p/720p/480p). `width`/`height` are `nil` for the `"source"` rung
+/// when the file's dimensions weren't probed; `bandwidth` is always a number.
+public struct QualityOption: Codable, Sendable, Equatable {
+    public var id: String
+    public var label: String
+    public var width: Int?
+    public var height: Int?
+    public var bandwidth: Int?
+
+    public init(id: String, label: String, width: Int? = nil, height: Int? = nil, bandwidth: Int? = nil) {
+        self.id = id
+        self.label = label
+        self.width = width
+        self.height = height
+        self.bandwidth = bandwidth
+    }
+}
+
+/// One entry of the server's fixed `AUDIO_MODES` const (`apps/api/src/routes/
+/// playback.ts`): `"standard"` (copy) or `"leveled"` (loudness-normalized,
+/// forces at least a remux).
+public struct AudioModeOption: Codable, Sendable, Equatable {
+    public var id: String
+    public var label: String
+
+    public init(id: String, label: String) {
+        self.id = id
+        self.label = label
+    }
+}
+
+/// Response of `POST /api/playback/info`. `quality`/`audioMode`/`qualities`/
+/// `audioModes` are the quality/audio-leveling ladder (Phase 3 Task 1): the
+/// quality/mode the server actually used for this session plus the full set
+/// of choices, driving the player's Quality / Audio-leveling menu (mirrors
+/// the web player's `PlaybackInfo` in `apps/web/src/components/Player.tsx`).
+/// Modeled `Optional` per this file's decode-safety stance even though the
+/// route currently always sends them.
 public struct PlaybackInfo: Codable, Sendable, Equatable {
     public var playSessionId: String
     public var mode: String
     public var streamUrl: String
     public var container: String?
     public var videoCodec: String?
+    public var quality: String?
+    public var audioMode: String?
+    public var qualities: [QualityOption]?
+    public var audioModes: [AudioModeOption]?
     public var audioTracks: [AudioTrack]
     public var subtitleTracks: [SubtitleTrack]
 
@@ -105,6 +163,10 @@ public struct PlaybackInfo: Codable, Sendable, Equatable {
         streamUrl: String,
         container: String? = nil,
         videoCodec: String? = nil,
+        quality: String? = nil,
+        audioMode: String? = nil,
+        qualities: [QualityOption]? = nil,
+        audioModes: [AudioModeOption]? = nil,
         audioTracks: [AudioTrack],
         subtitleTracks: [SubtitleTrack]
     ) {
@@ -113,6 +175,10 @@ public struct PlaybackInfo: Codable, Sendable, Equatable {
         self.streamUrl = streamUrl
         self.container = container
         self.videoCodec = videoCodec
+        self.quality = quality
+        self.audioMode = audioMode
+        self.qualities = qualities
+        self.audioModes = audioModes
         self.audioTracks = audioTracks
         self.subtitleTracks = subtitleTracks
     }
@@ -122,9 +188,12 @@ public struct PlaybackInfo: Codable, Sendable, Equatable {
 
 /// Decodes the common fields of a home-row / catalog item, per the shape
 /// `GET /api/home/rows` sends (see `apps/api/src/routes/discovery.ts`'s
-/// `rows` hydration step). `addedAt` is the one field on the server's card
-/// this type still doesn't model — simply ignored by Codable's synthesized
-/// `init(from:)` — since nothing in the tvOS app needs it yet.
+/// `rows` hydration step). Also doubles as the decode target for the
+/// narrower `{id,title,year,posterPath,matchState}` shape shared by
+/// `GET /libraries/:id/items`, `GET /wishlist`, `similar`, and `search` —
+/// every field beyond `id`/`title` is `Optional`, so a card missing
+/// `backdropPath`/`progress`/`resume`/`addedAt`/`matchState` on the wire
+/// still decodes cleanly with those `nil`.
 public struct MediaCard: Codable, Sendable, Equatable {
     /// A movie/series' resume position, as sent on a home-row card with an
     /// in-progress `PlaybackState` (`cw` in the server's row-hydration
@@ -165,6 +234,15 @@ public struct MediaCard: Codable, Sendable, Equatable {
     public var backdropPath: String?
     public var progress: Progress?
     public var resume: Resume?
+    /// The item's `addedAt` timestamp (ISO 8601 string), present on
+    /// home-row cards (`discovery.ts`'s row hydration) and absent from the
+    /// narrower catalog/wishlist/search shapes — drives the billboard/
+    /// box-art "NEW" badge (Phase 2 Tasks 2/3).
+    public var addedAt: String?
+    /// The item's recognition state (`"matched"`, `"unmatched"`, `"manual"`,
+    /// ...), present on the narrower catalog/wishlist/search/similar card
+    /// shapes and absent from home-row cards.
+    public var matchState: String?
 
     public init(
         id: String,
@@ -173,7 +251,9 @@ public struct MediaCard: Codable, Sendable, Equatable {
         posterPath: String? = nil,
         backdropPath: String? = nil,
         progress: Progress? = nil,
-        resume: Resume? = nil
+        resume: Resume? = nil,
+        addedAt: String? = nil,
+        matchState: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -182,6 +262,8 @@ public struct MediaCard: Codable, Sendable, Equatable {
         self.backdropPath = backdropPath
         self.progress = progress
         self.resume = resume
+        self.addedAt = addedAt
+        self.matchState = matchState
     }
 }
 
@@ -221,6 +303,15 @@ public struct HomeRows: Codable, Sendable, Equatable {
 /// and an explicit `null` both decode to `nil` without throwing, which keeps
 /// this type decode-safe against a server that omits or nulls out more than
 /// it does today.
+///
+/// `tmdbScore`/`imdbRating`/`imdbVotes`/`rtRating`/`metacritic` (Phase 3
+/// Task 1) are the ratings shown on the title hero (mirrors the web player's
+/// `Ratings` in `apps/web/src/lib/types.ts`) — every title carries the keys
+/// with explicit `null`s when unrated/unmatched, never an absent key,
+/// per `catalog.ts`'s response block. `matchState` (`"matched"` /
+/// `"unmatched"` / `"manual"`) is the same recognition-state string
+/// `MediaCard` already models; `ItemDetail` gains its own copy here since
+/// the route always sends it on the detail response too.
 public struct ItemDetail: Codable, Sendable, Equatable {
     public struct FileRef: Codable, Sendable, Equatable {
         public var id: String
@@ -285,6 +376,12 @@ public struct ItemDetail: Codable, Sendable, Equatable {
     public var logoPath: String?
     public var runtimeSec: Int?
     public var rating: String?
+    public var tmdbScore: Double?
+    public var imdbRating: Double?
+    public var imdbVotes: Int?
+    public var rtRating: Int?
+    public var metacritic: Int?
+    public var matchState: String?
     public var genres: [String]?
     public var cast: [CastMember]?
     public var director: Director?
@@ -310,6 +407,12 @@ public struct ItemDetail: Codable, Sendable, Equatable {
         logoPath: String? = nil,
         runtimeSec: Int? = nil,
         rating: String? = nil,
+        tmdbScore: Double? = nil,
+        imdbRating: Double? = nil,
+        imdbVotes: Int? = nil,
+        rtRating: Int? = nil,
+        metacritic: Int? = nil,
+        matchState: String? = nil,
         genres: [String]? = nil,
         cast: [CastMember]? = nil,
         director: Director? = nil,
@@ -326,6 +429,12 @@ public struct ItemDetail: Codable, Sendable, Equatable {
         self.logoPath = logoPath
         self.runtimeSec = runtimeSec
         self.rating = rating
+        self.tmdbScore = tmdbScore
+        self.imdbRating = imdbRating
+        self.imdbVotes = imdbVotes
+        self.rtRating = rtRating
+        self.metacritic = metacritic
+        self.matchState = matchState
         self.genres = genres
         self.cast = cast
         self.director = director
@@ -359,10 +468,9 @@ public struct ProgressState: Codable, Sendable, Equatable {
 /// Response of `GET /api/items/:id/similar` (see
 /// `apps/api/src/routes/similar.ts`): `{items: [...]}`, each entry a subset
 /// of `MediaCard`'s fields (`id,title,year,posterPath,matchState`) —
-/// `matchState` isn't modeled (nothing needs it yet), and
-/// `backdropPath`/`progress`/`resume` are simply absent on the wire, which
-/// decode to `nil` since every one of those is already `Optional` on
-/// `MediaCard`.
+/// `backdropPath`/`progress`/`resume`/`addedAt` are simply absent on the
+/// wire, which decode to `nil` since every one of those is already
+/// `Optional` on `MediaCard`.
 public struct SimilarResponse: Codable, Sendable, Equatable {
     public var items: [MediaCard]
 
@@ -376,10 +484,9 @@ public struct SimilarResponse: Codable, Sendable, Equatable {
 /// Response of `GET /api/search?q=` (see `apps/api/src/routes/discovery.ts`'s
 /// `/search` route): `{items: [...], usedEmbeddings: boolean}`. `items`
 /// shares `SimilarResponse`'s narrow per-card shape (`id,title,year,
-/// posterPath,matchState`; `matchState` unmodeled, same rationale as
-/// `SimilarResponse`'s doc comment — `backdropPath`/`progress`/`resume`
-/// simply aren't on the wire here either, decoding to `nil` since all three
-/// are already `Optional` on `MediaCard`). `usedEmbeddings` reports whether
+/// posterPath,matchState`) — `backdropPath`/`progress`/`resume`/`addedAt`
+/// simply aren't on the wire here either, decoding to `nil` since all four
+/// are already `Optional` on `MediaCard`. `usedEmbeddings` reports whether
 /// the route's vector-similarity ranking actually fired for this query
 /// versus its keyword-degrade fallback (`EmbedderUnavailable`, no
 /// embeddings backfilled yet, a non-finite query vector, ...) — modeled
@@ -405,8 +512,8 @@ public struct SearchResponse: Codable, Sendable, Equatable {
 /// page's data source. `fileId` is the episode's single owned `MediaFile`
 /// id (the route's `files: {select: {id: true}, take: 1}`) or `nil` when
 /// the episode isn't in the library yet — the row still renders (still art,
-/// title, runtime) but there's nothing to play, so `SeasonEpisodeView`
-/// disables that row rather than hiding it. `progress` reuses
+/// title, runtime) but there's nothing to play, so `SeasonEpisodeListView`
+/// disables that card rather than hiding it. `progress` reuses
 /// `ProgressState` rather than a bespoke nested type: the route's
 /// per-episode progress hydration (`progressByEpisode`/`states` in
 /// series.ts) reads the same `PlaybackState` row `GET .../progress` does,
@@ -513,6 +620,12 @@ public struct Profile: Codable, Sendable, Equatable {
     public var kind: String?
     public var maturityCap: Int?
     public var language: String?
+    /// Present (`true`/`false`) on `origin/main`'s `serializeProfile` wire
+    /// (`Boolean(p.pinHash)`); absent (→ `nil`) on this branch's wire, which
+    /// doesn't compute it at all. `isGroup`/`members` are deliberately not
+    /// modeled here — unknown keys are ignored by `Codable`, and group
+    /// profiles are out of scope until the Phase 6 merge.
+    public var hasPin: Bool?
 
     public init(
         id: String,
@@ -520,7 +633,8 @@ public struct Profile: Codable, Sendable, Equatable {
         avatar: String? = nil,
         kind: String? = nil,
         maturityCap: Int? = nil,
-        language: String? = nil
+        language: String? = nil,
+        hasPin: Bool? = nil
     ) {
         self.id = id
         self.name = name
@@ -528,6 +642,55 @@ public struct Profile: Codable, Sendable, Equatable {
         self.kind = kind
         self.maturityCap = maturityCap
         self.language = language
+        self.hasPin = hasPin
+    }
+}
+
+// MARK: - Menu
+
+/// One catalog category in the profile's nav, one per enabled library (see
+/// `resolveProfileMenu` in `packages/core/src/menu/resolve.ts`, consumed by
+/// `apps/api/src/routes/menu.ts`'s `/me/menu` handler). Mirrors
+/// `apps/web/src/lib/types.ts`'s `MenuItem` exactly: no `kind` on the wire.
+/// `libraryId` is this entry's key (always present — it's the library's
+/// `cuid`); `name` is modeled `Optional` per this file's decode-safety
+/// stance even though `resolveProfileMenu` never actually nulls it today
+/// (`Library.name` is `NOT NULL`).
+public struct MenuItem: Codable, Sendable, Equatable {
+    public var libraryId: String
+    public var name: String?
+
+    public init(libraryId: String, name: String? = nil) {
+        self.libraryId = libraryId
+        self.name = name
+    }
+}
+
+/// Response of `GET /api/me/menu`: `{items: [...]}`. When no profile is
+/// active yet, `menu.ts` sends `{items: []}` rather than erroring (see its
+/// `if (!profile) return reply.send({ items: [] })`), which decodes to an
+/// empty array here, not a decode failure.
+public struct MenuResponse: Codable, Sendable, Equatable {
+    public var items: [MenuItem]
+
+    public init(items: [MenuItem]) {
+        self.items = items
+    }
+}
+
+/// Response of `GET /api/me/menu/config` (see `apps/api/src/routes/menu.ts`'s
+/// `/me/menu/config` handler) — every library, unfiltered
+/// (`resolveProfileMenu(libraries, [])`), plus the active profile's ordered
+/// enabled library ids. Powers the menu editor: `libraries` is the full
+/// candidate list to choose from, `enabled` is which of them (and in what
+/// order) the profile currently shows.
+public struct MenuConfig: Codable, Sendable, Equatable {
+    public var libraries: [MenuItem]
+    public var enabled: [String]
+
+    public init(libraries: [MenuItem], enabled: [String]) {
+        self.libraries = libraries
+        self.enabled = enabled
     }
 }
 
@@ -561,5 +724,454 @@ public struct MeProfile: Codable, Sendable, Equatable {
         self.kind = kind
         self.maturityCap = maturityCap
         self.language = language
+    }
+}
+
+// MARK: - Wishlist (Phase 2 Task 1)
+
+/// Response of `GET /api/wishlist/ids` (see
+/// `apps/api/src/routes/wishlist.ts`): membership ids for the active
+/// profile's saved titles, newest-first, filtered to only what the profile
+/// can currently see (fail-safe: never leaks a kids-blocked id). `{ids: []}`
+/// when the wishlist is empty.
+public struct WishlistIdsResponse: Codable, Sendable, Equatable {
+    public var ids: [String]
+
+    public init(ids: [String]) {
+        self.ids = ids
+    }
+}
+
+// MARK: - TV (Phase 4)
+
+/// One now/next programme slot (`apps/api/src/lib/tv-now-next.ts:3-6`'s
+/// `TvNowNextSlot`): `title`/`start`/`stop` are always present when the slot
+/// itself is non-null — the server never sends a partial slot, only a whole
+/// slot or `null` for the whole `now`/`next` key.
+public struct TvProgrammeSlot: Codable, Sendable, Equatable {
+    public var title: String
+    public var start: String
+    public var stop: String
+
+    public init(title: String, start: String, stop: String) {
+        self.title = title
+        self.start = start
+        self.stop = stop
+    }
+}
+
+/// Channel card shared by `/tv/home` rails, `/tv/guide` rows and (without
+/// `now`/`next`) `/tv/favorites` — `toCard()` in `apps/api/src/routes/
+/// tv-catalog.ts:56-68`. `now`/`next` are `Optional` for two different
+/// reasons: on `/tv/home` and `/tv/guide` the server always sends the keys,
+/// present-but-`null` when nothing airs (`tv-catalog.ts:165-171`'s `dec`);
+/// on `/tv/favorites` the keys are **absent entirely** (`tv-catalog.ts:
+/// 447-449`'s plain `toCard()`, no `dec`) — both cases decode to `nil` here
+/// since Codable's synthesized `init(from:)` calls `decodeIfPresent` for
+/// every `Optional` stored property.
+public struct TvChannelCard: Codable, Sendable, Equatable {
+    public var id: String
+    public var number: Int
+    public var name: String
+    public var country: String?
+    public var categories: [String]
+    public var quality: String?
+    /// Same-origin cached-image URL (`"/api/images/channel/x.png"`) or `nil`
+    /// → UI monogram (mirrors the handler's doc comment on `TvChannelCard`).
+    public var logo: String?
+    public var healthy: Bool
+    public var favorite: Bool
+    public var now: TvProgrammeSlot?
+    public var next: TvProgrammeSlot?
+
+    public init(
+        id: String,
+        number: Int,
+        name: String,
+        country: String? = nil,
+        categories: [String],
+        quality: String? = nil,
+        logo: String? = nil,
+        healthy: Bool,
+        favorite: Bool,
+        now: TvProgrammeSlot? = nil,
+        next: TvProgrammeSlot? = nil
+    ) {
+        self.id = id
+        self.number = number
+        self.name = name
+        self.country = country
+        self.categories = categories
+        self.quality = quality
+        self.logo = logo
+        self.healthy = healthy
+        self.favorite = favorite
+        self.now = now
+        self.next = next
+    }
+}
+
+/// One `/tv/home` country rail (`tv-catalog.ts:132-137`).
+public struct TvCountryRail: Codable, Sendable, Equatable {
+    public var code: String
+    public var channels: [TvChannelCard]
+
+    public init(code: String, channels: [TvChannelCard]) {
+        self.code = code
+        self.channels = channels
+    }
+}
+
+/// One `/tv/home` category rail (`tv-catalog.ts:148-153`).
+public struct TvCategoryRail: Codable, Sendable, Equatable {
+    public var id: String
+    public var channels: [TvChannelCard]
+
+    public init(id: String, channels: [TvChannelCard]) {
+        self.id = id
+        self.channels = channels
+    }
+}
+
+/// Response of `GET /api/tv/home` (`tv-catalog.ts:74-173`): recents (latest
+/// tuned, cap 20), favorites (position order), per-country and per-category
+/// rails — every card decorated with `now`/`next` from one grouped
+/// `loadNowNext` query.
+public struct TvHome: Codable, Sendable, Equatable {
+    public var recents: [TvChannelCard]
+    public var favorites: [TvChannelCard]
+    public var countries: [TvCountryRail]
+    public var categories: [TvCategoryRail]
+
+    public init(
+        recents: [TvChannelCard],
+        favorites: [TvChannelCard],
+        countries: [TvCountryRail],
+        categories: [TvCategoryRail]
+    ) {
+        self.recents = recents
+        self.favorites = favorites
+        self.countries = countries
+        self.categories = categories
+    }
+}
+
+/// Response of `GET /api/tv/guide` (`tv-catalog.ts:185-227`): an offset-paged
+/// channel list, each card decorated with `now`/`next`. `offset`/`limit`
+/// mirror the request's resolved paging (the route always echoes both, but
+/// they're modeled `Optional` per this file's decode-safety stance).
+public struct TvGuideResponse: Codable, Sendable, Equatable {
+    public var total: Int
+    public var offset: Int?
+    public var limit: Int?
+    public var channels: [TvChannelCard]
+
+    public init(total: Int, offset: Int? = nil, limit: Int? = nil, channels: [TvChannelCard]) {
+        self.total = total
+        self.offset = offset
+        self.limit = limit
+        self.channels = channels
+    }
+}
+
+/// One programme in a `TvGridChannel`'s time window (`loadProgrammeWindow` in
+/// `apps/api/src/lib/tv-grid.ts:3-9`) — distinct from `TvProgrammeSlot`: the
+/// grid shows every programme intersecting the window, not just now/next.
+public struct TvGridProgramme: Codable, Sendable, Equatable {
+    public var id: String
+    public var title: String
+    public var start: String
+    public var stop: String
+    public var category: String?
+
+    public init(id: String, title: String, start: String, stop: String, category: String? = nil) {
+        self.id = id
+        self.title = title
+        self.start = start
+        self.stop = stop
+        self.category = category
+    }
+}
+
+/// One row of `/tv/grid`'s time×channel guide (`tv-catalog.ts:297-300`): the
+/// same card fields as `TvChannelCard` **minus** `now`/`next` (the grid never
+/// decorates rows with now/next — `loadProgrammeWindow` covers the whole
+/// window instead) **plus** the channel's `programmes` in that window.
+public struct TvGridChannel: Codable, Sendable, Equatable {
+    public var id: String
+    public var number: Int
+    public var name: String
+    public var country: String?
+    public var categories: [String]
+    public var quality: String?
+    public var logo: String?
+    public var healthy: Bool
+    public var favorite: Bool
+    public var programmes: [TvGridProgramme]
+
+    public init(
+        id: String,
+        number: Int,
+        name: String,
+        country: String? = nil,
+        categories: [String],
+        quality: String? = nil,
+        logo: String? = nil,
+        healthy: Bool,
+        favorite: Bool,
+        programmes: [TvGridProgramme]
+    ) {
+        self.id = id
+        self.number = number
+        self.name = name
+        self.country = country
+        self.categories = categories
+        self.quality = quality
+        self.logo = logo
+        self.healthy = healthy
+        self.favorite = favorite
+        self.programmes = programmes
+    }
+}
+
+/// Response of `GET /api/tv/grid` (`tv-catalog.ts:243-302`): an offset-paged
+/// channel list windowed to `[start, start + hours)`, each row carrying its
+/// own `programmes` in that window rather than a now/next pair.
+public struct TvGridResponse: Codable, Sendable, Equatable {
+    public var start: String
+    public var hours: Int
+    public var total: Int
+    public var offset: Int?
+    public var limit: Int?
+    public var channels: [TvGridChannel]
+
+    public init(
+        start: String,
+        hours: Int,
+        total: Int,
+        offset: Int? = nil,
+        limit: Int? = nil,
+        channels: [TvGridChannel]
+    ) {
+        self.start = start
+        self.hours = hours
+        self.total = total
+        self.offset = offset
+        self.limit = limit
+        self.channels = channels
+    }
+}
+
+/// now/next pair returned by `GET /api/tv/channels/:id/play`
+/// (`tv-play.ts:127`) — always present as a key, either slot may be `null`.
+public struct TvNowNext: Codable, Sendable, Equatable {
+    public var now: TvProgrammeSlot?
+    public var next: TvProgrammeSlot?
+
+    public init(now: TvProgrammeSlot? = nil, next: TvProgrammeSlot? = nil) {
+        self.now = now
+        self.next = next
+    }
+}
+
+/// One ordered playable source from `GET /api/tv/channels/:id/play`
+/// (`tv-play.ts:147-152`). `src` is a same-origin proxy URL
+/// (`/api/tv/proxy/<streamId>/index.m3u8`); for a bearer-authenticated
+/// request it carries a `?token=` suffix so the native player's subsequent
+/// segment fetches (no headers) don't 401 (`tv-play.ts:133-135,149`) — a
+/// cookie-authenticated request's `src` has no `?token=` at all
+/// (`tv-play.test.ts:405-423`).
+public struct TvPlaySource: Codable, Sendable, Equatable {
+    public var streamId: String
+    public var src: String
+    public var quality: String?
+    public var label: String?
+
+    public init(streamId: String, src: String, quality: String? = nil, label: String? = nil) {
+        self.streamId = streamId
+        self.src = src
+        self.quality = quality
+        self.label = label
+    }
+}
+
+/// The channel summary nested in `TvPlayResponse` (`tv-play.ts:138-145`) —
+/// narrower than `TvChannelCard`/`TvChannelDetail` (no `categories`,
+/// `healthy`, `favorite`, ...): only what the player chrome needs.
+public struct TvPlayChannel: Codable, Sendable, Equatable {
+    public var id: String
+    public var number: Int
+    public var name: String
+    public var logo: String?
+    public var country: String?
+    public var quality: String?
+
+    public init(
+        id: String,
+        number: Int,
+        name: String,
+        logo: String? = nil,
+        country: String? = nil,
+        quality: String? = nil
+    ) {
+        self.id = id
+        self.number = number
+        self.name = name
+        self.logo = logo
+        self.country = country
+        self.quality = quality
+    }
+}
+
+/// Response of `GET /api/tv/channels/:id/play` (`tv-play.ts:137-153`) — the
+/// tune negotiation: channel summary, now/next, and up to 3 ordered proxied
+/// sources (`MAX_SOURCES` in `tv-play.ts:19`).
+public struct TvPlayResponse: Codable, Sendable, Equatable {
+    public var channel: TvPlayChannel
+    public var nowNext: TvNowNext
+    public var sources: [TvPlaySource]
+
+    public init(channel: TvPlayChannel, nowNext: TvNowNext, sources: [TvPlaySource]) {
+        self.channel = channel
+        self.nowNext = nowNext
+        self.sources = sources
+    }
+}
+
+/// One of a channel's upstream sources (`GET /api/tv/channels/:id`,
+/// `tv-catalog.ts:355-362`), ordered by `priority` ascending. **`protocol`
+/// is a Swift keyword**: the stored property is declared backticked
+/// (`` `protocol` ``) — Codable's synthesized `CodingKeys` still map it to
+/// the JSON key `"protocol"` correctly, so no custom `CodingKeys` is needed.
+/// Stream URLs themselves are deliberately not exposed on this DTO —
+/// playback always goes through the phase-2 proxy (see the handler's doc
+/// comment on why `streams.map` omits `url`).
+public struct TvStreamRef: Codable, Sendable, Equatable {
+    public var id: String
+    public var quality: String?
+    public var label: String?
+    public var `protocol`: String
+    public var status: String
+    public var priority: Int
+
+    public init(
+        id: String,
+        quality: String? = nil,
+        label: String? = nil,
+        protocol: String,
+        status: String,
+        priority: Int
+    ) {
+        self.id = id
+        self.quality = quality
+        self.label = label
+        self.protocol = `protocol`
+        self.status = status
+        self.priority = priority
+    }
+}
+
+/// Response of `GET /api/tv/channels/:id` (`tv-catalog.ts:339-363`) — full
+/// channel detail incl. its ordered `streams`. **404** `{error:"not_found"}`
+/// when the channel is missing or hidden (surfaced as
+/// `OrbixError.http(404, code: "not_found")` by `perform`, same as any
+/// other 404).
+public struct TvChannelDetail: Codable, Sendable, Equatable {
+    public var id: String
+    public var number: Int
+    public var name: String
+    public var rawName: String?
+    public var country: String?
+    public var languages: [String]
+    public var categories: [String]
+    public var website: String?
+    public var epgId: String?
+    public var quality: String?
+    public var logo: String?
+    public var healthy: Bool
+    public var favorite: Bool
+    public var streams: [TvStreamRef]
+
+    public init(
+        id: String,
+        number: Int,
+        name: String,
+        rawName: String? = nil,
+        country: String? = nil,
+        languages: [String],
+        categories: [String],
+        website: String? = nil,
+        epgId: String? = nil,
+        quality: String? = nil,
+        logo: String? = nil,
+        healthy: Bool,
+        favorite: Bool,
+        streams: [TvStreamRef]
+    ) {
+        self.id = id
+        self.number = number
+        self.name = name
+        self.rawName = rawName
+        self.country = country
+        self.languages = languages
+        self.categories = categories
+        self.website = website
+        self.epgId = epgId
+        self.quality = quality
+        self.logo = logo
+        self.healthy = healthy
+        self.favorite = favorite
+        self.streams = streams
+    }
+}
+
+/// One entry of a channel's day schedule (`GET /api/tv/channels/:id/
+/// programmes?day=`, `tv-catalog.ts:389-396`). **400** `{error:"invalid_day"}`
+/// on a malformed `day`; **404** for a hidden/missing channel.
+public struct TvProgramme: Codable, Sendable, Equatable {
+    public var id: String
+    public var start: String
+    public var stop: String
+    public var title: String
+    public var description: String?
+    public var category: String?
+
+    public init(
+        id: String,
+        start: String,
+        stop: String,
+        title: String,
+        description: String? = nil,
+        category: String? = nil
+    ) {
+        self.id = id
+        self.start = start
+        self.stop = stop
+        self.title = title
+        self.description = description
+        self.category = category
+    }
+}
+
+/// Response of `GET /api/tv/channels/:id/programmes`: `{programmes: [...]}`
+/// (`tv-catalog.ts:394-396`).
+public struct TvProgrammesResponse: Codable, Sendable, Equatable {
+    public var programmes: [TvProgramme]
+
+    public init(programmes: [TvProgramme]) {
+        self.programmes = programmes
+    }
+}
+
+/// Response of `GET /api/tv/favorites` (`tv-catalog.ts:438-450`):
+/// `{favorites: [...]}`, each card a **plain** `toCard()` with no `now`/
+/// `next` keys at all (no `dec` decoration on this route) — decodes to `nil`
+/// on `TvChannelCard.now`/`.next` the same way an explicit `null` would.
+/// `{favorites: []}` when no profile is active.
+public struct TvFavoritesResponse: Codable, Sendable, Equatable {
+    public var favorites: [TvChannelCard]
+
+    public init(favorites: [TvChannelCard]) {
+        self.favorites = favorites
     }
 }
