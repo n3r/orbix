@@ -33,6 +33,12 @@ struct TitleHeroView: View {
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
+            // Full-bleed art + scrim layer, same composition as
+            // `HomeBillboardView`: `.ignoresSafeArea([.top, .horizontal])`
+            // (outermost) bleeds the backdrop and its scrims under the
+            // transparent top bar and both horizontal safe-area insets, while
+            // the `copyBlock` sibling stays inside the TV title-safe area so
+            // the logo/meta/overview/buttons never touch the physical edge.
             HeroBackdrop(url: imageURL(path: detail.backdropPath), imageLoader: imageLoader)
                 .frame(height: Self.height)
                 .frame(maxWidth: .infinity)
@@ -41,6 +47,7 @@ struct TitleHeroView: View {
                 .overlay { LeftVignette() }
                 .overlay(alignment: .top) { TopBarScrim().frame(height: 220) }
                 .overlay(alignment: .bottom) { BottomScrim().frame(height: 380) }
+                .ignoresSafeArea(edges: [.top, .horizontal])
 
             copyBlock
                 .padding(.horizontal, 64)

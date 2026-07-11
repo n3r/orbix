@@ -36,6 +36,14 @@ struct HomeBillboardView: View {
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
+            // The art + its three legibility scrims are the full-bleed
+            // background layer: `.ignoresSafeArea([.top, .horizontal])`
+            // (outermost, so the clip/overlays inside see the expanded
+            // proposal) pushes them under the transparent top bar *and* both
+            // horizontal safe-area insets — large on real TVs, which is what
+            // left/right-banded the art before. The `copyBlock` sibling below
+            // is intentionally *not* bled: it keeps the TV title-safe inset so
+            // no text ever sits at the physical screen edge.
             BillboardBackdrop(url: backdropURL, imageLoader: imageLoader)
                 .frame(height: Self.height)
                 .frame(maxWidth: .infinity)
@@ -45,6 +53,7 @@ struct HomeBillboardView: View {
                 .overlay { LeftVignette() }
                 .overlay(alignment: .top) { TopBarScrim().frame(height: 220) }
                 .overlay(alignment: .bottom) { BottomScrim().frame(height: 380) }
+                .ignoresSafeArea(edges: [.top, .horizontal])
 
             copyBlock
                 .padding(.horizontal, 64)

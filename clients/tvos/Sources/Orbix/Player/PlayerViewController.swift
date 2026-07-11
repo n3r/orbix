@@ -49,20 +49,38 @@ struct PlayerViewController: UIViewControllerRepresentable {
     /// displays a real title instead of the raw stream URL.
     var videoTitle: String?
 
+    /// Invoked when the viewer presses **Menu**, so `PlayerScreen` can collapse
+    /// its `.fullScreenCover` (which then runs `dismantleUIViewController` →
+    /// `Coordinator.teardown`, the load-bearing final progress PUT + `/stop`).
+    ///
+    /// This is deliberately a UIKit-level handler (a `.menu`-only press gesture
+    /// recognizer installed on the controller in `MenuAwarePlayerViewController`)
+    /// rather than a SwiftUI `.onExitCommand`: a SwiftUI exit-command modifier
+    /// anywhere in `AVPlayerViewController`'s ancestor chain intercepts remote
+    /// input for the whole subtree and starves AVKit's own transport of the
+    /// Siri-Remote touch-surface pan events, so native pause-and-pan scrubbing
+    /// / swipe-to-skip silently stop working (only the dpad left/right skip
+    /// still fires). Same class of bug the ShellView doc comment records for
+    /// `.onExitCommand` killing `NavigationStack` pop. Keeping Menu handling in
+    /// UIKit leaves AVKit's gesture pipeline untouched.
+    var onMenuPress: () -> Void = {}
+
     func makeCoordinator() -> Coordinator {
         Coordinator(playbackController: playbackController)
     }
 
-    func makeUIViewController(context: Context) -> AVPlayerViewController {
-        let controller = AVPlayerViewController()
+    func makeUIViewController(context: Context) -> MenuAwarePlayerViewController {
+        let controller = MenuAwarePlayerViewController()
         controller.player = player
+        controller.onMenuPress = onMenuPress
         applyExternalMetadata(to: controller)
         context.coordinator.attach(to: player, resumeSeconds: resumeSeconds)
         updateTransportMenu(on: controller, coordinator: context.coordinator)
         return controller
     }
 
-    func updateUIViewController(_ uiViewController: AVPlayerViewController, context: Context) {
+    func updateUIViewController(_ uiViewController: MenuAwarePlayerViewController, context: Context) {
+        uiViewController.onMenuPress = onMenuPress
         if uiViewController.player !== player {
             uiViewController.player = player
             context.coordinator.attach(to: player, resumeSeconds: resumeSeconds)
@@ -86,7 +104,7 @@ struct PlayerViewController: UIViewControllerRepresentable {
     /// guaranteed to fire, so it's where every observer registered in
     /// `Coordinator.attach` gets removed. Static (per the protocol
     /// requirement) — `coordinator` is everything it needs.
-    static func dismantleUIViewController(_ uiViewController: AVPlayerViewController, coordinator: Coordinator) {
+    static func dismantleUIViewController(_ uiViewController: MenuAwarePlayerViewController, coordinator: Coordinator) {
         coordinator.teardown()
     }
 
@@ -338,6 +356,37 @@ struct PlayerViewController: UIViewControllerRepresentable {
     }
 }
 
+/// `AVPlayerViewController` subclass that reports a **Menu** press through a
+/// closure (`onMenuPress`) via a `.menu`-only `UITapGestureRecognizer` on its
+/// own view, instead of the wrapper relying on a SwiftUI `.onExitCommand`.
+///
+/// Why UIKit and not `.onExitCommand`: `AVPlayerViewController` reads the Siri
+/// Remote touch surface directly for its native transport (pause-and-pan
+/// scrubbing, swipe-to-skip). A SwiftUI `.onExitCommand` anywhere in the
+/// ancestor chain becomes a command-handling responder for the whole subtree
+/// and starves that transport of the pan gestures — the user-reported "can't
+/// scrub, only left/right skip works" bug — the same interception the
+/// `ShellView` doc comment records for `.onExitCommand` disabling
+/// `NavigationStack` pop. A press gesture recognizer scoped to the Menu button
+/// only leaves every other remote input (including the touch-surface pans) to
+/// AVKit. A `.menu` gesture on a non-modally-presented `AVPlayerViewController`
+/// doesn't collide with any built-in dismissal (there's no presenting
+/// controller to pop), so it's a safe place to hang our cover-collapse.
+final class MenuAwarePlayerViewController: AVPlayerViewController {
+    var onMenuPress: () -> Void = {}
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        let menuTap = UITapGestureRecognizer(target: self, action: #selector(handleMenuPress))
+        menuTap.allowedPressTypes = [NSNumber(value: UIPress.PressType.menu.rawValue)]
+        view.addGestureRecognizer(menuTap)
+    }
+
+    @objc private func handleMenuPress() {
+        onMenuPress()
+    }
+}
+
 /// Presented full-screen from `TitlePage`'s Play button (`.fullScreenCover`):
 /// negotiates playback via `PlaybackController`, then hosts the production
 /// `PlayerViewController` once ready. Owns the `AVPlayer` instance for the
@@ -392,8 +441,18 @@ struct PlayerScreen: View {
                     .font(.title3)
                     .tint(.white)
                     .foregroundStyle(.white)
+                    // `.focusable` is load-bearing: `.onExitCommand` fires only
+                    // when its subtree can hold focus. Without it, Menu here
+                    // would background the APP mid-negotiation — stranding the
+                    // cover and leaking the just-minted play session/ffmpeg.
+                    .focusable(true)
+                    // Menu during negotiation still collapses the cover. Scoped
+                    // to this branch (not an ancestor of the ready-state player)
+                    // so AVKit's transport is never starved of remote input.
+                    .onExitCommand { dismiss() }
             case .error(let message):
                 errorView(message: message)
+                    .onExitCommand { dismiss() }
             case .ready(let streamURL, let resumeSeconds):
                 Group {
                     if let player {
@@ -405,21 +464,28 @@ struct PlayerScreen: View {
                             audioModes: controller.audioModes,
                             selectedQuality: controller.quality,
                             selectedAudioMode: controller.audioMode,
-                            videoTitle: title
+                            videoTitle: title,
+                            // Menu collapses the cover (→ `dismantleUIViewController`
+                            // → `Coordinator.teardown`) through a UIKit `.menu`
+                            // gesture *inside* the player VC, not a SwiftUI
+                            // `.onExitCommand` — the latter, anywhere above
+                            // `AVPlayerViewController`, starves its native
+                            // touch-surface scrubbing of pan events (see
+                            // `MenuAwarePlayerViewController`). So the player
+                            // branch carries no SwiftUI exit-command modifier.
+                            onMenuPress: { dismiss() }
                         )
                         .ignoresSafeArea()
-                        // Belt-and-suspenders alongside the identical modifier
-                        // on the outer `ZStack` below: once playback is ready,
-                        // `AVPlayerViewController`'s own view is what actually
-                        // holds focus, so if its responder chain ever consumes
-                        // the Menu press before it reaches an ancestor's
-                        // `onExitCommand`, this closer copy still catches it.
-                        // `dismiss()` is idempotent, so having both is harmless.
-                        .onExitCommand { dismiss() }
                     } else {
                         // One-frame gap before the `.task(id:)` below constructs
-                        // the player.
+                        // the player. This branch vanishes the instant the
+                        // player exists, so its Menu catcher never sits above
+                        // `AVPlayerViewController` in the ready state.
+                        // `.focusable` for the same reason as `.loading`'s:
+                        // a non-focusable subtree's `.onExitCommand` never fires.
                         Color.clear
+                            .focusable(true)
+                            .onExitCommand { dismiss() }
                     }
                 }
                 // Rebuild the `AVPlayer` whenever the negotiated stream URL
@@ -436,16 +502,20 @@ struct PlayerScreen: View {
             }
         }
         .task { await controller.start() }
-        // tvOS's `.fullScreenCover` does not auto-dismiss on a Menu press,
-        // and the embedded (non-modally-presented) `AVPlayerViewController`
-        // has no presenting view controller of its own to dismiss — so
-        // without this, Menu suspends the app with the cover still up:
-        // `PlayerViewController.dismantleUIViewController` never runs, and
-        // the final progress PUT + `/stop` in `Coordinator.teardown()` never
-        // fire (silent data loss, plus a stuck player on return to the app).
-        // Calling `dismiss()` here collapses the cover, which *does*
-        // guarantee `dismantleUIViewController` → `teardown()` runs.
-        .onExitCommand { dismiss() }
+        // tvOS's `.fullScreenCover` does not auto-dismiss on a Menu press, and
+        // the embedded (non-modally-presented) `AVPlayerViewController` has no
+        // presenting view controller of its own to dismiss — so every state
+        // must catch Menu itself and call `dismiss()` to collapse the cover,
+        // which guarantees `dismantleUIViewController` → `Coordinator.teardown()`
+        // runs (final progress PUT + `/stop`; without it, silent data loss and
+        // a stuck player on return to the app). Crucially, that catcher is
+        // attached **per state branch above** — the loading `ProgressView`, the
+        // error view, and the pre-player `Color.clear` each own a SwiftUI
+        // `.onExitCommand`, while the ready state routes Menu through the
+        // player VC's own UIKit `.menu` gesture (`MenuAwarePlayerViewController`).
+        // A single `.onExitCommand` out here (an ancestor of the player) would
+        // instead disable AVKit's native touch-surface scrubbing for the whole
+        // subtree — the bug this replaced.
         .accessibilityIdentifier("playerScreen")
     }
 
