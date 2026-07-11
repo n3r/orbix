@@ -45,6 +45,14 @@ final class DTOTests: XCTestCase {
         XCTAssertEqual(Capabilities.appleTV.audioCodecs, ["aac", "ac3", "eac3", "flac"])
     }
 
+    func testAppleMobileCapabilityProfile() {
+        XCTAssertEqual(Capabilities.appleMobile.subtitleDelivery, "hls")
+        XCTAssertTrue(Capabilities.appleMobile.videoCodecs.contains("hevc"))
+        XCTAssertEqual(Capabilities.appleMobile.maxAudioChannels, 2)
+        XCTAssertEqual(Capabilities.appleMobile.containers, ["mp4"])
+        XCTAssertEqual(Capabilities.appleMobile.audioCodecs, ["aac", "ac3", "eac3", "flac"])
+    }
+
     func testEncodeCapabilitiesRoundTrip() throws {
         // PlaybackInfoRequest.capabilities is what actually goes over the
         // wire to POST /api/playback/info, so the encode direction matters
@@ -131,6 +139,29 @@ final class DTOTests: XCTestCase {
         XCTAssertEqual(resume.seasonNumber, 1)
         XCTAssertEqual(resume.episodeNumber, 3)
         XCTAssertNil(resume.episodeTitle)
+    }
+
+    func testDecodeMenuResponse() throws {
+        let json = """
+        {"items":[{"libraryId":"lib-movies","name":"Movies"},{"libraryId":"lib-series","name":"Series"}]}
+        """.data(using: .utf8)!
+        let response = try JSONDecoder().decode(MenuResponse.self, from: json)
+        XCTAssertEqual(response.items, [
+            MenuLibrary(libraryId: "lib-movies", name: "Movies"),
+            MenuLibrary(libraryId: "lib-series", name: "Series"),
+        ])
+    }
+
+    func testDecodeLibraryItemsBareArray() throws {
+        let json = """
+        [{"id":"m4","title":"Library Title","year":2026,"posterPath":"/p4.jpg","matchState":"matched"}]
+        """.data(using: .utf8)!
+        let items = try JSONDecoder().decode([MediaCard].self, from: json)
+        let card = try XCTUnwrap(items.first)
+        XCTAssertEqual(card.id, "m4")
+        XCTAssertEqual(card.title, "Library Title")
+        XCTAssertEqual(card.year, 2026)
+        XCTAssertEqual(card.posterPath, "/p4.jpg")
     }
 
     func testDecodeProfile() throws {
@@ -320,6 +351,14 @@ final class DTOTests: XCTestCase {
         XCTAssertNil(card.backdropPath)
         XCTAssertNil(card.progress)
         XCTAssertNil(card.resume)
+    }
+
+    func testDecodeWishlistIdsResponse() throws {
+        let json = """
+        {"ids":["movie-orbit","series-night-signal"]}
+        """.data(using: .utf8)!
+        let response = try JSONDecoder().decode(WishlistIdsResponse.self, from: json)
+        XCTAssertEqual(response.ids, ["movie-orbit", "series-night-signal"])
     }
 
     // MARK: - Search (M3 Task 5)

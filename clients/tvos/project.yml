@@ -2,6 +2,7 @@ name: Orbix
 options:
   bundleIdPrefix: dev.orbix
   deploymentTarget:
+    iOS: "17.0"
     tvOS: "17.0"
   createIntermediateGroups: true
 settings:
@@ -39,6 +40,22 @@ targets:
         # Resources/Assets.xcassets/App Icon & Top Shelf Image.brandassets.
         ASSETCATALOG_COMPILER_APPICON_NAME: "App Icon & Top Shelf Image"
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: ""
+  OrbixIOS:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources/OrbixIOS
+      - path: Resources-iOS
+    dependencies:
+      - target: OrbixKitIOS
+    settings:
+      base:
+        INFOPLIST_FILE: Resources-iOS/Info.plist
+        IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+        PRODUCT_BUNDLE_IDENTIFIER: dev.orbix.ios
+        TARGETED_DEVICE_FAMILY: "1" # iPhone
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: ""
   OrbixKit:
     type: framework
     platform: tvOS
@@ -73,6 +90,19 @@ targets:
         LD_RUNPATH_SEARCH_PATHS:
           - "$(inherited)"
           - "@executable_path/../../Frameworks"
+  OrbixKitIOS:
+    type: framework
+    platform: iOS
+    sources:
+      - path: Sources/OrbixKit
+    settings:
+      base:
+        IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+        PRODUCT_BUNDLE_IDENTIFIER: dev.orbix.ios.kit
+        PRODUCT_MODULE_NAME: OrbixKit
+        PRODUCT_NAME: OrbixKit
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: "YES"
   OrbixKitTests:
     type: bundle.unit-test
     platform: tvOS
@@ -83,7 +113,30 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.orbix.tvos.kittests
+  OrbixIOSUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: Tests/OrbixIOSUITests
+    dependencies:
+      - target: OrbixIOS
+    settings:
+      base:
+        IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+        PRODUCT_BUNDLE_IDENTIFIER: dev.orbix.ios.uitests
+        TARGETED_DEVICE_FAMILY: "1"
 schemes:
+  OrbixIOS:
+    build:
+      targets:
+        OrbixIOS: all
+        OrbixIOSUITests: [test]
+    test:
+      targets:
+        - OrbixIOSUITests
+      environmentVariables:
+        ORBIX_UI_TEST_BASE_URL: "$(ORBIX_UI_TEST_BASE_URL)"
+        ORBIX_UI_TEST_TOKEN: "$(ORBIX_UI_TEST_TOKEN)"
   OrbixKit:
     build:
       targets:

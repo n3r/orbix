@@ -40,6 +40,16 @@ public struct Capabilities: Codable, Sendable, Equatable {
         maxAudioChannels: 6,
         subtitleDelivery: "hls"
     )
+
+    /// iPhone/iPad AVPlayer capability profile. Keep subtitles in HLS
+    /// renditions so the system player owns track selection, matching tvOS.
+    public static let appleMobile = Capabilities(
+        containers: ["mp4"],
+        videoCodecs: ["h264", "hevc"],
+        audioCodecs: ["aac", "ac3", "eac3", "flac"],
+        maxAudioChannels: 2,
+        subtitleDelivery: "hls"
+    )
 }
 
 // MARK: - Playback negotiation
@@ -206,6 +216,35 @@ public struct HomeRows: Codable, Sendable, Equatable {
     }
 }
 
+// MARK: - Libraries
+
+/// One active-profile menu library from `GET /api/me/menu`.
+public struct MenuLibrary: Codable, Sendable, Equatable {
+    public var libraryId: String
+    public var name: String
+
+    public init(libraryId: String, name: String) {
+        self.libraryId = libraryId
+        self.name = name
+    }
+}
+
+/// Response of `GET /api/me/menu`.
+public struct MenuResponse: Codable, Sendable, Equatable {
+    public var items: [MenuLibrary]
+
+    public init(items: [MenuLibrary]) {
+        self.items = items
+    }
+}
+
+/// Server-supported sort modes for `GET /api/libraries/:id/items`.
+public enum LibrarySort: String, Codable, Sendable, CaseIterable, Equatable {
+    case title
+    case added
+    case year
+}
+
 // MARK: - Item detail
 
 /// Decode target for `GET /api/items/:id` (see `apps/api/src/routes/catalog.ts`),
@@ -368,6 +407,17 @@ public struct SimilarResponse: Codable, Sendable, Equatable {
 
     public init(items: [MediaCard]) {
         self.items = items
+    }
+}
+
+// MARK: - Wishlist
+
+/// Response of `GET /api/wishlist/ids`.
+public struct WishlistIdsResponse: Codable, Sendable, Equatable {
+    public var ids: [String]
+
+    public init(ids: [String]) {
+        self.ids = ids
     }
 }
 

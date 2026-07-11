@@ -11,6 +11,7 @@ public actor OrbixClient {
     private let session: URLSession
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
+    private var unauthorizedHandler: (@MainActor @Sendable () -> Void)?
 
     public init(baseURL: URL, token: String? = nil, session: URLSession = .shared) {
         self.baseURL = baseURL
@@ -22,6 +23,10 @@ public actor OrbixClient {
 
     public func setToken(_ token: String?) {
         self.token = token
+    }
+
+    public func setUnauthorizedHandler(_ handler: (@MainActor @Sendable () -> Void)?) {
+        unauthorizedHandler = handler
     }
 
     // MARK: - Health
@@ -40,12 +45,12 @@ public actor OrbixClient {
 
     /// `POST /api/pair/initiate` — unauthenticated; the TV displays `code`
     /// while polling `pollToken` for approval.
-    public func pairInitiate(name: String) async throws -> PairInitiateResponse {
+    public func pairInitiate(name: String, platform: String = "tvos") async throws -> PairInitiateResponse {
         struct Body: Encodable {
             let name: String
             let platform: String
         }
-        let data = try encodeBody(Body(name: name, platform: "tvos"))
+        let data = try encodeBody(Body(name: name, platform: platform))
         return try await send(method: "POST", url: baseURL.appending(path: "api/pair/initiate"), body: data)
     }
 
@@ -72,14 +77,25 @@ public actor OrbixClient {
         try await send(method: "GET", url: baseURL.appending(path: "api/profiles"))
     }
 
-    /// `POST /api/profiles/:id/select`. The response body is `{ profileId }`;
-    /// callers only need success/failure, hence `Void` rather than a decoded type.
-    public func selectProfile(id: String) async throws {
-        _ = try await perform(
-            method: "POST",
-            url: baseURL.appending(path: "api/profiles/\(id)/select"),
-            body: Data("{}".utf8)
-        )
+    /// `POST /api/profiles/:id/select`. Locked profiles require a four-digit
+    /// PIN; the server answers 403 for missing/invalid PINs.
+    public func selectProfile(id: String, pin: String? = nil) async throws {
+        struct Body: Encodable {
+            let pin: String?
+        }
+        let data = try encodeBody(Body(pin: pin))
+        do {
+            _ = try await perform(
+                method: "POST",
+                url: baseURL.appending(path: "api/profiles/\(id)/select"),
+                body: data
+            )
+        } catch {
+            if let orbixError = error as? OrbixError, case .http(403) = orbixError {
+                throw ProfileSelectionError.pinRequired
+            }
+            throw error
+        }
     }
 
     // MARK: - Discovery
@@ -87,6 +103,31 @@ public actor OrbixClient {
     /// `GET /api/home/rows`.
     public func homeRows() async throws -> HomeRows {
         try await send(method: "GET", url: baseURL.appending(path: "api/home/rows"))
+    }
+
+    /// `GET /api/me/menu` — active profile's enabled libraries/categories.
+    public func menu() async throws -> [MenuLibrary] {
+        let response: MenuResponse = try await send(method: "GET", url: baseURL.appending(path: "api/me/menu"))
+        return response.items
+    }
+
+    /// `GET /api/libraries/:id/items?sort=&q=` — a profile-filtered library
+    /// grid. The server accepts exactly `title`, `added`, and `year`.
+    public func libraryItems(
+        libraryId: String,
+        sort: LibrarySort = .title,
+        query: String? = nil
+    ) async throws -> [MediaCard] {
+        var queryItems = [URLQueryItem(name: "sort", value: sort.rawValue)]
+        if let query = query?.trimmingCharacters(in: .whitespacesAndNewlines), !query.isEmpty {
+            queryItems.append(URLQueryItem(name: "q", value: query))
+        }
+        return try await send(
+            method: "GET",
+            url: baseURL
+                .appending(path: "api/libraries/\(libraryId)/items")
+                .appending(queryItems: queryItems)
+        )
     }
 
     /// `GET /api/search?q=<query>` (see `apps/api/src/routes/discovery.ts`'s
@@ -128,6 +169,33 @@ public actor OrbixClient {
             url: baseURL.appending(path: "api/items/\(id)/similar")
         )
         return response.items
+    }
+
+    // MARK: - Wishlist
+
+    /// `GET /api/wishlist` — active profile's saved titles, already
+    /// kids-filtered server-side.
+    public func wishlist() async throws -> [MediaCard] {
+        try await send(method: "GET", url: baseURL.appending(path: "api/wishlist"))
+    }
+
+    /// `GET /api/wishlist/ids` — visible saved item ids for toggle state.
+    public func wishlistIds() async throws -> [String] {
+        let response: WishlistIdsResponse = try await send(
+            method: "GET",
+            url: baseURL.appending(path: "api/wishlist/ids")
+        )
+        return response.ids
+    }
+
+    /// `POST /api/wishlist/:itemId` — idempotent add.
+    public func addToWishlist(itemId: String) async throws {
+        _ = try await perform(method: "POST", url: baseURL.appending(path: "api/wishlist/\(itemId)"))
+    }
+
+    /// `DELETE /api/wishlist/:itemId` — idempotent remove.
+    public func removeFromWishlist(itemId: String) async throws {
+        _ = try await perform(method: "DELETE", url: baseURL.appending(path: "api/wishlist/\(itemId)"))
     }
 
     /// `GET /api/items/:id` → the ids of its playable files, "best copy
@@ -271,6 +339,9 @@ public actor OrbixClient {
             throw OrbixError.transport(URLError(.badServerResponse))
         }
         guard (200..<300).contains(http.statusCode) else {
+            if http.statusCode == 401, let unauthorizedHandler {
+                await unauthorizedHandler()
+            }
             throw OrbixError.http(http.statusCode)
         }
         return (data, http)
@@ -288,4 +359,8 @@ public enum OrbixError: Error, @unchecked Sendable {
     case http(Int)
     case decoding(Error)
     case transport(Error)
+}
+
+public enum ProfileSelectionError: Error, Sendable, Equatable {
+    case pinRequired
 }

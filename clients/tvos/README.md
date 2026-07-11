@@ -1,16 +1,18 @@
-# Orbix tvOS client
+# Orbix Apple clients
 
-Native Apple TV (tvOS) app for Orbix, generated with [XcodeGen](https://github.com/yonaskolb/XcodeGen): one `Orbix` app target (SwiftUI, `NavigationStack` + the tvOS focus engine) plus an `OrbixKit` framework target holding the API client, DTOs, auth/token storage, and image loading — all exercised by `OrbixKitTests`.
+Native Apple clients for Orbix, generated with [XcodeGen](https://github.com/yonaskolb/XcodeGen): a mature `Orbix` tvOS app target, a new `OrbixIOS` iPhone app target, and shared `OrbixKit` framework targets holding the API client, DTOs, auth/token storage, server discovery, and image loading — all exercised by `OrbixKitTests`.
 
-Pair a TV with an Orbix server, pick a profile, and get a genuinely usable living-room app: Netflix-style home rails, a title/detail page (or a series' season/episode list), a production AVKit player with resume/progress/native track selection/next-episode, and search — all driven by the existing Orbix server contract (no server changes). See **Features** below for the full M3 feature set.
+Pair an Apple TV with an Orbix server, pick a profile, and get a genuinely usable living-room app: Netflix-style home rails, a title/detail page (or a series' season/episode list), a production AVKit player with resume/progress/native track selection/next-episode, and search — all driven by the existing Orbix server contract (no server changes). See **Features** below for the full M3 feature set.
 
-This client lives outside the pnpm workspace — it's a separate Swift/Xcode toolchain, not part of the `apps/*` / `packages/*` TypeScript monorepo.
+The iPhone app starts from the same contract: LAN server discovery/manual URL entry, device pairing, profile selection, Netflix-style home rails, search, title detail, season/episode browsing, and AVKit playback with progress reporting.
+
+These clients live outside the pnpm workspace — this is a separate Swift/Xcode toolchain, not part of the `apps/*` / `packages/*` TypeScript monorepo.
 
 ## Prerequisites
 
-- Xcode 26 (tvOS 26 SDK, Swift 6 toolchain)
+- Xcode 26 (iOS/tvOS SDKs, Swift 6 toolchain)
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen): `brew install xcodegen`
-- A tvOS Simulator runtime installed (Xcode → Settings → Platforms), e.g. tvOS 26.x
+- iOS and tvOS Simulator runtimes installed (Xcode → Settings → Platforms)
 
 ## Generate the Xcode project
 
@@ -24,7 +26,16 @@ open Orbix.xcodeproj
 
 ## Build
 
-From the command line, against the tvOS Simulator:
+From the command line, against the iOS Simulator:
+
+```bash
+cd clients/tvos
+xcodebuild -project Orbix.xcodeproj -scheme OrbixIOS \
+  -destination 'generic/platform=iOS Simulator' \
+  build CODE_SIGNING_ALLOWED=NO
+```
+
+Against the tvOS Simulator:
 
 ```bash
 cd clients/tvos
@@ -39,15 +50,46 @@ If that simulator name isn't available on your machine, list what is and substit
 xcrun simctl list devices available | grep "Apple TV"
 ```
 
-Or just build/run from Xcode: open `Orbix.xcodeproj`, pick an "Apple TV" simulator destination, and hit Run.
+Or just build/run from Xcode: open `Orbix.xcodeproj`, pick the `OrbixIOS` or `Orbix` scheme, choose a matching simulator destination, and hit Run.
 
-## Deployment target
+## iPhone simulator smoke server
 
-tvOS **17.0**. Swift 6 language mode (`SWIFT_VERSION: "6.0"` in `project.yml`).
+For a quick visual smoke test without a real Orbix database, run the deterministic local API fixture in `Scripts/ios-smoke-server.mjs`. Allocate a free local port first, then pass that port to the script and launch the iPhone app with the printed base URL/token:
+
+```bash
+cd clients/tvos
+ORBIX_SMOKE_PORT=<allocated-port> ORBIX_SMOKE_TOKEN=orb_smoke node Scripts/ios-smoke-server.mjs
+```
+
+In another shell, build/install the app and launch it with:
+
+```bash
+xcrun simctl launch <booted-iphone-device-id> dev.orbix.ios \
+  -orbixBaseURL http://127.0.0.1:<allocated-port> \
+  -orbixToken orb_smoke
+```
+
+The fixture serves `/health`, profile selection, home rows, search, item/detail/season routes, local image assets, playback negotiation, direct MP4 playback, and progress updates so Home, Search, Title Detail, Episodes, and Player can be checked in the simulator.
+
+The `OrbixIOS` scheme also contains an optional UI smoke test. Start the fixture first, then pass the same URL/token as Xcode build settings:
+
+```bash
+xcodebuild -project Orbix.xcodeproj -scheme OrbixIOS \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
+  test CODE_SIGNING_ALLOWED=NO \
+  ORBIX_UI_TEST_BASE_URL=http://127.0.0.1:<allocated-port> \
+  ORBIX_UI_TEST_TOKEN=orb_smoke
+```
+
+If `ORBIX_UI_TEST_BASE_URL` or `ORBIX_UI_TEST_TOKEN` is unset, the UI smoke test skips cleanly.
+
+## Deployment targets
+
+iOS **17.0** and tvOS **17.0**. Swift 6 language mode (`SWIFT_VERSION: "6.0"` in `project.yml`).
 
 ## App Transport Security (LAN access)
 
-Orbix is a self-hosted, offline-capable media server that clients reach over the local network — often at a bare LAN IP with no TLS certificate. `Resources/Info.plist` sets:
+Orbix is a self-hosted, offline-capable media server that clients reach over the local network — often at a bare LAN IP with no TLS certificate. `Resources/Info.plist` and `Resources-iOS/Info.plist` set:
 
 - `NSAllowsArbitraryLoads = true` — permits plain-HTTP connections to the NAS.
 - `NSAllowsLocalNetworking = true` — permits connections to local-network hosts even under ATS.
@@ -57,21 +99,38 @@ This mirrors the "offline guarantee" / LAN-first architecture of the rest of Orb
 
 ## Onboarding flow
 
-On first launch (and on any launch without a usable device token), the app walks through a short setup flow before it reaches the home screen:
+On first launch (and on any launch without a usable device token), both native apps walk through a short setup flow before reaching the home screen:
 
 1. **Server URL** — enter (or confirm) the Orbix server's address, e.g. `http://192.168.1.10:1061`; the app checks `GET /health` and won't proceed until it gets a response.
-2. **Pairing code** — once the server is reachable, the TV requests a pairing code and displays it full-screen: a 6-character code.
-3. **Approve from another device** — on a phone, tablet, or computer already signed in to the same Orbix server, open **Orbix → Account → Devices**, enter the code, and approve it. The TV is polling in the background and picks up the approval automatically.
-4. **Pick a profile** — once paired, the TV shows the household's profiles; select one to make it this device's active profile.
+2. **Pairing code** — once the server is reachable, the native app requests a pairing code and displays it full-screen: a 6-character code.
+3. **Approve from another device** — on a phone, tablet, or computer already signed in to the same Orbix server, open **Orbix → Account → Devices**, enter the code, and approve it. The native app polls in the background and picks up the approval automatically.
+4. **Pick a profile** — once paired, the native app shows the household's profiles; select one to make it this device's active profile.
 5. **Home** — the app opens to the home list for the selected profile.
 
 The device token issued by pairing is persisted to the Keychain, so subsequent launches skip straight past steps 1–4 (reachability permitting) — the app calls `GET /api/me/profile` to confirm the token is still valid and a profile is already selected, and falls back to the pairing screen if not (e.g. the device was revoked from **Account → Devices**).
 
 **Dev shortcut:** the `-orbixBaseURL <url>` and `-orbixToken <token>` launch arguments (Xcode scheme "Arguments Passed On Launch", or the `ORBIX_BASE_URL`/`ORBIX_TOKEN` environment variables) bypass steps 1–3 for local development — the app uses the given URL/token directly instead of showing the reachability or pairing screens. Never commit real values for these; they're only ever read at runtime.
 
-**Simulator Keychain caveat:** the tvOS Simulator has no Keychain access-group entitlement (`errSecMissingEntitlement`), so a token saved during pairing (or via `-orbixToken`) does **not** persist across relaunches in the simulator — the pairing screen reappears every launch there. On a real Apple TV, the token persists normally across relaunches.
+**Simulator Keychain caveat:** the tvOS Simulator has no Keychain access-group entitlement (`errSecMissingEntitlement`), so a token saved during pairing (or via `-orbixToken`) does **not** persist across relaunches in the simulator — the pairing screen reappears every launch there. On real devices, the token persists normally across relaunches.
 
 ## Features
+
+### iPhone app (`OrbixIOS`)
+
+The iPhone app is an MVP native mobile client built around the same Orbix server APIs as tvOS:
+
+- **Onboarding** — LAN auto-discovery, manual server entry, pairing-code auth (`platform: "ios"`), Keychain token persistence, revoked-token recovery back to pairing, and profile selection.
+- **Home** — dark, poster-forward mobile layout with a cinematic hero, horizontal rails, and Continue Watching cards with progress bars.
+- **Browse** — profile-menu libraries from `/api/me/menu`, server-filtered title grids from `/api/libraries/:id/items`, and title/added/year sorting with in-library filtering.
+- **Search** — debounced `/api/search` queries with tappable mood/genre suggestions, local recent searches, and a compact poster grid.
+- **Title detail** — backdrop/poster hero, metadata, overview, director/cast, Play/Resume for movies, direct Continue for in-progress series episodes, Browse Episodes, More Like This, and season navigation for series.
+- **Episodes** — season episode list with still artwork, runtime, progress bars, direct episode playback, next-episode autoplay, and disabled "not in library" rows.
+- **Playback** — AVKit player using `Capabilities.appleMobile`, resume seek, periodic/final progress PUTs, `/api/playback/:id/stop` teardown, a compact title overlay for the active movie/episode, and an Audio & Subtitles panel backed by playback negotiation metadata.
+- **My List** — server-backed saved-title toggle on title pages plus a browsable My List grid from the Profile tab.
+- **Profiles** — active profile summary tab with connected-server context, My List entry point, Switch Profile flow through the server-backed profile picker, server-demanded PIN entry for locked profiles, and a confirmed Change Server action that clears the saved device token/server URL.
+- **Kids profiles** — still enforced server-side; the iPhone app does not apply client-only filtering.
+
+### tvOS app (`Orbix`)
 
 Everything below is driven entirely by the existing Orbix server contract (`apps/api`) — SP2 M3 shipped zero server changes.
 
@@ -132,6 +191,9 @@ clients/tvos/
     Orbix.entitlements          # App Group + shared Keychain group (Top Shelf sharing)
     Assets.xcassets/            # tvOS Brand Assets App Icon & Top Shelf Image (see above)
     Localizable.xcstrings       # app UI String Catalog (en + ru)
+  Resources-iOS/
+    Info.plist                  # iPhone app target's Info.plist
+    Assets.xcassets/            # iPhone app icon catalog
   Sources/
     Orbix/                     # app target
       OrbixApp.swift            # @main entry point
@@ -142,6 +204,16 @@ clients/tvos/
       Title/                      # TitlePage + SeasonEpisodeView
       Player/                     # PlaybackController + PlayerViewController (AVKit)
       Search/                     # SearchView
+    OrbixIOS/                  # iPhone app target
+      App/                        # @main, root routing, app session model
+      Onboarding/                 # server selection, pairing, profile picker
+      Home/                       # mobile home hero + rails
+      Browse/                     # profile-menu libraries + sortable title grid
+      Title/                      # title detail + season episode list
+      Player/                     # AVKit playback + progress controller
+      Profile/                    # active profile summary, My List, profile switching
+      Search/                     # mobile search tab
+      Components/                 # shared mobile image/poster views
     OrbixKit/                  # framework target: DTOs, OrbixClient, Keychain/TokenStore, ImageLoader
       Localization.swift          # Bundle.orbixKit + OrbixLocalized(_:) (shared-string resolver)
       Localizable.xcstrings       # OrbixKit String Catalog (Top Shelf shared strings, en + ru)
@@ -161,7 +233,7 @@ Do not commit `Orbix.xcodeproj`, `.build/`, or `DerivedData/` — they're all ge
 
 Two paths, not yet decided:
 
-- **Free Apple ID sideload** — build and install directly to a personal Apple TV via Xcode with a free developer account. Zero cost, but the app's provisioning profile expires after **7 days**, after which it must be reinstalled from Xcode. Fine for local development and short-lived testing.
+- **Free Apple ID sideload** — build and install directly to a personal iPhone or Apple TV via Xcode with a free developer account. Zero cost, but the app's provisioning profile expires after **7 days**, after which it must be reinstalled from Xcode. Fine for local development and short-lived testing.
 - **Apple Developer Program ($99/year) + TestFlight** — enables ad-hoc/TestFlight distribution without the 7-day reinstall cycle, and is required for eventual App Store distribution. Adds an annual cost and enrollment overhead.
 
-The app icon (see **App Icon** above) — previously the one hard blocker for an on-device/TestFlight install — is now in place. No distribution decision is needed for simulator-only development; revisit once the app needs to run on physical hardware for longer than a week or be shared with testers. Hardware signoff (HEVC/HDR hardware decode on a real Apple TV 4K) is still outstanding — see `.superpowers/sdd/progress.md`.
+The tvOS app icon (see **App Icon** above) — previously the one hard blocker for an on-device/TestFlight install — is now in place. The iPhone target also has a valid placeholder `AppIcon.appiconset` so simulator/device builds are not blocked on icon catalog structure; replace it with final brand art before TestFlight/App Store distribution. No distribution decision is needed for simulator-only development; revisit once the app needs to run on physical hardware for longer than a week or be shared with testers. Hardware signoff (HEVC/HDR hardware decode on a real Apple TV 4K) is still outstanding.
